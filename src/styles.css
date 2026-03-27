@@ -18,3 +18,36 @@ body {
 canvas {
   display: block;
 }
+
+.hud {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  background: rgba(17, 17, 17, 0.78);
+  color: #f3f3f3;
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  z-index: 10;
+}
+
+.hud-section + .hud-section {
+  margin-top: 10px;
+}
+
+.hud-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #d0cabd;
+}
+
+.hud-text {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}

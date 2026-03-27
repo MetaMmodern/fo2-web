@@ -7,16 +7,16 @@ const { PNG } = require("pngjs");
 
 function printUsage() {
   console.error(
-    "Usage: node tools/convert-dds-to-png.js <input.dds> [output.png] [--keep-alpha] [--unpremultiply]",
+    "Usage: node tools/convert-dds-to-png.js <input.dds> [output.png] [--flatten-alpha] [--unpremultiply]",
   );
 }
 
 function main() {
   const args = process.argv.slice(2);
-  const keepAlpha = args.includes("--keep-alpha");
+  const flattenAlpha = args.includes("--flatten-alpha");
   const unpremultiplyAlpha = args.includes("--unpremultiply");
   const positionalArgs = args.filter(
-    (arg) => arg !== "--keep-alpha" && arg !== "--unpremultiply",
+    (arg) => arg !== "--flatten-alpha" && arg !== "--unpremultiply",
   );
   const [inputPathArg, outputPathArg] = positionalArgs;
 
@@ -74,7 +74,7 @@ function main() {
     }
   }
 
-  if (!keepAlpha) {
+  if (flattenAlpha) {
     for (let i = 3; i < rgbaData.length; i += 4) {
       rgbaData[i] = 255;
     }
@@ -94,7 +94,7 @@ function main() {
         format: dds.format,
         size: [width, height],
         mipmaps: dds.images.length,
-        keepAlpha,
+        flattenAlpha,
         unpremultiplyAlpha,
       },
       null,

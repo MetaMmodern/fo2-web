@@ -1,0 +1,554 @@
+nFileVersion: 0x20000 FlatOut 2 / Ultimate Carnage Car
+
+Materials begin
+Count: 3
+
+Material 0
+Name: shadow
+nAlpha: 0
+nShaderId: 13 (shadow project)
+nUseColormap: 0
+Texture 1: 
+Texture 2: 
+Texture 3: 
+Total references: 4
+
+Material 1
+Name: tire
+nAlpha: 1
+nShaderId: 7 (car diffuse)
+nUseColormap: 0
+Texture 1: tire_08.tga
+Texture 2: 
+Texture 3: 
+Total references: 4
+
+Material 2
+Name: rim
+nAlpha: 1
+nShaderId: 9 (car tire)
+nUseColormap: 0
+Texture 1: tire_08.tga
+Texture 2: 
+Texture 3: 
+Total references: 4
+
+Materials end
+
+Streams begin
+Count: 3
+
+Stream 0
+Vertex buffer
+Vertex Size: 12
+Vertex Count: 96
+nFlags: 0x2 Position 
+
+Stream 1
+Vertex buffer
+Vertex Size: 32
+Vertex Count: 932
+nFlags: 0x112 Position Normals UVMap 
+
+Stream 2
+Index buffer
+Index Count: 1970
+
+Streams end
+
+Surfaces begin
+Count: 12
+
+Surface 0
+nIsVegetation: 0
+nMaterialId: 0
+nVertexCount: 24
+nFormat: 0x2
+nPolyCount: 66
+nPolyMode: 5
+nNumIndicesUsed: 68
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 0
+nStreamOffset: 0x120
+nStreamId: 2
+nStreamOffset: 0x88
+Total references: 1
+Prop model references: 1
+
+Surface 1
+nIsVegetation: 0
+nMaterialId: 0
+nVertexCount: 24
+nFormat: 0x2
+nPolyCount: 66
+nPolyMode: 5
+nNumIndicesUsed: 68
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 0
+nStreamOffset: 0x0
+nStreamId: 2
+nStreamOffset: 0x0
+Total references: 1
+Prop model references: 1
+
+Surface 2
+nIsVegetation: 0
+nMaterialId: 1
+nVertexCount: 136
+nFormat: 0x112
+nPolyCount: 248
+nPolyMode: 5
+nNumIndicesUsed: 250
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 1
+nStreamOffset: 0x0
+nStreamId: 2
+nStreamOffset: 0x220
+Total references: 1
+Prop model references: 1
+
+Surface 3
+nIsVegetation: 0
+nMaterialId: 2
+nVertexCount: 97
+nFormat: 0x112
+nPolyCount: 178
+nPolyMode: 5
+nNumIndicesUsed: 180
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 1
+nStreamOffset: 0x4400
+nStreamId: 2
+nStreamOffset: 0x9D0
+Total references: 1
+Prop model references: 1
+
+Surface 4
+nIsVegetation: 0
+nMaterialId: 0
+nVertexCount: 24
+nFormat: 0x2
+nPolyCount: 66
+nPolyMode: 5
+nNumIndicesUsed: 68
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 0
+nStreamOffset: 0x240
+nStreamId: 2
+nStreamOffset: 0x110
+Total references: 1
+Prop model references: 1
+
+Surface 5
+nIsVegetation: 0
+nMaterialId: 0
+nVertexCount: 24
+nFormat: 0x2
+nPolyCount: 66
+nPolyMode: 5
+nNumIndicesUsed: 68
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 0
+nStreamOffset: 0x360
+nStreamId: 2
+nStreamOffset: 0x198
+Total references: 1
+Prop model references: 1
+
+Surface 6
+nIsVegetation: 0
+nMaterialId: 1
+nVertexCount: 136
+nFormat: 0x112
+nPolyCount: 248
+nPolyMode: 5
+nNumIndicesUsed: 250
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 1
+nStreamOffset: 0x1100
+nStreamId: 2
+nStreamOffset: 0x414
+Total references: 1
+Prop model references: 1
+
+Surface 7
+nIsVegetation: 0
+nMaterialId: 2
+nVertexCount: 97
+nFormat: 0x112
+nPolyCount: 178
+nPolyMode: 5
+nNumIndicesUsed: 180
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 1
+nStreamOffset: 0x5020
+nStreamId: 2
+nStreamOffset: 0xB38
+Total references: 1
+Prop model references: 1
+
+Surface 8
+nIsVegetation: 0
+nMaterialId: 1
+nVertexCount: 136
+nFormat: 0x112
+nPolyCount: 240
+nPolyMode: 5
+nNumIndicesUsed: 242
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 1
+nStreamOffset: 0x2200
+nStreamId: 2
+nStreamOffset: 0x608
+Total references: 1
+Prop model references: 1
+
+Surface 9
+nIsVegetation: 0
+nMaterialId: 2
+nVertexCount: 97
+nFormat: 0x112
+nPolyCount: 175
+nPolyMode: 5
+nNumIndicesUsed: 177
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 1
+nStreamOffset: 0x5C40
+nStreamId: 2
+nStreamOffset: 0xCA0
+Total references: 1
+Prop model references: 1
+
+Surface 10
+nIsVegetation: 0
+nMaterialId: 1
+nVertexCount: 136
+nFormat: 0x112
+nPolyCount: 240
+nPolyMode: 5
+nNumIndicesUsed: 242
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 1
+nStreamOffset: 0x3300
+nStreamId: 2
+nStreamOffset: 0x7EC
+Total references: 1
+Prop model references: 1
+
+Surface 11
+nIsVegetation: 0
+nMaterialId: 2
+nVertexCount: 97
+nFormat: 0x112
+nPolyCount: 175
+nPolyMode: 5
+nNumIndicesUsed: 177
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.000000
+vRadius.y: 0.000000
+vRadius.z: 0.000000
+nNumStreamsUsed: 2
+nStreamId: 1
+nStreamOffset: 0x6860
+nStreamId: 2
+nStreamOffset: 0xE02
+Total references: 1
+Prop model references: 1
+
+Surfaces end
+
+Models begin
+Count: 8
+
+nUnknown1: 0
+sName: tire_rr_shadow
+vCenter.x: -0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.109276
+vRadius.y: 0.323159
+vRadius.z: 0.323817
+fRadius: 0.470351
+vAABBMin: { -0.10927597, -0.3231586, -0.32381657 }
+vAABBMax: { 0.10927597, 0.3231586, 0.32381657 }
+nNumSurfaces: 1
+0
+
+nUnknown1: 0
+sName: tire_rl_shadow
+vCenter.x: -0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.109276
+vRadius.y: 0.323159
+vRadius.z: 0.323817
+fRadius: 0.470351
+vAABBMin: { -0.10927597, -0.3231586, -0.32381657 }
+vAABBMax: { 0.10927597, 0.3231586, 0.32381657 }
+nNumSurfaces: 1
+1
+
+nUnknown1: 0
+sName: tire_fl
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.125513
+vRadius.y: 0.324952
+vRadius.z: 0.324952
+fRadius: 0.476384
+vAABBMin: { -0.12551296, -0.32495216, -0.3249522 }
+vAABBMax: { 0.12551296, 0.32495216, 0.3249522 }
+nNumSurfaces: 2
+2
+3
+
+nUnknown1: 0
+sName: tire_fl_shadow
+vCenter.x: -0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.109276
+vRadius.y: 0.323159
+vRadius.z: 0.323817
+fRadius: 0.470351
+vAABBMin: { -0.10927597, -0.3231586, -0.32381657 }
+vAABBMax: { 0.10927597, 0.3231586, 0.32381657 }
+nNumSurfaces: 1
+4
+
+nUnknown1: 0
+sName: tire_fr_shadow
+vCenter.x: -0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.109276
+vRadius.y: 0.323159
+vRadius.z: 0.323817
+fRadius: 0.470351
+vAABBMin: { -0.10927597, -0.3231586, -0.32381657 }
+vAABBMax: { 0.10927597, 0.3231586, 0.32381657 }
+nNumSurfaces: 1
+5
+
+nUnknown1: 0
+sName: tire_rl
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.125513
+vRadius.y: 0.324952
+vRadius.z: 0.324952
+fRadius: 0.476384
+vAABBMin: { -0.12551296, -0.32495216, -0.3249522 }
+vAABBMax: { 0.12551296, 0.32495216, 0.3249522 }
+nNumSurfaces: 2
+6
+7
+
+nUnknown1: 0
+sName: tire_fr
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.125513
+vRadius.y: 0.324952
+vRadius.z: 0.324952
+fRadius: 0.476384
+vAABBMin: { -0.12551296, -0.32495216, -0.3249522 }
+vAABBMax: { 0.12551296, 0.32495216, 0.3249522 }
+nNumSurfaces: 2
+8
+9
+
+nUnknown1: 0
+sName: tire_rr
+vCenter.x: 0.000000
+vCenter.y: 0.000000
+vCenter.z: 0.000000
+vRadius.x: 0.125513
+vRadius.y: 0.324952
+vRadius.z: 0.324952
+fRadius: 0.476384
+vAABBMin: { -0.12551296, -0.32495216, -0.3249522 }
+vAABBMax: { 0.12551296, 0.32495216, 0.3249522 }
+nNumSurfaces: 2
+10
+11
+
+Models end
+
+BGM Meshes begin
+Count: 8
+
+sObjectName: tire_rr_shadow
+sModelName: 
+nFlags: 0x0
+nGroup: -1
+mMatrix: 
+1, 0, 0, 0
+0, 1, 0, 0
+0, 0, 1, 0
+1.6364807e-05, -0.0002643924, 7.547195e-06, 1
+nNumModels: 1
+0 - tire_rr_shadow
+
+sObjectName: tire_rl_shadow
+sModelName: 
+nFlags: 0x0
+nGroup: -1
+mMatrix: 
+1, 0, 0, 0
+0, 1, 0, 0
+0, 0, 1, 0
+1.6364807e-05, -0.0002643924, 7.547195e-06, 1
+nNumModels: 1
+1 - tire_rl_shadow
+
+sObjectName: tire_fl
+sModelName: 
+nFlags: 0x0
+nGroup: -1
+mMatrix: 
+1, 0, -1.7484555e-07, 0
+0, 1, 0, 0
+1.7484555e-07, 0, 1, 0
+-6.368402e-07, 1.02911e-05, -2.9376378e-07, 1
+nNumModels: 1
+2 - tire_fl
+
+sObjectName: tire_fl_shadow
+sModelName: 
+nFlags: 0x0
+nGroup: -1
+mMatrix: 
+1, 0, 0, 0
+0, 1, 0, 0
+0, 0, 1, 0
+1.6364807e-05, -0.0002643924, 7.547195e-06, 1
+nNumModels: 1
+3 - tire_fl_shadow
+
+sObjectName: tire_fr_shadow
+sModelName: 
+nFlags: 0x0
+nGroup: -1
+mMatrix: 
+1, 0, 0, 0
+0, 1, 0, 0
+0, 0, 1, 0
+1.6364807e-05, -0.0002643924, 7.547195e-06, 1
+nNumModels: 1
+4 - tire_fr_shadow
+
+sObjectName: tire_rl
+sModelName: 
+nFlags: 0x0
+nGroup: -1
+mMatrix: 
+1, 0, -1.7484555e-07, 0
+0, 1, 0, 0
+1.7484555e-07, 0, 1, 0
+-6.368402e-07, 1.02911e-05, -2.9376378e-07, 1
+nNumModels: 1
+5 - tire_rl
+
+sObjectName: tire_fr
+sModelName: 
+nFlags: 0x0
+nGroup: -1
+mMatrix: 
+1, 0, -1.7484555e-07, 0
+0, 1, 0, 0
+1.7484555e-07, 0, 1, 0
+-6.368402e-07, 1.02911e-05, -2.9376378e-07, 1
+nNumModels: 1
+6 - tire_fr
+
+sObjectName: tire_rr
+sModelName: 
+nFlags: 0x0
+nGroup: -1
+mMatrix: 
+1, 0, -1.7484555e-07, 0
+0, 1, 0, 0
+1.7484555e-07, 0, 1, 0
+-6.368402e-07, 1.02911e-05, -2.9376378e-07, 1
+nNumModels: 1
+7 - tire_rr
+
+BGM Meshes end
+
+Objects begin
+Count: 0
+
+Objects end
+
