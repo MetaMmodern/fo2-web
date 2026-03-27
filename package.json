@@ -1,0 +1,21 @@
+{
+  "name": "flatout_oss",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "start": "parcel index.html --open",
+    "build": "parcel build index.html"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.30.3",
+  "dependencies": {
+    "parcel": "^2.16.4",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@parcel/config-default": "^2.16.4",
+    "@parcel/transformer-raw": "^2.16.4"
+  }
+}
