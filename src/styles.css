@@ -1,3 +1,20 @@
+html,
 body {
-  font-family: sans-serif;
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #111;
+  color: #f3f3f3;
+  font-family:
+    "IBM Plex Sans",
+    "Segoe UI",
+    sans-serif;
+}
+
+body {
+  position: relative;
+}
+
+canvas {
+  display: block;
 }

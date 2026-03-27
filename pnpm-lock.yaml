@@ -21,6 +21,15 @@ importers:
       '@parcel/transformer-raw':
         specifier: ^2.16.4
         version: 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.20))
+      decode-dxt:
+        specifier: ^1.0.1
+        version: 1.0.1
+      parse-dds:
+        specifier: ^1.2.1
+        version: 1.2.1
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
 
 packages:
 
@@ -615,6 +624,9 @@ packages:
     resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
     engines: {node: '>=18'}
 
+  decode-dxt@1.0.1:
+    resolution: {integrity: sha512-sf+Jrp7l23K71gGrQPOvZReY12/sYEXKExx9kXtsKyosLqwQ/+ZhNvQLzAZLPqzdGLXcMQrTrEinYGtt36jFmA==}
+
   detect-libc@1.0.3:
     resolution: {integrity: sha512-pGjwhsmsp4kL2RTz08wcOlGN83otlqHeD/Z5T8GXZB+/YcpQ/dgo+lbU8ZsGxV0HIvqqxo9l7mqYwyYMD9bKDg==}
     engines: {node: '>=0.10'}
@@ -777,12 +789,19 @@ packages:
     engines: {node: '>= 16.0.0'}
     hasBin: true
 
+  parse-dds@1.2.1:
+    resolution: {integrity: sha512-oE88N8mzUi9d26tAaKVc0clxi6AjeTSWpLwgtcEVjXTYY1MW58w8FctmM9gGgvFd6YGu1/eFFYVeDVnlMsKBtA==}
+
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
   picomatch@4.0.4:
     resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
     engines: {node: '>=12'}
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   postcss-value-parser@4.2.0:
     resolution: {integrity: sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ==}
@@ -1633,6 +1652,8 @@ snapshots:
 
   commander@12.1.0: {}
 
+  decode-dxt@1.0.1: {}
+
   detect-libc@1.0.3: {}
 
   detect-libc@2.1.2: {}
@@ -1783,9 +1804,13 @@ snapshots:
       - '@swc/helpers'
       - napi-wasm
 
+  parse-dds@1.2.1: {}
+
   picocolors@1.1.1: {}
 
   picomatch@4.0.4: {}
+
+  pngjs@7.0.0: {}
 
   postcss-value-parser@4.2.0: {}
 

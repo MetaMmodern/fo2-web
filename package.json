@@ -16,6 +16,9 @@
   },
   "devDependencies": {
     "@parcel/config-default": "^2.16.4",
-    "@parcel/transformer-raw": "^2.16.4"
+    "@parcel/transformer-raw": "^2.16.4",
+    "decode-dxt": "^1.0.1",
+    "parse-dds": "^1.2.1",
+    "pngjs": "^7.0.0"
   }
 }
