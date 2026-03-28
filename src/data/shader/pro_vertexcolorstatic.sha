@@ -1,0 +1,49 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_vertexcolor.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2003 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 4/2/2003 6:26:42 PM
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+
+const string inputStreamFormat = "PosColor";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];  // Position
+		D3DCOLOR v2;     // Diffuse
+	}
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_color		v2
+		
+		m4x4	oPos, v0, c0
+		mov		oD0, v2
+	};
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		mov		r0, v0
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}

@@ -1,0 +1,125 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_car_window.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2002 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 8/6/2002 9:05:39 PM
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture	Tex0;
+Texture	Tex1;
+Texture	Tex2;
+
+const string inputStreamFormat = "PosNormTex1";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];		// Position
+		float	 v1[3];		// Normal
+		float    v3[2];		// Tex coord 0
+	}
+
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+		;  4..7 - World Matrix
+
+		;  c32 = [R(0), 1-R(0), 0, 0]
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_normal		v1
+		dcl_texcoord	v3
+				
+		// project position
+		m4x4	oPos, v0, c0
+
+		// R0 = rotated normal
+		m3x3	r0.xyz, v1, c4
+		; position -> world
+		m4x3	r1.xyz, v0, c4
+		; normalization coords
+		mov		oT2.xyz, r0
+		; compute vtx->eye ray
+		sub		r1.xyz, c8, r1
+		dp3		r3.w, r1.xyz, r1.xyz
+		rsq		r3.w, r3.w
+		; normalize it
+		mul		r1.xyz, r1.xyz, r3.w
+		; R0 = N (normal vector)
+		; R1 = V (vertex to eye vector)
+
+		
+		// passthru texture coords
+		mov		oT0.xy, v3.xy
+		
+		; 2*(V dot N)*N - V
+				
+		dp3		r0.w, r1, r0
+		add		r3.w, r0.w, r0.w
+		mad		oT1.xyz, r0.xyz, r3.w, -r1.xyz
+
+		// Compute fresnel term approximation
+		// f = r(0) + (1.0-R(0)) * pow(1.0 - dot(eye, normal), 5.0 );
+		; R0 = N (normal vector)
+		; R1 = V (vertex to eye vector)
+	
+		; abs(r0)
+		max		r0.w, r0.w, -r0.w
+		; complement: r0 = 1 - r0
+		add		r0.w, c15.z, -r0.w
+		mul		r1.w, r0.w, r0.w	; squared
+		mul		r1.w, r1.w, r1.w	; quartic
+		mul		r1.w, r1.w, r0.w	; quintic
+
+		mov		oD0.rgb, c22					; specular color
+		mad		oD0.a, r1.w, c33.y, c33.x
+		mov		oD1.rgb, c22					; specular color
+		mov		oD1.a, c32						; window brightness
+		
+	};
+
+
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		// fetch textures
+		tex		t0	; Base color
+		tex		t1	; Reflection + specular alpha
+		tex		t2	; N * L
+		// v0.rgb = ambient
+		// v0.a = fresnel term
+		
+		; output.rgb = fresnel*env + specular 
+		; output.a = (1-fresnel)*brightness
+		mul			r0.rgb, v0.a, t1
+		+mul_sat	r0.a, 1-v0, v1			
+		mad_sat		r0.rgb, v1, t1.a, r0
+		
+	};
+
+
+
+Technique T0
+{
+    Pass P0
+    {    
+		Texture[0] = <Tex0>;
+		Texture[1] = <Tex1>;
+		Texture[2] = <Tex2>;
+
+		VertexShaderConstantF[33] = float4( 0.25f, 0.5f, 1.0f, 0.0f );   // R0, 1-R1, specular power, ?
+		PixelShaderConstantF[7] = float4( 0.50f, 0.50f, 0.50f, 0.50f );
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}
+

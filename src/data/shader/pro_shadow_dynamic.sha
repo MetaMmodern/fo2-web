@@ -1,0 +1,91 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_shadow_dynamic.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2002 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 10/7/2002 9:47:32 PM
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture	Tex0;
+
+const string inputStreamFormat = "PosColorTex1";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];  // Position
+		D3DCOLOR v2;     // Diffuse
+		float    v3[2];  // Tex coord 0
+	}
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_color		v2
+		dcl_texcoord	v3	
+		
+		m4x4	oPos, v0, c0
+		add		oT0.xy, v3, c32
+		add		oT1.xy, v3, c33
+		add		oT2.xy, v3, c34
+		add		oT3.xy, v3, c35
+	};
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		tex		t0
+		tex		t1
+		tex		t2
+		tex		t3
+		mul		r0, c7, t0
+		mad		r0, c7, t1, r0
+		mad		r0, c7, t2, r0
+		mad_sat	r0, c7, t3, r0
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+		Texture[0] = <Tex0>;
+		Texture[1] = <Tex0>;
+		Texture[2] = <Tex0>;
+		Texture[3] = <Tex0>;
+
+		AddressU[0] = Clamp;
+		AddressV[0] = Clamp;
+		AddressU[1] = Clamp;
+		AddressV[1] = Clamp;
+		AddressU[2] = Clamp;
+		AddressV[2] = Clamp;
+		AddressU[3] = Clamp;
+		AddressV[3] = Clamp;
+
+		MinFilter[0] = Linear;
+		MagFilter[0] = Linear;
+		MinFilter[1] = Linear;
+		MagFilter[1] = Linear;
+		MinFilter[2] = Linear;
+		MagFilter[2] = Linear;
+		MinFilter[3] = Linear;
+		MagFilter[3] = Linear;
+
+		PixelShaderConstantF[7] = float4( 0.2509804f, 0.2509804f, 0.2509804f, 0.2509804f );		
+
+		VertexShaderConstantF[32] = float4( 0.0f, -0.00390625f, 0.0f, 0.0f );
+		VertexShaderConstantF[33] = float4(-0.00390625f, 0.0f,  0.0f, 0.0f );
+		VertexShaderConstantF[34] = float4( 0.00390625f, 0.0f,  0.0f, 0.0f );
+		VertexShaderConstantF[35] = float4( 0.0f, 0.00390625f,  0.0f, 0.0f );
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}

@@ -1,0 +1,56 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_intensitymap.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2002 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 8/27/2002 2:28:30 PM
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture Tex0;
+
+const string inputStreamFormat = "PosprojTex1";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[4];  // xyzrhw
+		float    v3[2];  // Tex coord 0
+	}
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_texcoord	v3
+		
+		mov		oPos, v0		
+		mov		oT0.xy, v3.xy
+	};
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		tex		t0
+		mul		r0, t0, c7
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+		PixelShaderConstantF[7] = float4( 0.003921568628f, 0.003921568628f, 0.003921568628f, 0.003921568628f );
+//		PixelShaderConstant[7] = { 0.0625f, 0.0625f, 0.0625f, 1.0f };
+		Texture[0] = <Tex0>;
+		MinFilter[0] = Point;
+		MagFilter[0] = Point;
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}

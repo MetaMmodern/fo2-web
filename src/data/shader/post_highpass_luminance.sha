@@ -1,0 +1,48 @@
+///////////////////////////////////////////////////////////////////////////
+// highpass_luminance.fx
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2005 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 1.12.2005 10:55
+// 
+// Authors: Timo Saarinen (timo.saarinen@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture Tex0;
+
+// C3 = threshold
+// C4 = after-cut scaling (/4, as using 4x multiply)
+
+const string inputStreamFormat = "PosprojTex4";
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+		
+		tex t0
+		
+		; OLD: Convert to luminance (C5 = RGB component weights)
+		;					dp3			r0, t0, c5	
+		
+		; luminance should already be in source alpha, just copy to all components
+		mov		r0.rgb, t0.a		; copy A (luminance) -> RGB
+		+mov	r0.a, t0.a
+		
+		; Cut-off
+		sub			r0, r0, c3
+		
+		; Scaling
+		mul_x4	r0, r0, c4
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+			Texture[0] = <Tex0>;
+			  	
+			VertexShader = null;
+			PixelShader = <pSdr>;
+	}
+}

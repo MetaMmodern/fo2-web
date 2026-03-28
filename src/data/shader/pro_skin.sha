@@ -1,0 +1,127 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_skin.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2004 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 18.2.2004 17:48
+// 
+// Authors: Timo Saarinen (timo.saarinen@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture	Tex0;
+Texture	Tex1;
+
+const string inputStreamFormat = "PosNormColorTex1";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];  // Position
+		float    v1[3];  // Normal
+		D3DCOLOR v2;     // "Diffuse": bone id #1, bone weight #1, bone id #2, bone weight #2
+		float    v3[2];  // Tex coord 0
+	}
+	
+	asm
+	{
+        ; Constants:
+		;  32     - Skinning data (v2) multiplier
+        ;  33..36 - Composite View-Projection Matrix
+        ;  37..   - Bone=>World matrices
+        
+		vs.1.1
+	
+		dcl_position	v0
+		dcl_normal		v1
+		dcl_color		v2
+		dcl_texcoord	v3	
+	
+		//def c27, 1021.8f, 1.0f, 1021.8f, 1.0f		; mul bone indexes from normalized to integer (255*4=1020 + rounding)
+		
+		; v0 = vertex position (model space)
+		; v1 = normal (model space)
+		; v2 = boneIndexAndWeight2 (D3DCOLOR)
+		; c37.. bone matrix palette/array (max 16 bones)
+	
+		mul 	r3, v2, c32				; bone index & weight (from D3DCOLOR)
+		mov		a0.x, r3.b				; 1st bone matrix index
+		m4x4	r1, v0, c[a0.x + 37]	; transform by 1st bone matrix
+		mov		a0.x, r3.r				; 2nd bone matrix index
+		m4x4	r2, v0, c[a0.x + 37]	; transform by 2nd bone matrix
+
+		; final vertex position = weighted position of 2 bones (in world space)
+		mul		r0, r1, r3.g		; 1st bone
+		mad		r0, r2, r3.a, r0	; + 2nd bone
+		m4x4	oPos, r0, c33		; final world => projection
+
+		//-- vertex normal (weighted from 2 bones, normalized)
+	
+		; r0 = weighted normal from all (2) bones
+		mov		a0.x, r3.b
+		m3x3	r1, v1, c[a0.x + 37]	; transform normal by 1st bone matrix
+		mov		a0.x, r3.r
+		m3x3	r2, v1, c[a0.x + 37]	; transform normal by 2nd bone matrix
+		mul		r0, r1, r3.g
+		mad		r0, r2, r3.a, r0
+	
+		; normalize normal
+		dp3		r1, r0, r0
+		rsq		r1, r1.x
+		mul		r0, r0, r1
+		
+		; store world space normal to texcoord #1
+		mov		oT1.xyz, r0		
+		
+		//-- compute ambient color (hemisphere lighting)
+
+		// SH lighting
+		mov		r0.w, c15.z		; w = 1.0
+		dp4		r1.x, r0, c17
+		dp4		r1.y, r0, c18
+		dp4		r1.z, r0, c19
+		; gamma correction
+		rsq		r1.x, r1.x
+		rsq		r1.y, r1.y
+		rsq		r1.z, r1.z
+		rcp		oD0.x, r1.x
+		rcp		oD0.y, r1.y
+		rcp		oD0.z, r1.z				
+		
+		//-- base texture mapping		
+		mov		oT0, v3	
+	};
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+		
+		; fetch texture
+		tex		t0		; base color
+		tex		t1		; diffuse lookup from cubemap
+
+		; = diffuse + ambient
+		mad_d2	r0.rgb, t1.a, c2, v0
+		; passthru alpha
+		+mov	r0.a, t0.a
+		; limit overlighting
+		mul_sat	r0.rgb, r0, c1
+		mul_sat	r0.rgb, r0, c1.a
+		
+		; modulate texel color
+		mul_x2_sat	r0.rgb, r0, t0
+
+	};
+
+Technique T0
+{
+    Pass P0
+    {
+		Texture[0] = <Tex0>;
+		Texture[1] = <Tex1>;		
+		 
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}

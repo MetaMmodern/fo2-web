@@ -1,0 +1,88 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_scale_dynamic.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2004 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 24.2.2004 16:03:37
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture	Tex0;
+Texture	Tex1;
+
+const string inputStreamFormat = "PosNormTex1";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];		// Position
+		float	 v1[3];		// Normal
+		float    v3[2];		// Tex coord 0
+	}
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+		;  4..7 - World Matrix
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_normal		v1
+		dcl_texcoord	v3	
+
+		// passthru texture coords
+		mov		oT0.xy, v3.xy
+		mov		r0, v0
+		mul		r0.y, r0.y, c32.w		; scale 
+		// project position
+		m4x4	oPos, r0, c0
+		// rotate normal
+		m3x3	r0.xyz, v1, c4
+		mov		oT1.xyz, r0
+		// SH lighting
+		mov		r0.w, c15.z		; w = 1.0
+		dp4		r1.x, r0, c17
+		dp4		r1.y, r0, c18
+		dp4		r1.z, r0, c19
+		; gamma correction
+		rsq		r1.x, r1.x
+		rsq		r1.y, r1.y
+		rsq		r1.z, r1.z
+		rcp		oD0.x, r1.x
+		rcp		oD0.y, r1.y
+		rcp		oD0.z, r1.z				
+	};
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		; fetch texture
+		tex		t0		; base color
+		tex		t1		; diffuse lookup from cubemap
+
+		; = diffuse + ambient
+		mad_d2	r0.rgb, t1.a, c2, v0
+		; passthru alpha
+		+mov	r0.a, t0.a
+		; limit overlighting
+		mul_sat	r0.rgb, r0, c1
+		mul_sat	r0.rgb, r0, c1.a
+		; modulate texel color
+		mul_x2_sat	r0.rgb, r0, t0
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+		Texture[0] = <Tex0>;
+		Texture[1] = <Tex1>;
+		
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}

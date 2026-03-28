@@ -1,0 +1,73 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_decalpaint.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2003 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 4/7/2003 3:06:48 PM
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture Tex0;
+Texture Tex1;
+
+const string inputStreamFormat = "PosTex2";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];  // Position
+		float    v3[2];  // Tex coord 0
+		float    v4[2];  // Tex coord 1
+	}
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+		;  9 - Clip plane 0
+		; 10 - Clip plane 1...
+
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_texcoord0	v3		
+		dcl_texcoord1	v4		
+		
+		m4x4	oPos, v0, c0
+		mov		oT0.xy, v3.xy
+		mov		oT1.xy, v4.xy
+		
+		; clip 0
+;		dp3		r1.x, v0.xyz, c9.xyz
+;		dp3		r2.y, v0.xyz, c10.xyz
+;		add		oT2.x, r1.x, c9.w
+;		add		oT2.y, r2.y, c10.w
+;		sub		oT2.z, v0.z, v0.z
+
+	};
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		tex		t0
+		tex		t1
+;		texkill	t2
+
+		mul		r0, t0, t1
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+		Texture[0] = <Tex0>;
+		Texture[1] = <Tex1>;
+		
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+		Zbias = 2;
+	}
+}

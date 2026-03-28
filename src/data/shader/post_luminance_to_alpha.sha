@@ -1,0 +1,39 @@
+///////////////////////////////////////////////////////////////////////////
+// post_luminance_to_alpha.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2006 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 22.5.2006 18:09
+// 
+// Authors: Timo Saarinen (timo.saarinen@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture Tex0;	// Source screen texture
+
+const string inputStreamFormat = "PosprojTex1";
+
+pixelshader pSdr =
+	asm
+	{	
+		ps.1.1
+		tex t0
+
+		; Convert to luminance (C5 = RGB component weights)
+		dp3		r0.rgba, t0, c5				; luminance -> RGBA
+		mov		r0.rgb, t0						; retain old RGB info, alpha keeps luminance
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+		Texture[0] = <Tex0>;
+    	AddressU[0] = Clamp;
+    	AddressV[0] = Clamp;
+    	MagFilter[0] = Point;
+    	
+		VertexShader = null;
+		PixelShader = <pSdr>;
+	}
+}
+

@@ -1,0 +1,59 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_sunmap_lightmap_spec.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2004 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 30.9.2004 16:50:51
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+
+const string inputStreamFormat = "PosNormTex2";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];  // Position
+		float	 v1[3];	 // Normal		
+		float    v3[2];  // Tex coord 0
+		float    v4[2];  // Tex coord 1
+	}
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_normal		v1
+		dcl_texcoord0	v3
+		dcl_texcoord1	v4
+		
+		m4x4	oPos, v0, c0
+
+	};
+	
+
+
+// Pixel shader
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		mov		r0, c0.a
+	};
+
+
+
+Technique T0
+{
+    Pass P0
+    {
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}
+

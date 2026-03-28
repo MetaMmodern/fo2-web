@@ -7,15 +7,16 @@ const textureNameAliases = {
   colormap: "col",
 };
 
-export async function loadTrack(assetUrls, scene) {
+export async function loadTrack(assetUrls, scene, renderer) {
   const [trackRoot, trackMaterialInfo, startPoints] = await Promise.all([
     loadFbx(assetUrls.model),
     loadTrackMaterialInfo(assetUrls.log),
     loadStartPoints(assetUrls.startPoints),
   ]);
 
-  const getTrackTexture = createTrackTextureRegistry(arenaTrackTextureUrls);
-  const trackLightMap = loadTrackLightMap(assetUrls.lightmap);
+  const maxAnisotropy = renderer?.capabilities?.getMaxAnisotropy?.() ?? 1;
+  const getTrackTexture = createTrackTextureRegistry(arenaTrackTextureUrls, maxAnisotropy);
+  const trackLightMap = loadTrackLightMap(assetUrls.lightmap, maxAnisotropy);
 
   prepareTrackMaterials(
     trackRoot,
@@ -144,7 +145,7 @@ function parseTrackLog(logText) {
   return materialsByName;
 }
 
-function createTrackTextureRegistry(textureUrls) {
+function createTrackTextureRegistry(textureUrls, maxAnisotropy) {
   const textureLoader = new THREE.TextureLoader();
   const textureCache = new Map();
 
@@ -170,18 +171,20 @@ function createTrackTextureRegistry(textureUrls) {
     texture.flipY = true;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = maxAnisotropy;
     textureCache.set(normalizedName, texture);
     return texture;
   };
 }
 
-function loadTrackLightMap(lightMapUrl) {
+function loadTrackLightMap(lightMapUrl, maxAnisotropy) {
   const textureLoader = new THREE.TextureLoader();
   const texture = textureLoader.load(lightMapUrl);
   texture.flipY = true; // this is correct, keep it
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = maxAnisotropy;
   return texture;
 }
 
@@ -262,6 +265,19 @@ function createTrackMaterial(
   const shouldUseLightMap =
     hasLightMapUv && !isAlphaMaterial && !isWindowShader;
   const isTerrainShader = materialInfo?.shaderId === 2;
+  const isStaticPrelitShader = materialInfo?.shaderId === 0;
+
+  if (isStaticPrelitShader) {
+    return createStaticPrelitMaterial({
+      name: sourceMaterial.name,
+      map: diffuseTexture,
+      useVertexColors: usesVertexColors,
+      transparent: isAlphaMaterial || isLeafLikeShader,
+      alphaTest: isAlphaMaterial || isLeafLikeShader ? 0.35 : 0,
+      side: isAlphaMaterial || isLeafLikeShader ? THREE.DoubleSide : THREE.FrontSide,
+      brightnessScale: getStaticPrelitBrightnessScale(sourceMaterial.name),
+    });
+  }
 
   if (isWindowShader) {
     return new THREE.MeshStandardMaterial({
@@ -296,10 +312,11 @@ function createTrackMaterial(
   }
 
   if (isTerrainShader) {
-    return new THREE.MeshBasicMaterial({
+    return createTerrainMaterial({
       name: sourceMaterial.name,
-      map: trackLightMap,
-      color: 0xffffff,
+      colorMap: trackLightMap,
+      detailMap: detailTexture || diffuseTexture,
+      useVertexColors: usesVertexColors,
     });
   }
 
@@ -316,6 +333,100 @@ function createTrackMaterial(
     emissive: new THREE.Color(0x000000),
     emissiveIntensity: 0,
   });
+}
+
+function createStaticPrelitMaterial({
+  name,
+  map,
+  useVertexColors,
+  transparent,
+  alphaTest,
+  side,
+  brightnessScale,
+}) {
+  const material = new THREE.MeshBasicMaterial({
+    name,
+    map,
+    color: 0xffffff,
+    transparent,
+    alphaTest,
+    side,
+    vertexColors: useVertexColors,
+  });
+
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <map_fragment>",
+      `#include <map_fragment>
+      diffuseColor.rgb = clamp(diffuseColor.rgb * ${brightnessScale.toFixed(2)}, 0.0, 1.0);`,
+    );
+  };
+  material.customProgramCacheKey = () => `flatout-static-prelit-${name}-${brightnessScale.toFixed(2)}`;
+
+  return material;
+}
+
+function getStaticPrelitBrightnessScale(materialName) {
+  const normalizedName = materialName?.toLowerCase() ?? "";
+
+  if (normalizedName.startsWith("wall_")) {
+    return 9.0;
+  }
+
+  if (normalizedName.includes("wirefence")) {
+    return 7.5;
+  }
+
+  return 6.0;
+}
+
+function createTerrainMaterial({
+  name,
+  colorMap,
+  detailMap,
+  useVertexColors,
+}) {
+  const material = new THREE.MeshBasicMaterial({
+    name,
+    map: colorMap,
+    color: 0xffffff,
+    vertexColors: useVertexColors,
+  });
+
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.detailMap = { value: detailMap };
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <uv_pars_vertex>",
+        `#include <uv_pars_vertex>
+        attribute vec2 uv2;
+        varying vec2 vTerrainDetailUv;`,
+      )
+      .replace(
+        "#include <uv_vertex>",
+        `#include <uv_vertex>
+        vTerrainDetailUv = uv2;`,
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <map_pars_fragment>",
+        `#include <map_pars_fragment>
+        uniform sampler2D detailMap;
+        varying vec2 vTerrainDetailUv;`,
+      )
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
+        vec4 terrainDetail = texture2D(detailMap, vTerrainDetailUv);
+        diffuseColor.rgb *= terrainDetail.rgb;
+        diffuseColor.a *= terrainDetail.a;`,
+      );
+  };
+  material.customProgramCacheKey = () => "flatout-terrain-colormap-detail-v1";
+
+  return material;
 }
 
 function pickTrackTextureName(materialInfo) {

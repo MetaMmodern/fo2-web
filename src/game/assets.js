@@ -6,7 +6,10 @@ import arenaTrackStartPointsUrl from "url:../data/tracks/arena/arena1/a/data/sta
 import arenaTrackAtmosphereUrl from "url:../data/tracks/arena/arena1/a/data/atmosphere.ini";
 import arenaTrackLightmapUrl from "url:../data/tracks/arena/arena1/a/lighting/lightmap1_w2.png";
 import arenaHorizonTextureUrl from "url:../data/tracks/arena/textures/arena_one_background.png";
-import defaultAtmosphereUrl from "url:../data/global/atmosphere/default.ini";
+import arenaSkyTopTextureUrl from "url:../data/global/skybox/arena_day_u.png";
+import desertAddFilterUrl from "url:../data/global/filters/desert_add.tga";
+import desertSubFilterUrl from "url:../data/global/filters/desert_sub.tga";
+import clearAtmosphereUrl from "url:../data/global/atmosphere/clear.ini";
 import defaultCloudBottomUrl from "url:../data/global/atmosphere/default_clouds_bottom.png";
 import defaultCloudTopUrl from "url:../data/global/atmosphere/default_clouds_top.png";
 import arenaGlowTextureUrl from "url:../data/global/flares/day_glow.png";
@@ -52,8 +55,11 @@ export const trackAssetUrls = {
 
 export const arenaEnvironmentAssetUrls = {
   atmosphere: arenaTrackAtmosphereUrl,
-  atmospherePreset: defaultAtmosphereUrl,
+  atmospherePreset: clearAtmosphereUrl,
   horizonTexture: arenaHorizonTextureUrl,
+  skyTopTexture: arenaSkyTopTextureUrl,
+  filterAddTexture: desertAddFilterUrl,
+  filterSubTexture: desertSubFilterUrl,
   cloudBottomTexture: defaultCloudBottomUrl,
   cloudTopTexture: defaultCloudTopUrl,
   glowTexture: arenaGlowTextureUrl,

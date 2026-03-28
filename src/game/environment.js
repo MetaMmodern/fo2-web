@@ -1,6 +1,14 @@
 import * as THREE from "three";
 
 const DEBUG_HORIZON = false;
+const ENVIRONMENT_SCALE = 0.02;
+const DEFAULT_ENVIRONMENT_VALUES = {
+  skyPlaneSize: 3300,
+  skyPlaneAltitude: 188,
+  horizonRadius: 599,
+  horizonBase: -40,
+  horizonHeight: 217,
+};
 
 export async function loadArenaEnvironment(scene, assetUrls) {
   const atmosphere = await loadAtmosphere(
@@ -13,13 +21,51 @@ export async function loadArenaEnvironment(scene, assetUrls) {
   scene.background = null;
   scene.environment = null;
 
-  const skyDome = createSkyDome({
-    radius: atmosphere.skyDomeRadius,
-    colors: atmosphere.skyGradient,
-  });
-  scene.add(skyDome);
+  const skyTopTexture = textureLoader.load(assetUrls.skyTopTexture);
+  configureSkyPlaneTexture(skyTopTexture);
 
-  const hemisphereLight = new THREE.HemisphereLight(0xe8f4ff, 0x6a4c2f, 1.45);
+  const horizonTexture = textureLoader.load(assetUrls.horizonTexture);
+  configureHorizonTexture(horizonTexture);
+
+  const environmentValues = {
+    skyPlaneSize: DEFAULT_ENVIRONMENT_VALUES.skyPlaneSize,
+    skyPlaneAltitude: DEFAULT_ENVIRONMENT_VALUES.skyPlaneAltitude,
+    horizonRadius: DEFAULT_ENVIRONMENT_VALUES.horizonRadius,
+    horizonBase: DEFAULT_ENVIRONMENT_VALUES.horizonBase,
+    horizonHeight: DEFAULT_ENVIRONMENT_VALUES.horizonHeight,
+  };
+
+  const skyPlane = createSkyPlane({
+    size: environmentValues.skyPlaneSize,
+    altitude: environmentValues.skyPlaneAltitude,
+    texture: skyTopTexture,
+  });
+  scene.add(skyPlane);
+
+  const horizonLayer = createHorizonLayer({
+    radius: environmentValues.horizonRadius,
+    base: environmentValues.horizonBase,
+    height: environmentValues.horizonHeight,
+    texture: horizonTexture,
+  });
+  scene.add(horizonLayer);
+
+  const skyLightColor = pickGradientColor(atmosphere.skyGradient, 0.78, new THREE.Color(0xb9d8ff));
+  const horizonLightColor = pickGradientColor(atmosphere.skyGradient, 0.52, new THREE.Color(0x8ab6e8));
+  const groundLightColor = horizonLightColor.clone().lerp(new THREE.Color(0x8d6640), 0.72);
+  const ambientLightColor = skyLightColor.clone().lerp(horizonLightColor, 0.45);
+
+  const ambientLight = new THREE.AmbientLight(
+    ambientLightColor,
+    0.55 * atmosphere.skyAmbient + 0.35 * atmosphere.cloudAmbient,
+  );
+  scene.add(ambientLight);
+
+  const hemisphereLight = new THREE.HemisphereLight(
+    skyLightColor,
+    groundLightColor,
+    1.15 * atmosphere.skyAmbient + 0.55 * atmosphere.cloudAmbient,
+  );
   scene.add(hemisphereLight);
 
   const sunLight = new THREE.DirectionalLight(
@@ -29,31 +75,6 @@ export async function loadArenaEnvironment(scene, assetUrls) {
   sunLight.position.copy(sunPosition);
   sunLight.castShadow = true;
   scene.add(sunLight);
-
-  const cloudBottomTexture = textureLoader.load(assetUrls.cloudBottomTexture);
-  configureCloudTexture(cloudBottomTexture, atmosphere.cloudTiling);
-  const cloudTopTexture = textureLoader.load(assetUrls.cloudTopTexture);
-  configureCloudTexture(cloudTopTexture, atmosphere.cloudTiling);
-
-  const horizonTexture = textureLoader.load(assetUrls.horizonTexture);
-  configureHorizonTexture(horizonTexture);
-  const horizonLayer = createHorizonLayer({
-    radius: atmosphere.horizonRadius,
-    base: atmosphere.horizonBase,
-    height: atmosphere.horizonHeight,
-    texture: horizonTexture,
-  });
-  scene.add(horizonLayer);
-
-  const cloudLayer = createCloudLayer({
-    altitude: atmosphere.cloudAltitude,
-    size: atmosphere.cloudSize,
-    curvature: atmosphere.cloudCurvature,
-    volume: atmosphere.cloudVolume,
-    bottomTexture: cloudBottomTexture,
-    topTexture: cloudTopTexture,
-  });
-  scene.add(cloudLayer);
 
   const glowTexture = textureLoader.load(assetUrls.glowTexture);
   glowTexture.colorSpace = THREE.SRGBColorSpace;
@@ -98,23 +119,91 @@ export async function loadArenaEnvironment(scene, assetUrls) {
   flareSprite.frustumCulled = false;
   scene.add(flareSprite);
 
-  scene.userData.arenaEnvironment = {
+  const environmentController = createEnvironmentController({
+    scene,
+    values: environmentValues,
+    skyPlane,
+    horizonLayer,
+    skyTopTexture,
+    horizonTexture,
     atmosphere,
-    skyDome,
+    ambientLight,
     hemisphereLight,
     sunLight,
     sunDirection,
     sunPosition,
-    cloudLayer,
-    horizonLayer,
-    cloudBottomTexture,
-    cloudTopTexture,
-    horizonTexture,
     glowTexture,
     flareTexture,
     glowSprite,
     flareSprite,
+  });
+
+  scene.userData.arenaEnvironment = environmentController;
+  return environmentController;
+}
+
+function createEnvironmentController(state) {
+  function rebuildHorizon() {
+    const nextLayer = createHorizonLayer({
+      radius: state.values.horizonRadius,
+      base: state.values.horizonBase,
+      height: state.values.horizonHeight,
+      texture: state.horizonTexture,
+    });
+    state.scene.remove(state.horizonLayer);
+    disposeHierarchy(state.horizonLayer);
+    state.horizonLayer = nextLayer;
+    state.scene.add(nextLayer);
+  }
+
+  function applyValue(key, value) {
+    state.values[key] = value;
+
+    if (key === "skyPlaneSize") {
+      state.skyPlane.geometry.dispose();
+      state.skyPlane.geometry = new THREE.PlaneGeometry(value, value, 1, 1);
+      state.skyPlane.geometry.rotateX(-Math.PI / 2);
+      return;
+    }
+
+    if (key === "skyPlaneAltitude") {
+      state.skyPlane.position.y = value;
+      return;
+    }
+
+    if (
+      key === "horizonRadius" ||
+      key === "horizonBase" ||
+      key === "horizonHeight"
+    ) {
+      rebuildHorizon();
+    }
+  }
+
+  return {
+    getValues() {
+      return { ...state.values };
+    },
+    setValue(key, value) {
+      if (!(key in state.values) || !Number.isFinite(value)) {
+        return;
+      }
+
+      applyValue(key, value);
+    },
+    ...state,
   };
+}
+
+function disposeHierarchy(root) {
+  root.traverse((node) => {
+    if (node.geometry) {
+      node.geometry.dispose();
+    }
+
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.forEach((material) => material?.dispose?.());
+  });
 }
 
 async function loadAtmosphere(trackAtmosphereUrl, presetAtmosphereUrl) {
@@ -128,6 +217,8 @@ async function loadAtmosphere(trackAtmosphereUrl, presetAtmosphereUrl) {
   return {
     sunDirection: new THREE.Vector3(...sunDirection),
     sunIntensity: parseNumber(trackText, "Sun_Intensity", 1.5),
+    skyAmbient: parseNumber(presetText, "SkyDome_Ambient", 1),
+    cloudAmbient: parseNumber(presetText, "CloudLayer_Ambient", 1),
     skyDomeRadius: parseNumber(trackText, "SkyDome_Radius", 30000),
     cloudAltitude: parseNumber(trackText, "CloudLayer_Altitude", 500),
     cloudSize: parseNumber(trackText, "CloudLayer_Size", 4000),
@@ -192,12 +283,19 @@ function parseGradientColors(text) {
     );
 }
 
-function configureCloudTexture(texture, tiling) {
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.flipY = true;
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(tiling, tiling);
+function pickGradientColor(gradient, normalizedPosition, fallbackColor) {
+  if (!gradient?.length) {
+    return fallbackColor.clone();
+  }
+
+  const clampedPosition = THREE.MathUtils.clamp(normalizedPosition, 0, 1);
+  const sampleIndex = Math.min(
+    gradient.length - 1,
+    Math.round(clampedPosition * (gradient.length - 1)),
+  );
+  const sample = gradient[sampleIndex];
+
+  return new THREE.Color(sample[0], sample[1], sample[2]);
 }
 
 function configureHorizonTexture(texture) {
@@ -207,130 +305,58 @@ function configureHorizonTexture(texture) {
   texture.wrapT = THREE.ClampToEdgeWrapping;
 }
 
-function createSkyDome({ radius, colors }) {
-  const geometry = new THREE.SphereGeometry(radius, 64, 32, 0, Math.PI * 2, 0, Math.PI * 0.5);
-  const position = geometry.getAttribute("position");
-  const colorValues = new Float32Array(position.count * 3);
-  const color = new THREE.Color();
-
-  for (let index = 0; index < position.count; index += 1) {
-    const y = position.getY(index);
-    const normalized = THREE.MathUtils.clamp(y / radius, 0, 1);
-    const sample = sampleGradient(colors, normalized);
-    color.setRGB(sample[0], sample[1], sample[2]);
-    color.toArray(colorValues, index * 3);
-  }
-
-  geometry.setAttribute("color", new THREE.BufferAttribute(colorValues, 3));
-
-  return new THREE.Mesh(
-    geometry,
-    new THREE.MeshBasicMaterial({
-      vertexColors: true,
-      side: THREE.BackSide,
-      fog: false,
-      depthWrite: false,
-    }),
-  );
+function configureSkyPlaneTexture(texture) {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = true;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
 }
 
-function sampleGradient(colors, t) {
-  const scaled = t * (colors.length - 1);
-  const lowIndex = Math.floor(scaled);
-  const highIndex = Math.min(colors.length - 1, lowIndex + 1);
-  const alpha = scaled - lowIndex;
-  const low = colors[lowIndex];
-  const high = colors[highIndex];
-
-  return [
-    THREE.MathUtils.lerp(low[0], high[0], alpha),
-    THREE.MathUtils.lerp(low[1], high[1], alpha),
-    THREE.MathUtils.lerp(low[2], high[2], alpha),
-  ];
-}
-
-function createCloudLayer({
-  altitude,
-  size,
-  curvature,
-  volume,
-  bottomTexture,
-  topTexture,
-}) {
-  const group = new THREE.Group();
-  const geometry = new THREE.PlaneGeometry(size, size, 48, 48);
+function createSkyPlane({ size, altitude, texture }) {
+  const geometry = new THREE.PlaneGeometry(size, size, 1, 1);
   geometry.rotateX(-Math.PI / 2);
-
-  const position = geometry.getAttribute("position");
-  const maxRadius = size * 0.5;
-
-  for (let index = 0; index < position.count; index += 1) {
-    const x = position.getX(index);
-    const z = position.getZ(index);
-    const radius = Math.min(1, Math.hypot(x, z) / maxRadius);
-    const y = altitude - radius * radius * curvature;
-    position.setY(index, y);
-  }
-
-  position.needsUpdate = true;
-  geometry.computeVertexNormals();
-
-  const bottomClouds = new THREE.Mesh(
+  const skyPlane = new THREE.Mesh(
     geometry,
     new THREE.MeshBasicMaterial({
-      map: bottomTexture,
+      map: texture,
       color: 0xffffff,
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: false,
       side: THREE.DoubleSide,
       fog: false,
-    }),
-  );
-  group.add(bottomClouds);
-
-  const topClouds = new THREE.Mesh(
-    geometry.clone(),
-    new THREE.MeshBasicMaterial({
-      map: topTexture,
-      color: 0xf7fbff,
-      transparent: true,
-      opacity: 0.45,
       depthWrite: false,
-      side: THREE.DoubleSide,
-      fog: false,
     }),
   );
-  topClouds.position.y += volume;
-  group.add(topClouds);
-
-  return group;
+  skyPlane.position.y = altitude;
+  skyPlane.name = "arena_sky_plane";
+  return skyPlane;
 }
 
 function createHorizonLayer({ radius, base, height, texture }) {
   const horizon = new THREE.Group();
   horizon.name = "arena_horizon_layer";
 
-  const wallWidth = radius * 2;
-  const wallHeight = height;
-  const wallGeometry = new THREE.PlaneGeometry(wallWidth, wallHeight, 1, 1);
-  const wallY = base + wallHeight * 0.5;
+  const wallY = base + height * 0.5;
   const stripHeight = 0.25;
   const stripOffsets = [0.75, 0.5, 0.25, 0];
-  const placements = [
-    { position: [0, wallY, -radius], rotationY: 0 },
-    { position: [radius, wallY, 0], rotationY: -Math.PI / 2 },
-    { position: [0, wallY, radius], rotationY: Math.PI },
-    { position: [-radius, wallY, 0], rotationY: Math.PI / 2 },
-  ];
 
   stripOffsets.forEach((offsetY, index) => {
+    const startAngle = -Math.PI * 0.75 + index * (Math.PI / 2);
+    const wallGeometry = new THREE.CylinderGeometry(
+      radius,
+      radius,
+      height,
+      24,
+      1,
+      true,
+      startAngle,
+      Math.PI / 2,
+    );
     const material = new THREE.MeshBasicMaterial({
       map: DEBUG_HORIZON ? null : texture.clone(),
       color: DEBUG_HORIZON ? 0xff0000 : 0xffffff,
-      transparent: false,
+      transparent: true,
       opacity: 1,
-      side: THREE.DoubleSide,
+      alphaTest: 0.02,
+      side: THREE.BackSide,
       depthWrite: false,
       fog: false,
     });
@@ -346,8 +372,7 @@ function createHorizonLayer({ radius, base, height, texture }) {
     }
 
     const wall = new THREE.Mesh(wallGeometry, material);
-    wall.position.set(...placements[index].position);
-    wall.rotation.y = placements[index].rotationY;
+    wall.position.y = wallY;
     horizon.add(wall);
   });
 

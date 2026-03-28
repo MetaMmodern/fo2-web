@@ -12,6 +12,7 @@ import { createHud, updateHud } from "./game/hud";
 import { createDrivingInput } from "./game/input";
 import { createTextureRegistry, prepareMaterials } from "./game/materials";
 import { createDrivingSimulation } from "./game/physics";
+import { createColorFilterPass } from "./game/postprocessing";
 import {
   createChaseCamera,
   createSceneApp,
@@ -22,14 +23,38 @@ import { loadVehicle } from "./game/vehicle";
 
 const { scene, camera, renderer, controls } = createSceneApp();
 const hud = createHud();
-const { getTexture } = createTextureRegistry(textureUrls);
+const { getTexture } = createTextureRegistry(
+  textureUrls,
+  renderer.capabilities.getMaxAnisotropy(),
+);
 const drivingInput = createDrivingInput();
+const colorFilterPass = createColorFilterPass(renderer, {
+  addTexture: arenaEnvironmentAssetUrls.filterAddTexture,
+  subTexture: arenaEnvironmentAssetUrls.filterSubTexture,
+});
 let chaseCamera = null;
 let drivingSimulation = null;
 
+if (typeof window !== "undefined") {
+  window.__flatoutDebug = {
+    scene,
+    camera,
+    renderer,
+    controls,
+    colorFilterPass,
+    get chaseCamera() {
+      return chaseCamera;
+    },
+    disableChaseCamera() {
+      chaseCamera = null;
+      controls.enabled = true;
+    },
+  };
+}
+
 Promise.all([
   loadArenaEnvironment(scene, arenaEnvironmentAssetUrls),
-  loadTrack(trackAssetUrls, scene),
+  loadTrack(trackAssetUrls, scene, renderer),
   loadVehicle(vehicleAssetUrls, scene, controls, (root) =>
     prepareMaterials(root, getTexture),
   ),
@@ -38,7 +63,7 @@ Promise.all([
     return null;
   }),
 ])
-  .then(async ([, { trackRoot, startPoints }, { carRoot, tireRoot }, cameraConfig]) => {
+  .then(async ([environment, { trackRoot, startPoints }, { carRoot, tireRoot }, cameraConfig]) => {
     placeVehicleOnTrack(trackRoot, carRoot, startPoints);
     drivingSimulation = await createDrivingSimulation({
       trackRoot,
@@ -65,5 +90,5 @@ function animate() {
   if (!chaseCamera) {
     controls.update();
   }
-  renderer.render(scene, camera);
+  colorFilterPass.render(scene, camera);
 }

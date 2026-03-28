@@ -1,0 +1,51 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_static_nonlit.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2006 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 9.3.2006 11:56:17
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture	Tex0;
+
+const string inputStreamFormat = "PosTex1";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];  // Position
+		float    v3[2];  // Tex coord 0
+	}
+	asm
+	{
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_texcoord	v3
+		
+		m4x4	oPos, v0, c0
+		mov		oT0.xy, v3.xy
+	};
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		tex			t0
+		mov			r0, t0
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+		Texture[0] = <Tex0>;
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}
+

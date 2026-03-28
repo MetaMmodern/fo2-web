@@ -1,0 +1,37 @@
+///////////////////////////////////////////////////////////////////////////
+// copy.fx
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2005 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 1.12.2005 10:55
+// 
+// Authors: Timo Saarinen (timo.saarinen@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture Tex0;
+
+const string inputStreamFormat = "PosprojTex1";
+
+// C3 = multiply color
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+		tex		t0
+		mul		r0, t0, c3
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+			Texture[0] = <Tex0>;
+    	AddressU[0] = Clamp;
+    	AddressV[0] = Clamp;
+    	MagFilter[0] = Linear;
+    	
+			VertexShader = null;
+			PixelShader = <pSdr>;
+	}
+}

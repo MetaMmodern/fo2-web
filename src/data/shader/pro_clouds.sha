@@ -1,0 +1,58 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_clouds.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2003 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 10.6.2004 16:24
+// 
+// Authors: Timo Saarinen (timo.saarinen@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture	Tex0;
+
+const string inputStreamFormat = "PosColorTex1";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];  // Position
+		D3DCOLOR v2;     // Diffuse
+		float    v3[2];  // Tex coord 0
+	}
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+        ;  32   - UV offset (added to all texture coordinates)
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_color		v2
+		dcl_texcoord	v3	
+		
+		m4x4	oPos, v0, c0
+		mov		oD0, v2
+		add		oT0.xy, v3.xy, c32
+	};
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		tex			t0
+		mul_x2_sat	r0.rgb, t0, v0
+		+mul_x2_sat r0.a, t0, v0
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+		Texture[0] = <Tex0>;
+		
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}

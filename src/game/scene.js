@@ -54,12 +54,34 @@ export function createChaseCamera(camera, controls, object, options = {}) {
   const desiredPosition = new THREE.Vector3();
   const desiredLookTarget = new THREE.Vector3();
   const smoothedLookTarget = new THREE.Vector3();
+  const orbitForward = new THREE.Vector3();
+  const orbitRight = new THREE.Vector3();
+  const orbitOffset = new THREE.Vector3();
   const presets =
     options.presets?.length > 0
       ? options.presets.map(cloneCameraPreset)
       : [cloneCameraPreset(createFallbackCameraPreset())];
   let presetIndex = options.initialPresetIndex ?? 0;
   let orbitMode = false;
+  let orbitKeyboardStep = 20;
+  const orbitKeys = new Set();
+  const onOrbitWheel = (event) => {
+    if (!orbitMode) {
+      return;
+    }
+
+    event.preventDefault();
+    const nextFov = THREE.MathUtils.clamp(
+      camera.fov + Math.sign(event.deltaY) * 2,
+      15,
+      120,
+    );
+
+    if (nextFov !== camera.fov) {
+      camera.fov = nextFov;
+      camera.updateProjectionMatrix();
+    }
+  };
 
   applyPresetToCamera(camera, presets[presetIndex]);
   camera.updateProjectionMatrix();
@@ -101,12 +123,40 @@ export function createChaseCamera(camera, controls, object, options = {}) {
 
     if (event.code === "KeyC") {
       cyclePreset();
+      return;
     }
+
+    if (event.code === "Digit1") {
+      orbitKeyboardStep = Math.max(2, orbitKeyboardStep * 0.5);
+      return;
+    }
+
+    if (event.code === "Digit2") {
+      orbitKeyboardStep = Math.min(240, orbitKeyboardStep * 2);
+      return;
+    }
+
+    orbitKeys.add(event.code);
   });
+
+  window.addEventListener("keyup", (event) => {
+    orbitKeys.delete(event.code);
+  });
+  controls.domElement.addEventListener("wheel", onOrbitWheel, { passive: false });
 
   return {
     update(deltaSeconds) {
       if (orbitMode) {
+        updateOrbitKeyboardControls(
+          camera,
+          controls,
+          orbitKeys,
+          orbitKeyboardStep,
+          deltaSeconds,
+          orbitForward,
+          orbitRight,
+          orbitOffset,
+        );
         controls.update();
         return;
       }
@@ -133,6 +183,69 @@ export function createChaseCamera(camera, controls, object, options = {}) {
       return presetIndex;
     },
   };
+}
+
+function updateOrbitKeyboardControls(
+  camera,
+  controls,
+  orbitKeys,
+  orbitKeyboardStep,
+  deltaSeconds,
+  orbitForward,
+  orbitRight,
+  orbitOffset,
+) {
+  const step = orbitKeyboardStep * deltaSeconds;
+
+  orbitForward.subVectors(controls.target, camera.position);
+  if (orbitForward.lengthSq() < 0.0001) {
+    orbitForward.set(0, 0, -1);
+  } else {
+    orbitForward.normalize();
+  }
+
+  orbitRight.crossVectors(orbitForward, camera.up);
+  if (orbitRight.lengthSq() < 0.0001) {
+    orbitRight.set(1, 0, 0);
+  } else {
+    orbitRight.normalize();
+  }
+
+  if (orbitKeys.has("KeyI")) {
+    orbitOffset.copy(orbitForward).multiplyScalar(step);
+    camera.position.add(orbitOffset);
+    controls.target.add(orbitOffset);
+  }
+
+  if (orbitKeys.has("KeyK")) {
+    orbitOffset.copy(orbitForward).multiplyScalar(-step);
+    camera.position.add(orbitOffset);
+    controls.target.add(orbitOffset);
+  }
+
+  if (orbitKeys.has("KeyJ")) {
+    orbitOffset.copy(orbitRight).multiplyScalar(-step);
+    camera.position.add(orbitOffset);
+    controls.target.add(orbitOffset);
+  }
+
+  if (orbitKeys.has("KeyL")) {
+    orbitOffset.copy(orbitRight).multiplyScalar(step);
+    camera.position.add(orbitOffset);
+    controls.target.add(orbitOffset);
+  }
+
+  if (orbitKeys.has("KeyU")) {
+    orbitOffset.copy(camera.up).multiplyScalar(step);
+    camera.position.add(orbitOffset);
+    controls.target.add(orbitOffset);
+  }
+
+  if (orbitKeys.has("KeyO")) {
+    orbitOffset.copy(camera.up).multiplyScalar(-step);
+    camera.position.add(orbitOffset);
+    controls.target.add(orbitOffset);
+  }
 }
 
 function parseVehicleCameraConfig(cameraIniText) {

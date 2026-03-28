@@ -1,0 +1,58 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_sunmap_lightmap_opa.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2002 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 8/27/2002 1:35:16 PM
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+// Lightmapped
+
+const string inputStreamFormat = "PosTex2";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float	v0[3];  // Position
+		float	v3[2];  // Tex coord 0
+		float	v4[2];  // Tex coord 0
+	}
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_texcoord0	v3
+		dcl_texcoord1	v4
+		
+		m4x4	oPos, v0, c0
+
+	};
+	
+
+
+// Pixel shader
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		mov		r0, c0.a
+	};
+
+
+
+Technique T0
+{
+    Pass P0
+    {
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}
+

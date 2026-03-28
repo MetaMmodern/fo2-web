@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-export function createTextureRegistry(textureUrls) {
+export function createTextureRegistry(textureUrls, maxAnisotropy = 1) {
   const textureLoader = new THREE.TextureLoader();
   const textureCache = new Map();
 
@@ -12,6 +12,7 @@ export function createTextureRegistry(textureUrls) {
     const texture = textureLoader.load(textureUrls[textureName]);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.flipY = false;
+    texture.anisotropy = maxAnisotropy;
     textureCache.set(textureName, texture);
     return texture;
   }

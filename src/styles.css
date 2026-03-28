@@ -28,9 +28,38 @@ canvas {
   background: rgba(17, 17, 17, 0.78);
   color: #f3f3f3;
   border-radius: 10px;
-  backdrop-filter: blur(8px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
   z-index: 10;
+}
+
+.hud-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.hud-body {
+  display: block;
+}
+
+.hud-collapsed {
+  width: auto;
+}
+
+.hud-collapsed .hud-body {
+  display: none;
+}
+
+.hud-toggle {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #ddd2b3;
+  color: #201a10;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .hud-section + .hud-section {
@@ -50,4 +79,20 @@ canvas {
   font-size: 13px;
   line-height: 1.4;
   word-break: break-word;
+}
+
+.hud-control + .hud-control {
+  margin-top: 8px;
+}
+
+.hud-control-label,
+.hud-value {
+  display: block;
+  font-size: 12px;
+  color: #d9d2c4;
+}
+
+.hud-range {
+  width: 100%;
+  margin-top: 4px;
 }

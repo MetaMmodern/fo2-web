@@ -1,0 +1,61 @@
+///////////////////////////////////////////////////////////////////////////
+// pro_lightmapped.sha
+///////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2002 Bugbear Entertainment ltd. 
+// All Rights Reserved.
+// 
+// Created on 8/2/2002 5:46:12 PM
+// 
+// Authors: Tatu Blomberg (tatu@bugbear.fi)
+///////////////////////////////////////////////////////////////////////////
+Texture	Tex0;
+Texture	Tex1;
+
+const string inputStreamFormat = "PosTex2";
+
+vertexshader vSdr = 
+	decl
+	{
+		stream 0;
+		float    v0[3];  // Position
+		float    v3[2];  // Tex coord 0
+		float    v4[2];  // Tex coord 1
+	}
+	asm
+	{
+        ; Constants:
+        ;  0..3 - Composite World-View-Projection Matrix
+		vs.1.1
+		
+		dcl_position	v0
+		dcl_texcoord0	v3	
+		dcl_texcoord1	v4
+		
+		m4x4	oPos, v0, c0
+		mov		oT0.xy, v3.xy
+		mov		oT1.xy, v4.xy
+	};
+
+pixelshader pSdr =
+	asm
+	{
+		ps.1.1
+
+		tex		t0
+		tex		t1
+
+//		add_sat	r1, t1, t0.a
+		mul		r0, t0, t1
+	};
+
+Technique T0
+{
+    Pass P0
+    {        
+		Texture[0] = <Tex0>;
+		Texture[1] = <Tex1>;
+		
+		VertexShader = <vSdr>;
+		PixelShader = <pSdr>;
+	}
+}
