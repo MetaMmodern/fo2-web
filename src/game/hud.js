@@ -38,6 +38,11 @@ export function updateHud(hud, carRoot, tireRoot) {
 
   hud.innerHTML = `
     <div class="hud-section">
+      <div class="hud-title">Controls</div>
+      <div class="hud-text">C: cycle chase cameras</div>
+      <div class="hud-text">\`: toggle orbit debug camera</div>
+    </div>
+    <div class="hud-section">
       <div class="hud-title">Wheel Hubs</div>
       <div class="hud-text">${hubNames.join(", ") || "none"}</div>
     </div>

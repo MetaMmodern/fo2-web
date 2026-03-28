@@ -40,6 +40,267 @@ export function createSceneApp(container = document.body) {
   return { scene, camera, renderer, controls };
 }
 
+export async function loadVehicleCameraConfig(cameraConfigUrl) {
+  const response = await fetch(cameraConfigUrl);
+
+  if (!response.ok) {
+    throw new Error(`Failed to load vehicle camera config: ${response.status}`);
+  }
+
+  return parseVehicleCameraConfig(await response.text());
+}
+
+export function createChaseCamera(camera, controls, object, options = {}) {
+  const desiredPosition = new THREE.Vector3();
+  const desiredLookTarget = new THREE.Vector3();
+  const smoothedLookTarget = new THREE.Vector3();
+  const presets =
+    options.presets?.length > 0
+      ? options.presets.map(cloneCameraPreset)
+      : [cloneCameraPreset(createFallbackCameraPreset())];
+  let presetIndex = options.initialPresetIndex ?? 0;
+  let orbitMode = false;
+
+  applyPresetToCamera(camera, presets[presetIndex]);
+  camera.updateProjectionMatrix();
+  object.updateWorldMatrix(true, false);
+  desiredPosition.copy(object.localToWorld(presets[presetIndex].positionOffset.clone()));
+  desiredLookTarget.copy(object.localToWorld(presets[presetIndex].targetOffset.clone()));
+  smoothedLookTarget.copy(desiredLookTarget);
+  camera.position.copy(desiredPosition);
+  controls.target.copy(smoothedLookTarget);
+  controls.enabled = false;
+  camera.lookAt(smoothedLookTarget);
+
+  function toggleOrbitMode() {
+    orbitMode = !orbitMode;
+    controls.enabled = orbitMode;
+  }
+
+  function cyclePreset() {
+    presetIndex = (presetIndex + 1) % presets.length;
+    applyPresetToCamera(camera, presets[presetIndex]);
+    object.updateWorldMatrix(true, false);
+    desiredPosition.copy(
+      object.localToWorld(presets[presetIndex].positionOffset.clone()),
+    );
+    desiredLookTarget.copy(
+      object.localToWorld(presets[presetIndex].targetOffset.clone()),
+    );
+    smoothedLookTarget.copy(desiredLookTarget);
+    camera.position.copy(desiredPosition);
+    controls.target.copy(smoothedLookTarget);
+    camera.lookAt(smoothedLookTarget);
+  }
+
+  window.addEventListener("keydown", (event) => {
+    if (event.code === "Backquote") {
+      toggleOrbitMode();
+      return;
+    }
+
+    if (event.code === "KeyC") {
+      cyclePreset();
+    }
+  });
+
+  return {
+    update(deltaSeconds) {
+      if (orbitMode) {
+        controls.update();
+        return;
+      }
+
+      object.updateWorldMatrix(true, false);
+      desiredPosition.copy(
+        object.localToWorld(presets[presetIndex].positionOffset.clone()),
+      );
+      desiredLookTarget.copy(
+        object.localToWorld(presets[presetIndex].targetOffset.clone()),
+      );
+
+      const positionAlpha =
+        1 - Math.exp(-presets[presetIndex].positionSharpness * deltaSeconds);
+      const lookAlpha =
+        1 - Math.exp(-presets[presetIndex].lookSharpness * deltaSeconds);
+
+      camera.position.lerp(desiredPosition, positionAlpha);
+      smoothedLookTarget.lerp(desiredLookTarget, lookAlpha);
+      controls.target.copy(smoothedLookTarget);
+      camera.lookAt(smoothedLookTarget);
+    },
+    getPresetIndex() {
+      return presetIndex;
+    },
+  };
+}
+
+function parseVehicleCameraConfig(cameraIniText) {
+  const cameraBlocks = Array.from(
+    cameraIniText.matchAll(/\[(\d+)\]\s*=\s*\{([\s\S]*?)\n\t\}/g),
+  ).map((match) => ({
+    index: Number.parseInt(match[1], 10),
+    body: match[2],
+  }));
+
+  const cameras = cameraBlocks.map(({ index, body }) => ({
+    index,
+    positionType: parseIniNumber(body, "PositionType"),
+    targetType: parseIniNumber(body, "TargetType"),
+    trackerType: parseIniNumber(body, "TrackerType"),
+    fov: parseIniNumber(body, "FOV"),
+    positionOffset: parseIniVector(body, "Offset", "PositionFrames"),
+    targetOffset: parseIniVector(body, "Offset", "TargetFrames"),
+    stiffness: parseTrackerStiffness(body),
+  }));
+
+  const presets = cameras
+    .filter((cameraConfig) => cameraConfig.positionOffset)
+    .sort((left, right) => left.index - right.index)
+    .map((cameraConfig) => ({
+      label: `Cam ${cameraConfig.index}`,
+      positionOffset: convertCameraOffsetToScene(cameraConfig.positionOffset),
+      targetOffset: resolveCameraTargetOffset(cameraConfig),
+      fov: cameraConfig.fov ?? 100,
+      positionSharpness: convertTrackerStiffness(
+        cameraConfig.stiffness?.x,
+        cameraConfig.targetOffset ? 4 : 9,
+      ),
+      lookSharpness: convertTrackerStiffness(
+        cameraConfig.stiffness?.y,
+        cameraConfig.targetOffset ? 5 : 11,
+      ),
+    }))
+    .filter(Boolean);
+
+  if (presets.length === 0) {
+    return null;
+  }
+
+  return {
+    presets,
+    initialPresetIndex: 0,
+  };
+}
+
+function parseIniNumber(text, key) {
+  const match = text.match(new RegExp(`${key}\\s*=\\s*([-+]?\\d*\\.?\\d+)`));
+  return match ? Number.parseFloat(match[1]) : null;
+}
+
+function parseIniVector(text, key, sectionName) {
+  const match = text.match(
+    new RegExp(
+      `${sectionName}[\\s\\S]*?${key}\\s*=\\s*\\{\\s*([^}]+)\\}`,
+      "m",
+    ),
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const values = match[1]
+    .split(",")
+    .map((value) => Number.parseFloat(value.trim()))
+    .filter((value) => Number.isFinite(value));
+
+  if (values.length !== 3) {
+    return null;
+  }
+
+  return new THREE.Vector3(values[0], values[1], values[2]);
+}
+
+function parseTrackerStiffness(text) {
+  const trackerMatch = text.match(
+    /TrackerData\s*=\s*\{([\s\S]*?)\n\t\t\}/m,
+  );
+
+  if (!trackerMatch) {
+    return null;
+  }
+
+  const stiffnessMatch = trackerMatch[1].match(/Stiffness\s*=\s*\{\s*([^}]+)\}/);
+
+  if (!stiffnessMatch) {
+    return null;
+  }
+
+  const values = stiffnessMatch[1]
+    .split(",")
+    .map((value) => Number.parseFloat(value.trim()))
+    .filter((value) => Number.isFinite(value));
+
+  if (values.length < 2) {
+    return null;
+  }
+
+  return {
+    x: values[0],
+    y: values[1],
+    z: values[2] ?? 0,
+  };
+}
+
+function convertTrackerStiffness(value, fallback) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+
+  return Math.max(value * 24, 1);
+}
+
+function applyPresetToCamera(camera, preset) {
+  camera.fov = preset.fov ?? 100;
+  camera.updateProjectionMatrix();
+}
+
+function cloneCameraPreset(preset) {
+  return {
+    label: preset.label,
+    positionOffset: preset.positionOffset.clone(),
+    targetOffset: preset.targetOffset.clone(),
+    fov: preset.fov,
+    positionSharpness: preset.positionSharpness,
+    lookSharpness: preset.lookSharpness,
+  };
+}
+
+function createFallbackCameraPreset() {
+  return {
+    label: "Cam 1",
+    positionOffset: new THREE.Vector3(0, 1.47, -4.05),
+    targetOffset: new THREE.Vector3(0, 0.49, -0.011),
+    fov: 100,
+    positionSharpness: 4,
+    lookSharpness: 5,
+  };
+}
+
+function convertCameraOffsetToScene(offset) {
+  return new THREE.Vector3(offset.x, offset.y, -offset.z);
+}
+
+function resolveCameraTargetOffset(cameraConfig) {
+  if (cameraConfig.targetOffset) {
+    return convertCameraOffsetToScene(cameraConfig.targetOffset);
+  }
+
+  const positionOffset = convertCameraOffsetToScene(cameraConfig.positionOffset);
+  const targetOffset = positionOffset.clone();
+
+  if (cameraConfig.positionType === 3 || cameraConfig.positionType === 4) {
+    targetOffset.x *= 0.2;
+    targetOffset.y = Math.max(positionOffset.y * 0.95, 0.55);
+    targetOffset.z -= 8;
+    return targetOffset;
+  }
+
+  targetOffset.set(0, Math.max(positionOffset.y * 0.7, 0.6), -2.5);
+  return targetOffset;
+}
+
 export function frameObject(camera, controls, object, options = {}) {
   const box = new THREE.Box3().setFromObject(object);
   const center = new THREE.Vector3();

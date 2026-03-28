@@ -11,6 +11,7 @@ import defaultCloudBottomUrl from "url:../data/global/atmosphere/default_clouds_
 import defaultCloudTopUrl from "url:../data/global/atmosphere/default_clouds_top.png";
 import arenaGlowTextureUrl from "url:../data/global/flares/day_glow.png";
 import arenaFlareTextureUrl from "url:../data/global/flares/day_flares.png";
+import carCameraConfigUrl from "url:../data/cars/car_1/camera.ini";
 import skin1TextureUrl from "url:../data/cars/car_1/skin1.png";
 import commonTextureUrl from "url:../data/cars/shared/common.png";
 import interiorTextureUrl from "url:../data/cars/shared/interior.png";
@@ -23,6 +24,7 @@ import tireTextureUrl from "url:../data/cars/shared/tire_04.png";
 export const vehicleAssetUrls = {
   carModel: modelUrl,
   tireModel: tireModelUrl,
+  cameraConfig: carCameraConfigUrl,
   textureOverrides: {
     "skin1.dds": skin1TextureUrl,
     "common.dds": commonTextureUrl,
