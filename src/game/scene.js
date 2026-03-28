@@ -8,8 +8,8 @@ export function createSceneApp(container = document.body) {
   const camera = new THREE.PerspectiveCamera(
     60,
     window.innerWidth / window.innerHeight,
-    0.1,
-    2000,
+    1,
+    60000,
   );
   camera.position.set(16, 9, 18);
 
@@ -30,8 +30,6 @@ export function createSceneApp(container = document.body) {
   controls.maxDistance = 1400;
   controls.maxPolarAngle = Math.PI;
   controls.zoomToCursor = true;
-
-  addStudio(scene);
 
   window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -61,21 +59,4 @@ export function frameObject(camera, controls, object, options = {}) {
     center.z + size.z * depthScale * distanceScale,
   );
   camera.lookAt(center);
-}
-
-function addStudio(scene) {
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xd7d1c7, 1.4));
-
-  const keyLight = new THREE.DirectionalLight(0xfffaf0, 2.8);
-  keyLight.position.set(6, 10, 9);
-  keyLight.castShadow = true;
-  scene.add(keyLight);
-
-  const fillLight = new THREE.DirectionalLight(0xe8f1ff, 1.4);
-  fillLight.position.set(-7, 4, 6);
-  scene.add(fillLight);
-
-  const rimLight = new THREE.DirectionalLight(0xffffff, 1.2);
-  rimLight.position.set(-4, 8, -10);
-  scene.add(rimLight);
 }

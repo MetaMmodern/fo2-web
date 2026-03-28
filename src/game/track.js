@@ -31,13 +31,14 @@ export async function loadTrack(assetUrls, scene) {
 
 export function placeVehicleOnTrack(trackRoot, carRoot, startPoints = []) {
   if (startPoints.length > 0) {
-    const spawnPoint = startPoints[0];
+    const spawnPoint = transformStartPointToScene(startPoints[0]);
     carRoot.position.set(
       trackRoot.position.x + spawnPoint.position.x,
       trackRoot.position.y + spawnPoint.position.y + 0.35,
       trackRoot.position.z + spawnPoint.position.z,
     );
-    carRoot.rotation.set(0, spawnPoint.yaw + Math.PI, 0);
+    carRoot.quaternion.copy(spawnPoint.quaternion);
+    carRoot.rotateY(Math.PI);
     return;
   }
 
@@ -74,7 +75,7 @@ async function loadStartPoints(startPointsUrl) {
     throw new Error(`Failed to load track start points: ${response.status}`);
   }
 
-  return parseStartPoints(await response.text());
+  return normalizeStartPointGrid(parseStartPoints(await response.text()));
 }
 
 function parseTrackLog(logText) {
@@ -396,23 +397,217 @@ function promoteSecondaryUvSet(geometry) {
 
 function parseStartPoints(startPointsText) {
   const blocks = Array.from(
-    startPointsText.matchAll(
-      /\[\d+\]\s*=\s*\{\s*Position\s*=\s*\{\s*([^}]+)\}\s*,\s*Orientation\s*=\s*\{\s*([^}]+)\}\s*\}/gms,
-    ),
+    startPointsText.matchAll(/\[\d+\]\s*=\s*\{([\s\S]*?)\n\t\}/g),
   );
 
-  return blocks.map((match) => {
-    const position = match[1]
-      .split(",")
-      .map((value) => Number.parseFloat(value.trim()));
-    const orientation = match[2]
-      .split(",")
-      .map((value) => Number.parseFloat(value.trim()));
+  return blocks
+    .map((match) => parseStartPointBlock(match[1]))
+    .filter(Boolean);
+}
+
+function parseStartPointBlock(blockText) {
+  const position = parseVectorBlock(blockText, "Position");
+  const xAxis = parseNamedVectorBlock(blockText, "x");
+  const yAxis = parseNamedVectorBlock(blockText, "y");
+  const zAxis = parseNamedVectorBlock(blockText, "z");
+
+  if (!position) {
+    return null;
+  }
+
+  const basisX = xAxis || new THREE.Vector3(1, 0, 0);
+  const basisY = yAxis || new THREE.Vector3(0, 1, 0);
+  const basisZ = zAxis || new THREE.Vector3(0, 0, 1);
+
+  return {
+    position,
+    basisX,
+    basisY,
+    basisZ,
+  };
+}
+
+function normalizeStartPointGrid(startPoints) {
+  if (startPoints.length < 2) {
+    return startPoints.map((startPoint) => buildSceneStartPoint(startPoint));
+  }
+
+  // BED encodes the arena grid on two repeated rank sets; rebuilding from those
+  // ranks preserves the intended 4x2 stagger after the source-to-scene axis flip.
+  const gridAxis = sourceVectorToScene(startPoints[0].basisX);
+  const up = sourceVectorToScene(startPoints[0].basisY);
+  const forward = sourceVectorToScene(startPoints[0].basisZ);
+  const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+  const centroid = new THREE.Vector3();
+
+  startPoints.forEach((startPoint) => {
+    centroid.add(sourcePositionToScene(startPoint.position));
+  });
+  centroid.divideScalar(startPoints.length);
+
+  const rotationMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
+  const quaternion = new THREE.Quaternion().setFromRotationMatrix(rotationMatrix);
+  const projectedPoints = startPoints.map((startPoint) => {
+    const scenePosition = sourcePositionToScene(startPoint.position);
+    const offset = scenePosition.clone().sub(centroid);
 
     return {
-      position: new THREE.Vector3(position[0], position[1], position[2]),
-      orientation,
-      yaw: THREE.MathUtils.degToRad(orientation[1] ?? 0),
+      startPoint,
+      alongGrid: offset.dot(gridAxis),
+      alongRoad: offset.dot(forward),
     };
   });
+  const gridValues = clusterProjectedValues(
+    projectedPoints.map((point) => point.alongGrid),
+  );
+  const roadValues = clusterProjectedValues(
+    projectedPoints.map((point) => point.alongRoad),
+  );
+  const laneWidth = averageClusterStep(gridValues);
+  const rowDepth = averageClusterStep(roadValues);
+
+  return projectedPoints.map(({ startPoint, alongGrid, alongRoad }) => {
+    const rowIndex = findClusterIndex(gridValues, alongGrid);
+    const columnIndex = findClusterIndex(roadValues, alongRoad);
+    const lateralOffset = (columnIndex - (roadValues.length - 1) * 0.5) * laneWidth;
+    const forwardOffset =
+      ((gridValues.length - 1) * 0.5 - rowIndex) * rowDepth;
+    const correctedScenePosition = centroid
+      .clone()
+      .addScaledVector(gridAxis, lateralOffset)
+      .addScaledVector(forward, forwardOffset);
+
+    return {
+      position: correctedScenePosition,
+      basisX: right.clone(),
+      basisY: up.clone(),
+      basisZ: forward.clone(),
+      quaternion: quaternion.clone(),
+    };
+  });
+}
+
+function clusterProjectedValues(values, tolerance = 0.2) {
+  const clusters = [];
+
+  values
+    .slice()
+    .sort((a, b) => a - b)
+    .forEach((value) => {
+      const lastCluster = clusters[clusters.length - 1];
+
+      if (!lastCluster || Math.abs(lastCluster - value) > tolerance) {
+        clusters.push(value);
+        return;
+      }
+
+      clusters[clusters.length - 1] = (lastCluster + value) * 0.5;
+    });
+
+  return clusters;
+}
+
+function averageClusterStep(values) {
+  if (values.length < 2) {
+    return 0;
+  }
+
+  let total = 0;
+
+  for (let index = 1; index < values.length; index += 1) {
+    total += values[index] - values[index - 1];
+  }
+
+  return total / (values.length - 1);
+}
+
+function findClusterIndex(clusters, value) {
+  let closestIndex = 0;
+  let closestDistance = Number.POSITIVE_INFINITY;
+
+  clusters.forEach((cluster, index) => {
+    const distance = Math.abs(cluster - value);
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = index;
+    }
+  });
+
+  return closestIndex;
+}
+
+function transformStartPointToScene(startPoint) {
+  return {
+    position: startPoint.position.clone(),
+    basisX: startPoint.basisX.clone(),
+    basisY: startPoint.basisY.clone(),
+    basisZ: startPoint.basisZ.clone(),
+    quaternion: startPoint.quaternion.clone(),
+  };
+}
+
+function buildSceneStartPoint(startPoint) {
+  const position = sourcePositionToScene(startPoint.position);
+  const up = sourceVectorToScene(startPoint.basisY);
+  const forward = sourceVectorToScene(startPoint.basisZ);
+  const right = new THREE.Vector3().crossVectors(up, forward).normalize();
+  const rotationMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
+  const quaternion = new THREE.Quaternion().setFromRotationMatrix(rotationMatrix);
+
+  return {
+    position,
+    basisX: right,
+    basisY: up,
+    basisZ: forward,
+    quaternion,
+  };
+}
+
+function sourcePositionToScene(position) {
+  return new THREE.Vector3(position.x, position.y, -position.z);
+}
+
+function sourceVectorToScene(vector) {
+  return new THREE.Vector3(vector.x, vector.y, -vector.z).normalize();
+}
+
+function parseVectorBlock(text, key) {
+  const match = text.match(new RegExp(`${key}\\s*=\\s*\\{\\s*([^}]+)\\}`));
+
+  if (!match) {
+    return null;
+  }
+
+  const values = match[1]
+    .split(",")
+    .map((value) => Number.parseFloat(value.trim()))
+    .filter((value) => Number.isFinite(value));
+
+  if (values.length !== 3) {
+    return null;
+  }
+
+  return new THREE.Vector3(values[0], values[1], values[2]);
+}
+
+function parseNamedVectorBlock(text, key) {
+  const match = text.match(
+    new RegExp(`\\["${key}"\\]\\s*=\\s*\\{\\s*([^}]+)\\}`),
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const values = match[1]
+    .split(",")
+    .map((value) => Number.parseFloat(value.trim()))
+    .filter((value) => Number.isFinite(value));
+
+  if (values.length !== 3) {
+    return null;
+  }
+
+  return new THREE.Vector3(values[0], values[1], values[2]);
 }

@@ -1,6 +1,12 @@
 import "./styles.css";
 
-import { textureUrls, trackAssetUrls, vehicleAssetUrls } from "./game/assets";
+import {
+  arenaEnvironmentAssetUrls,
+  textureUrls,
+  trackAssetUrls,
+  vehicleAssetUrls,
+} from "./game/assets";
+import { loadArenaEnvironment } from "./game/environment";
 import { createHud, updateHud } from "./game/hud";
 import { createTextureRegistry, prepareMaterials } from "./game/materials";
 import { createSceneApp, frameObject } from "./game/scene";
@@ -12,12 +18,13 @@ const hud = createHud();
 const { getTexture } = createTextureRegistry(textureUrls);
 
 Promise.all([
+  loadArenaEnvironment(scene, arenaEnvironmentAssetUrls),
   loadTrack(trackAssetUrls, scene),
   loadVehicle(vehicleAssetUrls, scene, controls, (root) =>
     prepareMaterials(root, getTexture),
   ),
 ])
-  .then(([{ trackRoot, startPoints }, { carRoot, tireRoot }]) => {
+  .then(([, { trackRoot, startPoints }, { carRoot, tireRoot }]) => {
     placeVehicleOnTrack(trackRoot, carRoot, startPoints);
     frameObject(camera, controls, carRoot, {
       distanceScale: 1.05,
