@@ -9,7 +9,9 @@ import {
 } from "./game/assets";
 import { loadArenaEnvironment } from "./game/environment";
 import { createHud, updateHud } from "./game/hud";
+import { createDrivingInput } from "./game/input";
 import { createTextureRegistry, prepareMaterials } from "./game/materials";
+import { createDrivingSimulation } from "./game/physics";
 import {
   createChaseCamera,
   createSceneApp,
@@ -21,7 +23,9 @@ import { loadVehicle } from "./game/vehicle";
 const { scene, camera, renderer, controls } = createSceneApp();
 const hud = createHud();
 const { getTexture } = createTextureRegistry(textureUrls);
+const drivingInput = createDrivingInput();
 let chaseCamera = null;
+let drivingSimulation = null;
 
 Promise.all([
   loadArenaEnvironment(scene, arenaEnvironmentAssetUrls),
@@ -34,8 +38,14 @@ Promise.all([
     return null;
   }),
 ])
-  .then(([, { trackRoot, startPoints }, { carRoot, tireRoot }, cameraConfig]) => {
+  .then(async ([, { trackRoot, startPoints }, { carRoot, tireRoot }, cameraConfig]) => {
     placeVehicleOnTrack(trackRoot, carRoot, startPoints);
+    drivingSimulation = await createDrivingSimulation({
+      trackRoot,
+      carRoot,
+      assetUrls: vehicleAssetUrls,
+      input: drivingInput,
+    });
     chaseCamera = createChaseCamera(camera, controls, carRoot, cameraConfig ?? {});
     updateHud(hud, carRoot, tireRoot);
   })
@@ -50,6 +60,7 @@ animate();
 function animate() {
   requestAnimationFrame(animate);
   const deltaSeconds = Math.min(frameClock.getDelta(), 0.1);
+  drivingSimulation?.update(deltaSeconds);
   chaseCamera?.update(deltaSeconds);
   if (!chaseCamera) {
     controls.update();

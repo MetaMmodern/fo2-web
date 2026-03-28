@@ -39,6 +39,10 @@ export function updateHud(hud, carRoot, tireRoot) {
   hud.innerHTML = `
     <div class="hud-section">
       <div class="hud-title">Controls</div>
+      <div class="hud-text">W/S or arrows: throttle and brake</div>
+      <div class="hud-text">A/D or arrows: steer</div>
+      <div class="hud-text">Space: handbrake</div>
+      <div class="hud-text">R: reset car</div>
       <div class="hud-text">C: cycle chase cameras</div>
       <div class="hud-text">\`: toggle orbit debug camera</div>
     </div>

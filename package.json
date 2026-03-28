@@ -11,6 +11,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.30.3",
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.19.3",
     "parcel": "^2.16.4",
     "three": "^0.183.2"
   },
