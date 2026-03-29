@@ -268,14 +268,15 @@ function createTrackMaterial(
   const isStaticPrelitShader = materialInfo?.shaderId === 0;
 
   if (isStaticPrelitShader) {
+    const staticPrelitSettings = getStaticPrelitSettings(sourceMaterial.name);
     return createStaticPrelitMaterial({
       name: sourceMaterial.name,
       map: diffuseTexture,
-      useVertexColors: usesVertexColors,
+      useVertexColors: usesVertexColors && staticPrelitSettings.useVertexColors,
       transparent: isAlphaMaterial || isLeafLikeShader,
       alphaTest: isAlphaMaterial || isLeafLikeShader ? 0.35 : 0,
       side: isAlphaMaterial || isLeafLikeShader ? THREE.DoubleSide : THREE.FrontSide,
-      brightnessScale: getStaticPrelitBrightnessScale(sourceMaterial.name),
+      brightnessScale: staticPrelitSettings.brightnessScale,
     });
   }
 
@@ -366,18 +367,44 @@ function createStaticPrelitMaterial({
   return material;
 }
 
-function getStaticPrelitBrightnessScale(materialName) {
+function getStaticPrelitSettings(materialName) {
   const normalizedName = materialName?.toLowerCase() ?? "";
 
-  if (normalizedName.startsWith("wall_")) {
-    return 9.0;
+  if (shouldUseTextureLedStaticPrelit(normalizedName)) {
+    return {
+      useVertexColors: false,
+      brightnessScale: 1.05,
+    };
   }
 
   if (normalizedName.includes("wirefence")) {
-    return 7.5;
+    return {
+      useVertexColors: true,
+      brightnessScale: 7.5,
+    };
   }
 
-  return 6.0;
+  return {
+    useVertexColors: true,
+    brightnessScale: 6.0,
+  };
+}
+
+function shouldUseTextureLedStaticPrelit(normalizedName) {
+  return (
+    normalizedName.startsWith("wall_") ||
+    normalizedName === "curbwalls" ||
+    normalizedName.includes("audience_stand") ||
+    normalizedName.includes("racingaudiencestand") ||
+    normalizedName.includes("racingwatchtower") ||
+    normalizedName === "concrete_blocks" ||
+    normalizedName.startsWith("warehouse_") ||
+    normalizedName.startsWith("control_tower_") ||
+    normalizedName.startsWith("track_office_") ||
+    normalizedName.startsWith("roof_") ||
+    normalizedName.startsWith("screen_frame") ||
+    normalizedName === "lights_a"
+  );
 }
 
 function createTerrainMaterial({

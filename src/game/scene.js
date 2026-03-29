@@ -8,7 +8,7 @@ export function createSceneApp(container = document.body) {
   const camera = new THREE.PerspectiveCamera(
     60,
     window.innerWidth / window.innerHeight,
-    1,
+    0.05,
     60000,
   );
   camera.position.set(16, 9, 18);
@@ -261,6 +261,8 @@ function parseVehicleCameraConfig(cameraIniText) {
     positionType: parseIniNumber(body, "PositionType"),
     targetType: parseIniNumber(body, "TargetType"),
     trackerType: parseIniNumber(body, "TrackerType"),
+    nearClipping: parseIniNumber(body, "NearClipping"),
+    farClipping: parseIniNumber(body, "FarClipping"),
     fov: parseIniNumber(body, "FOV"),
     positionOffset: parseIniVector(body, "Offset", "PositionFrames"),
     targetOffset: parseIniVector(body, "Offset", "TargetFrames"),
@@ -275,6 +277,8 @@ function parseVehicleCameraConfig(cameraIniText) {
       positionOffset: convertCameraOffsetToScene(cameraConfig.positionOffset),
       targetOffset: resolveCameraTargetOffset(cameraConfig),
       fov: cameraConfig.fov ?? 100,
+      nearClipping: Math.min(cameraConfig.nearClipping ?? 0.05, 0.05),
+      farClipping: cameraConfig.farClipping ?? 1000,
       positionSharpness: convertTrackerStiffness(
         cameraConfig.stiffness?.x,
         cameraConfig.targetOffset ? 4 : 9,
@@ -366,6 +370,8 @@ function convertTrackerStiffness(value, fallback) {
 
 function applyPresetToCamera(camera, preset) {
   camera.fov = preset.fov ?? 100;
+  camera.near = preset.nearClipping ?? 0.05;
+  camera.far = preset.farClipping ?? camera.far;
   camera.updateProjectionMatrix();
 }
 
@@ -375,6 +381,8 @@ function cloneCameraPreset(preset) {
     positionOffset: preset.positionOffset.clone(),
     targetOffset: preset.targetOffset.clone(),
     fov: preset.fov,
+    nearClipping: preset.nearClipping,
+    farClipping: preset.farClipping,
     positionSharpness: preset.positionSharpness,
     lookSharpness: preset.lookSharpness,
   };
@@ -386,6 +394,8 @@ function createFallbackCameraPreset() {
     positionOffset: new THREE.Vector3(0, 1.47, -4.05),
     targetOffset: new THREE.Vector3(0, 0.49, -0.011),
     fov: 100,
+    nearClipping: 0.05,
+    farClipping: 1000,
     positionSharpness: 4,
     lookSharpness: 5,
   };

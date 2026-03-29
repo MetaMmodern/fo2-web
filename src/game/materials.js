@@ -43,8 +43,11 @@ export function prepareMaterials(root, getTexture) {
 }
 
 function createMaterialForName(name, getTexture) {
+  const materialName = name ?? "";
+
   if (name === "body") {
     return new THREE.MeshBasicMaterial({
+      name: materialName,
       map: getTexture("skin"),
       color: 0xffffff,
       vertexColors: false,
@@ -53,6 +56,7 @@ function createMaterialForName(name, getTexture) {
 
   if (name === "common" || name === "shear") {
     return new THREE.MeshStandardMaterial({
+      name: materialName,
       map: getTexture("common"),
       color: 0xffffff,
       roughness: 0.7,
@@ -67,6 +71,7 @@ function createMaterialForName(name, getTexture) {
     name === "scaleshock"
   ) {
     return new THREE.MeshStandardMaterial({
+      name: materialName,
       map: getTexture("shock"),
       color: 0xffffff,
       transparent: true,
@@ -78,6 +83,7 @@ function createMaterialForName(name, getTexture) {
 
   if (name === "interior") {
     return new THREE.MeshStandardMaterial({
+      name: materialName,
       map: getTexture("interior"),
       color: 0xffffff,
       roughness: 0.78,
@@ -86,15 +92,38 @@ function createMaterialForName(name, getTexture) {
   }
 
   if (name.startsWith("window")) {
-    return new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshStandardMaterial({
+      name: materialName,
       map: getTexture("windows"),
-      color: 0xaebdc7,
+      color: 0x8ea2ad,
       transparent: true,
-      opacity: 0.42,
-      roughness: 0.12,
+      opacity: 0.5,
+      roughness: 0.08,
       metalness: 0.05,
       depthWrite: false,
+      side: THREE.DoubleSide,
     });
+
+    material.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          "#include <common>",
+          `#include <common>
+          float flatoutWindowFresnel(vec3 viewDir, vec3 normal) {
+            float facing = 1.0 - abs(dot(normalize(viewDir), normalize(normal)));
+            return pow(clamp(facing, 0.0, 1.0), 5.0);
+          }`,
+        )
+        .replace(
+          "#include <opaque_fragment>",
+          `float flatoutFresnel = flatoutWindowFresnel(vViewPosition, normal);
+          outgoingLight = mix(outgoingLight * 0.52, vec3(0.72, 0.82, 0.90), flatoutFresnel * 0.9);
+          diffuseColor.a = max(diffuseColor.a, 0.48);
+          #include <opaque_fragment>`,
+        );
+    };
+    material.customProgramCacheKey = () => "flatout-window-fresnel-v1";
+    return material;
   }
 
   if (name.startsWith("light_")) {
@@ -104,36 +133,38 @@ function createMaterialForName(name, getTexture) {
 
     let lightColor = 0xffffff;
     let emissiveColor = 0x141414;
-    let emissiveIntensity = 0.2;
+    let emissiveIntensity = 0.16;
 
     if (isFront) {
-      lightColor = 0xf8f4ea;
-      emissiveColor = 0xfff2c2;
-      emissiveIntensity = 0.45;
+      emissiveColor = 0xffefc1;
+      emissiveIntensity = 0.28;
     } else if (isBrake) {
-      lightColor = 0xd86b5c;
       emissiveColor = 0xa11200;
-      emissiveIntensity = 0.35;
+      emissiveIntensity = 0.26;
     } else if (isReverse) {
-      lightColor = 0xf2f6ff;
       emissiveColor = 0xa8c8ff;
-      emissiveIntensity = 0.25;
+      emissiveIntensity = 0.2;
     }
 
     return new THREE.MeshStandardMaterial({
+      name: materialName,
       map: getTexture("lights"),
       color: lightColor,
-      transparent: true,
-      alphaTest: 0.12,
+      transparent: isFront,
+      alphaTest: 0.02,
+      emissiveMap: getTexture("lights"),
       emissive: new THREE.Color(emissiveColor),
       emissiveIntensity,
       roughness: 0.18,
       metalness: 0.04,
+      depthWrite: !isFront,
+      side: THREE.DoubleSide,
     });
   }
 
   if (name === "shadow") {
     return new THREE.MeshBasicMaterial({
+      name: materialName,
       map: getTexture("shadow"),
       color: 0xffffff,
       transparent: true,
@@ -143,6 +174,7 @@ function createMaterialForName(name, getTexture) {
 
   if (name === "tire") {
     return new THREE.MeshStandardMaterial({
+      name: materialName,
       map: getTexture("tire"),
       color: 0xffffff,
       roughness: 0.84,
@@ -152,6 +184,7 @@ function createMaterialForName(name, getTexture) {
 
   if (name === "rim") {
     return new THREE.MeshStandardMaterial({
+      name: materialName,
       map: getTexture("tire"),
       color: 0xffffff,
       transparent: true,
@@ -162,6 +195,7 @@ function createMaterialForName(name, getTexture) {
   }
 
   return new THREE.MeshStandardMaterial({
+    name: materialName,
     color: 0x777777,
     roughness: 0.72,
     metalness: 0.04,

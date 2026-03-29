@@ -2,6 +2,8 @@ import * as THREE from "three";
 
 const DEBUG_HORIZON = false;
 const ENVIRONMENT_SCALE = 0.02;
+const SKY_TEXTURE_ROTATION = -Math.PI * 0.35;
+const HORIZON_ROTATION = Math.PI * 0.18;
 const DEFAULT_ENVIRONMENT_VALUES = {
   skyPlaneSize: 3300,
   skyPlaneAltitude: 188,
@@ -40,6 +42,8 @@ export async function loadArenaEnvironment(scene, assetUrls) {
     altitude: environmentValues.skyPlaneAltitude,
     texture: skyTopTexture,
   });
+  skyPlane.material.map.rotation = SKY_TEXTURE_ROTATION;
+  skyPlane.material.map.needsUpdate = true;
   scene.add(skyPlane);
 
   const horizonLayer = createHorizonLayer({
@@ -48,6 +52,7 @@ export async function loadArenaEnvironment(scene, assetUrls) {
     height: environmentValues.horizonHeight,
     texture: horizonTexture,
   });
+  horizonLayer.rotation.y = HORIZON_ROTATION;
   scene.add(horizonLayer);
 
   const skyLightColor = pickGradientColor(atmosphere.skyGradient, 0.78, new THREE.Color(0xb9d8ff));
@@ -150,6 +155,7 @@ function createEnvironmentController(state) {
       height: state.values.horizonHeight,
       texture: state.horizonTexture,
     });
+    nextLayer.rotation.y = HORIZON_ROTATION;
     state.scene.remove(state.horizonLayer);
     disposeHierarchy(state.horizonLayer);
     state.horizonLayer = nextLayer;
@@ -308,6 +314,7 @@ function configureHorizonTexture(texture) {
 function configureSkyPlaneTexture(texture) {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.flipY = true;
+  texture.center.set(0.5, 0.5);
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
 }
@@ -352,9 +359,9 @@ function createHorizonLayer({ radius, base, height, texture }) {
     );
     const material = new THREE.MeshBasicMaterial({
       map: DEBUG_HORIZON ? null : texture.clone(),
-      color: DEBUG_HORIZON ? 0xff0000 : 0xffffff,
+      color: DEBUG_HORIZON ? 0xff0000 : 0xf6e4cf,
       transparent: true,
-      opacity: 1,
+      opacity: 0.94,
       alphaTest: 0.02,
       side: THREE.BackSide,
       depthWrite: false,

@@ -25,8 +25,10 @@ export function createColorFilterPass(renderer, assetUrls) {
       tScene: { value: renderTarget.texture },
       tAdd: { value: addTexture },
       tSub: { value: subTexture },
-      addStrength: { value: 0.28 },
-      subStrength: { value: 0.18 },
+      addStrength: { value: 0.31 },
+      subStrength: { value: 0.15 },
+      exposure: { value: 1.1 },
+      shadowLift: { value: 0.026 },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -42,6 +44,8 @@ export function createColorFilterPass(renderer, assetUrls) {
       uniform sampler2D tSub;
       uniform float addStrength;
       uniform float subStrength;
+      uniform float exposure;
+      uniform float shadowLift;
 
       varying vec2 vUv;
 
@@ -77,6 +81,13 @@ export function createColorFilterPass(renderer, assetUrls) {
           0.0,
           1.0
         );
+        filteredScreen *= exposure;
+        float shadowBalance = 1.0 - smoothstep(0.16, 0.62, luminance);
+        filteredScreen += vec3(
+          shadowLift * 1.02,
+          shadowLift * 1.0,
+          shadowLift * 0.95
+        ) * shadowBalance;
         float highlightBalance = smoothstep(0.45, 0.95, luminance);
         filteredScreen *= mix(vec3(1.0), vec3(0.90, 0.96, 1.12), highlightBalance);
         filteredScreen = clamp(filteredScreen, 0.0, 1.0);
@@ -110,13 +121,21 @@ export function createColorFilterPass(renderer, assetUrls) {
       renderer.setRenderTarget(null);
       renderer.render(postScene, postCamera);
     },
-    setStrengths({ addStrength, subStrength }) {
+    setStrengths({ addStrength, subStrength, exposure, shadowLift }) {
       if (Number.isFinite(addStrength)) {
         postMaterial.uniforms.addStrength.value = addStrength;
       }
 
       if (Number.isFinite(subStrength)) {
         postMaterial.uniforms.subStrength.value = subStrength;
+      }
+
+      if (Number.isFinite(exposure)) {
+        postMaterial.uniforms.exposure.value = exposure;
+      }
+
+      if (Number.isFinite(shadowLift)) {
+        postMaterial.uniforms.shadowLift.value = shadowLift;
       }
     },
   };
