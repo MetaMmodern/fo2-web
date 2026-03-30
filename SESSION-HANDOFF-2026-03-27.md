@@ -101,3 +101,10 @@
   - inspect which atlas island it samples
   - compare that to the expected hood island on `skin1`
   - if mismatched, apply a hood-specific UV remap or source a better conversion path for that panel
+## Important: Parcel Asset Pipeline
+
+- `src/game/generated/runtimeAssetCatalog.js` currently imports a very large portion of `src/data` via `url:` imports.
+- Because of that, Parcel owns those assets in its graph and will fingerprint/hash them and spend build time traversing them.
+- If build time needs to be reduced, the fix is not a Parcel flag on the current setup.
+- The real fix is to change `tools/generate-runtime-catalog.js` so it emits plain runtime paths for data assets instead of `url:` imports, then copy/serve `src/data` as raw files.
+- As long as the generated catalog keeps importing `src/data`, Parcel optimization work on that folder is expected.
