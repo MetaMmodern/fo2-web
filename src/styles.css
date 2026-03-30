@@ -96,3 +96,14 @@ canvas {
   width: 100%;
   margin-top: 4px;
 }
+
+.hud-select {
+  width: 100%;
+  margin-top: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 248, 234, 0.08);
+  color: #f3f3f3;
+  font: inherit;
+}

@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
 export function createSceneApp(container = document.body) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf2f2ee);
@@ -61,8 +63,10 @@ export function createChaseCamera(camera, controls, object, options = {}) {
     options.presets?.length > 0
       ? options.presets.map(cloneCameraPreset)
       : [cloneCameraPreset(createFallbackCameraPreset())];
-  let presetIndex = options.initialPresetIndex ?? 0;
-  let orbitMode = false;
+  const initialState = options.initialState ?? null;
+  let presetIndex = initialState?.presetIndex ?? options.initialPresetIndex ?? 0;
+  presetIndex = THREE.MathUtils.clamp(presetIndex, 0, presets.length - 1);
+  let orbitMode = Boolean(initialState?.orbitMode);
   let orbitKeyboardStep = 20;
   const orbitKeys = new Set();
   const onOrbitWheel = (event) => {
@@ -83,7 +87,14 @@ export function createChaseCamera(camera, controls, object, options = {}) {
     }
   };
 
+  if (Number.isFinite(initialState?.orbitKeyboardStep)) {
+    orbitKeyboardStep = initialState.orbitKeyboardStep;
+  }
+
   applyPresetToCamera(camera, presets[presetIndex]);
+  if (Number.isFinite(initialState?.fov)) {
+    camera.fov = initialState.fov;
+  }
   camera.updateProjectionMatrix();
   object.updateWorldMatrix(true, false);
   desiredPosition.copy(object.localToWorld(presets[presetIndex].positionOffset.clone()));
@@ -91,7 +102,8 @@ export function createChaseCamera(camera, controls, object, options = {}) {
   smoothedLookTarget.copy(desiredLookTarget);
   camera.position.copy(desiredPosition);
   controls.target.copy(smoothedLookTarget);
-  controls.enabled = false;
+  controls.enabled = orbitMode;
+  camera.up.copy(WORLD_UP);
   camera.lookAt(smoothedLookTarget);
 
   function toggleOrbitMode() {
@@ -112,10 +124,11 @@ export function createChaseCamera(camera, controls, object, options = {}) {
     smoothedLookTarget.copy(desiredLookTarget);
     camera.position.copy(desiredPosition);
     controls.target.copy(smoothedLookTarget);
+    camera.up.copy(WORLD_UP);
     camera.lookAt(smoothedLookTarget);
   }
 
-  window.addEventListener("keydown", (event) => {
+  const onKeyDown = (event) => {
     if (event.code === "Backquote") {
       toggleOrbitMode();
       return;
@@ -137,11 +150,14 @@ export function createChaseCamera(camera, controls, object, options = {}) {
     }
 
     orbitKeys.add(event.code);
-  });
+  };
 
-  window.addEventListener("keyup", (event) => {
+  const onKeyUp = (event) => {
     orbitKeys.delete(event.code);
-  });
+  };
+
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
   controls.domElement.addEventListener("wheel", onOrbitWheel, { passive: false });
 
   return {
@@ -169,18 +185,27 @@ export function createChaseCamera(camera, controls, object, options = {}) {
         object.localToWorld(presets[presetIndex].targetOffset.clone()),
       );
 
-      const positionAlpha =
-        1 - Math.exp(-presets[presetIndex].positionSharpness * deltaSeconds);
-      const lookAlpha =
-        1 - Math.exp(-presets[presetIndex].lookSharpness * deltaSeconds);
-
-      camera.position.lerp(desiredPosition, positionAlpha);
-      smoothedLookTarget.lerp(desiredLookTarget, lookAlpha);
+      camera.position.copy(desiredPosition);
+      smoothedLookTarget.copy(desiredLookTarget);
       controls.target.copy(smoothedLookTarget);
+      camera.up.copy(WORLD_UP);
       camera.lookAt(smoothedLookTarget);
     },
     getPresetIndex() {
       return presetIndex;
+    },
+    getState() {
+      return {
+        presetIndex,
+        orbitMode,
+        orbitKeyboardStep,
+        fov: camera.fov,
+      };
+    },
+    dispose() {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      controls.domElement.removeEventListener("wheel", onOrbitWheel);
     },
   };
 }

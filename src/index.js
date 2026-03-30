@@ -2,13 +2,21 @@ import "./styles.css";
 import * as THREE from "three";
 
 import {
-  arenaEnvironmentAssetUrls,
-  textureUrls,
-  trackAssetUrls,
-  vehicleAssetUrls,
-} from "./game/assets";
-import { loadArenaEnvironment } from "./game/environment";
-import { createHud, updateHud } from "./game/hud";
+  buildVehicleAssetUrls,
+  buildVehicleMaterialTextures,
+  carCatalog,
+  defaultSelection,
+  getCarById,
+  getSkinById,
+  getTrackById,
+  trackCatalog,
+} from "./game/catalog";
+import { loadTrackEnvironment } from "./game/environment";
+import {
+  createHud,
+  syncHudSelection,
+  updateHudTelemetry,
+} from "./game/hud";
 import { createDrivingInput } from "./game/input";
 import { createTextureRegistry, prepareMaterials } from "./game/materials";
 import { createDrivingSimulation } from "./game/physics";
@@ -22,20 +30,43 @@ import { loadTrack, placeVehicleOnTrack } from "./game/track";
 import { loadVehicle } from "./game/vehicle";
 
 const { scene, camera, renderer, controls } = createSceneApp();
-const hud = createHud();
-const { getTexture } = createTextureRegistry(
-  textureUrls,
-  renderer.capabilities.getMaxAnisotropy(),
-);
 const drivingInput = createDrivingInput();
-const colorFilterPass = createColorFilterPass(renderer, {
-  addTexture: arenaEnvironmentAssetUrls.filterAddTexture,
-  subTexture: arenaEnvironmentAssetUrls.filterSubTexture,
+const initialTrack = getTrackById(defaultSelection.trackId);
+const hud = createHud({
+  tracks: trackCatalog,
+  cars: carCatalog,
+  selection: { ...defaultSelection },
+  onTrackChange(trackId) {
+    applySelection({ trackId });
+  },
+  onCarChange(carId) {
+    const car = getCarById(carId);
+    applySelection({
+      carId,
+      skinId: getSkinById(car, car?.defaultSkinId)?.id ?? null,
+    });
+  },
+  onSkinChange(skinId) {
+    applySelection({ skinId });
+  },
 });
-colorFilterPass.applyWeatherProfile(arenaEnvironmentAssetUrls.weatherProfile);
-let chaseCamera = null;
-let drivingSimulation = null;
-let environmentController = null;
+let colorFilterPass = createColorFilterPass(renderer, {
+  addTexture: initialTrack.environment.filterAddTexture,
+  subTexture: initialTrack.environment.filterSubTexture,
+});
+colorFilterPass.applyWeatherProfile(initialTrack.environment.weatherProfile);
+
+const selection = { ...defaultSelection };
+const sceneState = {
+  trackRoot: null,
+  startPoints: [],
+  carRoot: null,
+  tireRoot: null,
+  chaseCamera: null,
+  drivingSimulation: null,
+  environmentController: null,
+};
+let transitionChain = Promise.resolve();
 
 if (typeof window !== "undefined") {
   window.__flatoutDebug = {
@@ -43,43 +74,21 @@ if (typeof window !== "undefined") {
     camera,
     renderer,
     controls,
-    colorFilterPass,
+    get colorFilterPass() {
+      return colorFilterPass;
+    },
     get chaseCamera() {
-      return chaseCamera;
+      return sceneState.chaseCamera;
     },
     disableChaseCamera() {
-      chaseCamera = null;
+      sceneState.chaseCamera?.dispose?.();
+      sceneState.chaseCamera = null;
       controls.enabled = true;
     },
   };
 }
 
-Promise.all([
-  loadArenaEnvironment(scene, arenaEnvironmentAssetUrls),
-  loadTrack(trackAssetUrls, scene, renderer),
-  loadVehicle(vehicleAssetUrls, scene, controls, (root) =>
-    prepareMaterials(root, getTexture),
-  ),
-  loadVehicleCameraConfig(vehicleAssetUrls.cameraConfig).catch((error) => {
-    console.warn("Falling back to default chase camera config:", error);
-    return null;
-  }),
-])
-  .then(async ([environment, { trackRoot, startPoints }, { carRoot, tireRoot }, cameraConfig]) => {
-    environmentController = environment;
-    placeVehicleOnTrack(trackRoot, carRoot, startPoints);
-    drivingSimulation = await createDrivingSimulation({
-      trackRoot,
-      carRoot,
-      assetUrls: vehicleAssetUrls,
-      input: drivingInput,
-    });
-    chaseCamera = createChaseCamera(camera, controls, carRoot, cameraConfig ?? {});
-    updateHud(hud, carRoot, tireRoot);
-  })
-  .catch((error) => {
-    console.error("Error loading scene assets:", error);
-  });
+queueTransition(() => loadSceneSelection({ reloadTrack: true, reloadCar: true }));
 
 const frameClock = new THREE.Clock();
 
@@ -88,14 +97,160 @@ animate();
 function animate() {
   requestAnimationFrame(animate);
   const deltaSeconds = Math.min(frameClock.getDelta(), 0.1);
-  drivingSimulation?.update(deltaSeconds);
-  chaseCamera?.update(deltaSeconds);
-  environmentController?.update(camera);
-  if (!chaseCamera) {
+  sceneState.drivingSimulation?.update(deltaSeconds);
+  sceneState.chaseCamera?.update(deltaSeconds);
+  sceneState.environmentController?.update(camera);
+  updateHudTelemetry(hud, {
+    speedKph: sceneState.drivingSimulation?.speedKph?.() ?? 0,
+  });
+
+  if (!sceneState.chaseCamera) {
     controls.update();
   }
+
   colorFilterPass.render(scene, camera, {
-    scene: environmentController?.getOverlayScene?.(),
-    camera: environmentController?.getOverlayCamera?.(),
+    scene: sceneState.environmentController?.getOverlayScene?.(),
+    camera: sceneState.environmentController?.getOverlayCamera?.(),
+  });
+}
+
+function applySelection(nextPartialSelection) {
+  const nextSelection = {
+    ...selection,
+    ...nextPartialSelection,
+  };
+  const selectedCar = getCarById(nextSelection.carId);
+  const selectedSkin = getSkinById(selectedCar, nextSelection.skinId);
+
+  nextSelection.carId = selectedCar?.id ?? selection.carId;
+  nextSelection.skinId = selectedSkin?.id ?? selection.skinId;
+
+  const reloadTrack = nextSelection.trackId !== selection.trackId;
+  const reloadCar =
+    reloadTrack ||
+    nextSelection.carId !== selection.carId ||
+    nextSelection.skinId !== selection.skinId;
+
+  Object.assign(selection, nextSelection);
+  syncHudSelection(hud, { tracks: trackCatalog, cars: carCatalog, selection });
+  queueTransition(() => loadSceneSelection({ reloadTrack, reloadCar }));
+}
+
+function queueTransition(task) {
+  transitionChain = transitionChain
+    .then(() => task())
+    .catch((error) => {
+      console.error("Error updating scene selection:", error);
+    });
+}
+
+async function loadSceneSelection({ reloadTrack, reloadCar }) {
+  const track = getTrackById(selection.trackId);
+  const car = getCarById(selection.carId);
+  const skin = getSkinById(car, selection.skinId);
+
+  if (!track || !car || !skin) {
+    return;
+  }
+
+  if (reloadTrack) {
+    if (sceneState.trackRoot) {
+      scene.remove(sceneState.trackRoot);
+      disposeHierarchy(sceneState.trackRoot);
+      sceneState.trackRoot = null;
+      sceneState.startPoints = [];
+    }
+
+    sceneState.environmentController?.dispose?.();
+    sceneState.environmentController = await loadTrackEnvironment(
+      scene,
+      track.environment,
+    );
+    colorFilterPass.setFilterTextures({
+      addTexture: track.environment.filterAddTexture,
+      subTexture: track.environment.filterSubTexture,
+    });
+    colorFilterPass.applyWeatherProfile(track.environment.weatherProfile);
+
+    const loadedTrack = await loadTrack(track, scene, renderer);
+    sceneState.trackRoot = loadedTrack.trackRoot;
+    sceneState.startPoints = loadedTrack.startPoints;
+  }
+
+  if (reloadCar) {
+    const previousCameraState = sceneState.chaseCamera?.getState?.() ?? null;
+    sceneState.chaseCamera?.dispose?.();
+    sceneState.chaseCamera = null;
+    sceneState.drivingSimulation = null;
+
+    if (sceneState.carRoot) {
+      scene.remove(sceneState.carRoot);
+      disposeHierarchy(sceneState.carRoot);
+      sceneState.carRoot = null;
+      sceneState.tireRoot = null;
+    }
+
+    const vehicleTextures = buildVehicleMaterialTextures(car, skin);
+    const vehicleAssetUrls = buildVehicleAssetUrls(car, skin);
+    const textureRegistry = createTextureRegistry(
+      vehicleTextures,
+      renderer.capabilities.getMaxAnisotropy(),
+    );
+    const [{ carRoot, tireRoot }, cameraConfig] = await Promise.all([
+      loadVehicle(vehicleAssetUrls, scene, controls, (root) =>
+        prepareMaterials(root, textureRegistry.getTexture),
+      ),
+      loadVehicleCameraConfig(vehicleAssetUrls.cameraConfig).catch((error) => {
+        console.warn("Falling back to default chase camera config:", error);
+        return null;
+      }),
+    ]);
+
+    sceneState.carRoot = carRoot;
+    sceneState.tireRoot = tireRoot;
+
+    if (sceneState.trackRoot) {
+      placeVehicleOnTrack(sceneState.trackRoot, carRoot, sceneState.startPoints);
+    }
+
+    sceneState.drivingSimulation = await createDrivingSimulation({
+      carRoot,
+      assetUrls: vehicleAssetUrls,
+      input: drivingInput,
+    });
+    sceneState.chaseCamera = createChaseCamera(
+      camera,
+      controls,
+      carRoot,
+      {
+        ...(cameraConfig ?? {}),
+        initialState: previousCameraState,
+      },
+    );
+  } else if (reloadTrack && sceneState.trackRoot && sceneState.carRoot) {
+    placeVehicleOnTrack(
+      sceneState.trackRoot,
+      sceneState.carRoot,
+      sceneState.startPoints,
+    );
+    sceneState.drivingSimulation = await createDrivingSimulation({
+      carRoot: sceneState.carRoot,
+      assetUrls: buildVehicleAssetUrls(car, skin),
+      input: drivingInput,
+    });
+  }
+}
+
+function disposeHierarchy(root) {
+  root.traverse((node) => {
+    node.geometry?.dispose?.();
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+
+    materials.forEach((material) => {
+      material?.map?.dispose?.();
+      material?.lightMap?.dispose?.();
+      material?.emissiveMap?.dispose?.();
+      material?.dispose?.();
+    });
   });
 }

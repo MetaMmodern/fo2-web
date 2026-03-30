@@ -24,8 +24,8 @@ export function createColorFilterPass(renderer, assetUrls) {
   );
 
   const tgaLoader = new TGALoader();
-  const addTexture = tgaLoader.load(assetUrls.addTexture, () => rebuildRemapLut());
-  const subTexture = tgaLoader.load(assetUrls.subTexture, () => rebuildRemapLut());
+  let addTexture = tgaLoader.load(assetUrls.addTexture, () => rebuildRemapLut());
+  let subTexture = tgaLoader.load(assetUrls.subTexture, () => rebuildRemapLut());
   configureRampTexture(addTexture);
   configureRampTexture(subTexture);
 
@@ -416,6 +416,25 @@ export function createColorFilterPass(renderer, assetUrls) {
         remapState.globalColorSub.set(globalColorSub);
       }
       rebuildRemapLut();
+    },
+    setFilterTextures({ addTexture: nextAddTexture, subTexture: nextSubTexture }) {
+      if (nextAddTexture) {
+        addTexture?.dispose?.();
+        addTexture = tgaLoader.load(nextAddTexture, (loadedTexture) => {
+          configureRampTexture(loadedTexture);
+          rebuildRemapLut();
+        });
+        configureRampTexture(addTexture);
+      }
+
+      if (nextSubTexture) {
+        subTexture?.dispose?.();
+        subTexture = tgaLoader.load(nextSubTexture, (loadedTexture) => {
+          configureRampTexture(loadedTexture);
+          rebuildRemapLut();
+        });
+        configureRampTexture(subTexture);
+      }
     },
     setBloom({
       bloomTolerance,

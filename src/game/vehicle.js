@@ -16,6 +16,7 @@ export async function loadVehicle(assetUrls, scene, controls, prepareMaterials) 
   prepareMaterials(carRoot);
   prepareMaterials(tireRoot);
   hideWheelhubMeshes(carRoot);
+  hideCrashMeshes(carRoot);
   addHoodUnderside(carRoot);
   attachTires(carRoot, tireRoot);
   centerCarAtOrigin(carRoot, controls);
@@ -137,6 +138,18 @@ function attachTires(carRoot, tireRoot) {
 function hideWheelhubMeshes(carRoot) {
   carRoot.traverse((obj) => {
     if (obj.isMesh && obj.name.startsWith("wheelhub_")) {
+      obj.visible = false;
+    }
+  });
+}
+
+function hideCrashMeshes(carRoot) {
+  carRoot.traverse((obj) => {
+    if (!obj.isMesh) {
+      return;
+    }
+
+    if (obj.name?.toLowerCase?.().endsWith("_crash")) {
       obj.visible = false;
     }
   });

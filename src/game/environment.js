@@ -13,7 +13,7 @@ const DEFAULT_ENVIRONMENT_VALUES = {
   horizonHeight: 217,
 };
 
-export async function loadArenaEnvironment(scene, assetUrls) {
+export async function loadTrackEnvironment(scene, assetUrls) {
   const weatherProfile = assetUrls.weatherProfile ?? null;
   const resolvedFlareConfigUrl = resolveFlareConfigUrl(assetUrls, weatherProfile);
   const [atmosphere, flareConfig] = await Promise.all([
@@ -37,6 +37,18 @@ export async function loadArenaEnvironment(scene, assetUrls) {
   if (skyTopTexture) {
     configureSkyPlaneTexture(skyTopTexture);
   }
+  const cloudBottomTexture = assetUrls.cloudBottomTexture
+    ? textureLoader.load(assetUrls.cloudBottomTexture)
+    : null;
+  const cloudTopTexture = assetUrls.cloudTopTexture
+    ? textureLoader.load(assetUrls.cloudTopTexture)
+    : null;
+  if (cloudBottomTexture) {
+    configureCloudTexture(cloudBottomTexture);
+  }
+  if (cloudTopTexture) {
+    configureCloudTexture(cloudTopTexture);
+  }
 
   const horizonTexture = textureLoader.load(assetUrls.horizonTexture);
   configureHorizonTexture(horizonTexture);
@@ -58,6 +70,34 @@ export async function loadArenaEnvironment(scene, assetUrls) {
         : DEFAULT_ENVIRONMENT_VALUES.horizonHeight,
   };
 
+  const atmosphereDome = createGradientSkyDome({
+    radius: Math.max(
+      environmentValues.horizonRadius * 1.35,
+      atmosphere.skyDomeRadius * ENVIRONMENT_SCALE,
+    ),
+    gradient: atmosphere.skyGradient,
+  });
+  scene.add(atmosphereDome);
+
+  const cloudLayer =
+    cloudBottomTexture || cloudTopTexture
+      ? createCloudLayer({
+          radius: Math.max(
+            environmentValues.horizonRadius * 1.15,
+            atmosphere.skyDomeRadius * ENVIRONMENT_SCALE * 0.92,
+          ),
+          altitude: atmosphere.cloudAltitude * ENVIRONMENT_SCALE,
+          bottomTexture: cloudBottomTexture,
+          topTexture: cloudTopTexture,
+          tiling: atmosphere.cloudTiling,
+          volume: atmosphere.cloudVolume,
+          ambient: atmosphere.cloudAmbient,
+        })
+      : null;
+  if (cloudLayer) {
+    scene.add(cloudLayer);
+  }
+
   const skyPlane = skyTopTexture
     ? createSkyPlane({
         size: environmentValues.skyPlaneSize,
@@ -65,6 +105,7 @@ export async function loadArenaEnvironment(scene, assetUrls) {
         texture: skyTopTexture,
       })
     : null;
+
   if (skyPlane?.material?.map) {
     skyPlane.material.map.rotation = SKY_TEXTURE_ROTATION;
     scene.add(skyPlane);
@@ -134,6 +175,8 @@ export async function loadArenaEnvironment(scene, assetUrls) {
   const environmentController = createEnvironmentController({
     scene,
     values: environmentValues,
+    atmosphereDome,
+    cloudLayer,
     skyPlane,
     horizonLayer,
     skyTopTexture,
@@ -152,9 +195,11 @@ export async function loadArenaEnvironment(scene, assetUrls) {
     weatherProfile,
   });
 
-  scene.userData.arenaEnvironment = environmentController;
+  scene.userData.trackEnvironment = environmentController;
   return environmentController;
 }
+
+export const loadArenaEnvironment = loadTrackEnvironment;
 
 function createEnvironmentController(state) {
   function rebuildHorizon() {
@@ -220,6 +265,43 @@ function createEnvironmentController(state) {
       }
 
       applyValue(key, value);
+    },
+    dispose() {
+      if (state.skyPlane) {
+        state.scene.remove(state.skyPlane);
+        disposeHierarchy(state.skyPlane);
+      }
+
+      if (state.atmosphereDome) {
+        state.scene.remove(state.atmosphereDome);
+        disposeHierarchy(state.atmosphereDome);
+      }
+
+      if (state.cloudLayer) {
+        state.scene.remove(state.cloudLayer);
+        disposeHierarchy(state.cloudLayer);
+      }
+
+      if (state.horizonLayer) {
+        state.scene.remove(state.horizonLayer);
+        disposeHierarchy(state.horizonLayer);
+      }
+
+      if (state.ambientLight) {
+        state.scene.remove(state.ambientLight);
+      }
+
+      if (state.hemisphereLight) {
+        state.scene.remove(state.hemisphereLight);
+      }
+
+      if (state.sunLight) {
+        state.scene.remove(state.sunLight);
+      }
+
+      if (state.flareOverlay?.scene) {
+        disposeHierarchy(state.flareOverlay.scene);
+      }
     },
     ...state,
   };
@@ -517,6 +599,13 @@ function configureSkyPlaneTexture(texture) {
   texture.wrapT = THREE.ClampToEdgeWrapping;
 }
 
+function configureCloudTexture(texture) {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = true;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+}
+
 function vector4ToColor(value) {
   if (!value) {
     return null;
@@ -556,6 +645,125 @@ function createSkyPlane({ size, altitude, texture }) {
   skyPlane.position.y = altitude;
   skyPlane.name = "arena_sky_plane";
   return skyPlane;
+}
+
+function createGradientSkyDome({ radius, gradient }) {
+  const topColor = pickGradientColor(
+    gradient,
+    0,
+    new THREE.Color(0x9dc3ea),
+  );
+  const midColor = pickGradientColor(
+    gradient,
+    0.45,
+    new THREE.Color(0x7eabda),
+  );
+  const bottomColor = pickGradientColor(
+    gradient,
+    1,
+    new THREE.Color(0xc9b79b),
+  );
+  const geometry = new THREE.SphereGeometry(radius, 32, 16);
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      topColor: { value: topColor },
+      midColor: { value: midColor },
+      bottomColor: { value: bottomColor },
+    },
+    vertexShader: `
+      varying vec3 vWorldPosition;
+
+      void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 topColor;
+      uniform vec3 midColor;
+      uniform vec3 bottomColor;
+      varying vec3 vWorldPosition;
+
+      void main() {
+        float h = normalize(vWorldPosition).y * 0.5 + 0.5;
+        vec3 color = mix(bottomColor, midColor, smoothstep(0.0, 0.55, h));
+        color = mix(color, topColor, smoothstep(0.45, 1.0, h));
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `,
+    side: THREE.BackSide,
+    depthWrite: false,
+    fog: false,
+  });
+  const skyDome = new THREE.Mesh(geometry, material);
+  skyDome.name = "gradient_sky_dome";
+  return skyDome;
+}
+
+function createCloudLayer({
+  radius,
+  altitude,
+  bottomTexture,
+  topTexture,
+  tiling,
+  volume,
+  ambient,
+}) {
+  const geometry = new THREE.SphereGeometry(radius, 40, 20);
+  geometry.translate(0, altitude, 0);
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      cloudBottomMap: { value: bottomTexture },
+      cloudTopMap: { value: topTexture },
+      uvScale: { value: tiling ?? 1 },
+      alphaScale: {
+        value: THREE.MathUtils.clamp((volume ?? 50) / 55, 0.2, 1.5),
+      },
+      brightness: {
+        value: THREE.MathUtils.clamp((ambient ?? 1) * 0.7, 0.2, 1.4),
+      },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D cloudBottomMap;
+      uniform sampler2D cloudTopMap;
+      uniform float uvScale;
+      uniform float alphaScale;
+      uniform float brightness;
+      varying vec2 vUv;
+
+      vec4 sampleOrEmpty(sampler2D mapRef, vec2 uv) {
+        return texture2D(mapRef, uv);
+      }
+
+      void main() {
+        vec2 uv0 = vec2(vUv.x * uvScale, vUv.y * uvScale);
+        vec2 uv1 = vec2(vUv.x * uvScale * 0.85 + 0.11, vUv.y * uvScale * 0.85 + 0.07);
+        vec4 bottomSample = sampleOrEmpty(cloudBottomMap, uv0);
+        vec4 topSample = sampleOrEmpty(cloudTopMap, uv1);
+        vec3 cloudColor = mix(bottomSample.rgb, topSample.rgb, topSample.a);
+        float cloudAlpha = max(bottomSample.a, topSample.a) * alphaScale;
+        cloudAlpha = smoothstep(0.04, 0.5, cloudAlpha) * 0.58;
+        gl_FragColor = vec4(cloudColor * brightness, cloudAlpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.BackSide,
+    fog: false,
+  });
+
+  const cloudLayer = new THREE.Mesh(geometry, material);
+  cloudLayer.name = "cloud_layer";
+  return cloudLayer;
 }
 
 function createHorizonLayer({ radius, base, height, texture }) {

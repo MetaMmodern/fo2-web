@@ -1,7 +1,5 @@
 import * as THREE from "three";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
-
-import { arenaTrackTextureUrls } from "./generated/arenaTrackTextureManifest";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 const textureNameAliases = {
   colormap: "col",
@@ -9,13 +7,16 @@ const textureNameAliases = {
 
 export async function loadTrack(assetUrls, scene, renderer) {
   const [trackRoot, trackMaterialInfo, startPoints] = await Promise.all([
-    loadFbx(assetUrls.model),
+    loadGltf(assetUrls.model),
     loadTrackMaterialInfo(assetUrls.log),
     loadStartPoints(assetUrls.startPoints),
   ]);
 
   const maxAnisotropy = renderer?.capabilities?.getMaxAnisotropy?.() ?? 1;
-  const getTrackTexture = createTrackTextureRegistry(arenaTrackTextureUrls, maxAnisotropy);
+  const getTrackTexture = createTrackTextureRegistry(
+    assetUrls.trackTextures,
+    maxAnisotropy,
+  );
   const trackLightMap = loadTrackLightMap(assetUrls.lightmap, maxAnisotropy);
 
   prepareTrackMaterials(
@@ -51,11 +52,16 @@ export function placeVehicleOnTrack(trackRoot, carRoot, startPoints = []) {
   carRoot.rotation.set(0, Math.PI, 0);
 }
 
-function loadFbx(url) {
-  const loader = new FBXLoader();
+function loadGltf(url) {
+  const loader = new GLTFLoader();
 
   return new Promise((resolve, reject) => {
-    loader.load(url, resolve, undefined, reject);
+    loader.load(
+      url,
+      (gltf) => resolve(gltf.scene),
+      undefined,
+      reject,
+    );
   });
 }
 
@@ -168,7 +174,7 @@ function createTrackTextureRegistry(textureUrls, maxAnisotropy) {
 
     const texture = textureLoader.load(textureUrl);
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.flipY = true;
+    texture.flipY = false;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.anisotropy = maxAnisotropy;
@@ -180,7 +186,7 @@ function createTrackTextureRegistry(textureUrls, maxAnisotropy) {
 function loadTrackLightMap(lightMapUrl, maxAnisotropy) {
   const textureLoader = new THREE.TextureLoader();
   const texture = textureLoader.load(lightMapUrl);
-  texture.flipY = true; // this is correct, keep it
+  texture.flipY = false;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -275,7 +281,10 @@ function createTrackMaterial(
       useVertexColors: usesVertexColors && staticPrelitSettings.useVertexColors,
       transparent: isAlphaMaterial || isLeafLikeShader,
       alphaTest: isAlphaMaterial || isLeafLikeShader ? 0.35 : 0,
-      side: isAlphaMaterial || isLeafLikeShader ? THREE.DoubleSide : THREE.FrontSide,
+      side:
+        isAlphaMaterial || isLeafLikeShader
+          ? THREE.DoubleSide
+          : THREE.FrontSide,
       brightnessScale: staticPrelitSettings.brightnessScale,
     });
   }
@@ -362,7 +371,8 @@ function createStaticPrelitMaterial({
       diffuseColor.rgb = clamp(diffuseColor.rgb * ${brightnessScale.toFixed(2)}, 0.0, 1.0);`,
     );
   };
-  material.customProgramCacheKey = () => `flatout-static-prelit-${name}-${brightnessScale.toFixed(2)}`;
+  material.customProgramCacheKey = () =>
+    `flatout-static-prelit-${name}-${brightnessScale.toFixed(2)}`;
 
   return material;
 }
@@ -519,6 +529,7 @@ function promoteSecondaryUvSet(geometry) {
 
   if (!geometry.getAttribute("uv2")) {
     const uv1 = geometry.getAttribute("uv1");
+
     if (uv1) {
       geometry.setAttribute("uv2", uv1.clone());
       return;
@@ -527,6 +538,7 @@ function promoteSecondaryUvSet(geometry) {
 
   if (!geometry.getAttribute("uv2")) {
     const uv = geometry.getAttribute("uv");
+
     if (uv) {
       geometry.setAttribute("uv2", uv.clone());
     }
@@ -570,8 +582,8 @@ function normalizeStartPointGrid(startPoints) {
     return startPoints.map((startPoint) => buildSceneStartPoint(startPoint));
   }
 
-  // BED encodes the arena grid on two repeated rank sets; rebuilding from those
-  // ranks preserves the intended 4x2 stagger after the source-to-scene axis flip.
+  // BED encodes the arena grid on repeated rank sets; reconstructing those
+  // ranks preserves the intended lane layout after source-to-scene conversion.
   const gridAxis = sourceVectorToScene(startPoints[0].basisX);
   const up = sourceVectorToScene(startPoints[0].basisY);
   const forward = sourceVectorToScene(startPoints[0].basisZ);
@@ -584,7 +596,9 @@ function normalizeStartPointGrid(startPoints) {
   centroid.divideScalar(startPoints.length);
 
   const rotationMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
-  const quaternion = new THREE.Quaternion().setFromRotationMatrix(rotationMatrix);
+  const quaternion = new THREE.Quaternion().setFromRotationMatrix(
+    rotationMatrix,
+  );
   const projectedPoints = startPoints.map((startPoint) => {
     const scenePosition = sourcePositionToScene(startPoint.position);
     const offset = scenePosition.clone().sub(centroid);
@@ -607,7 +621,8 @@ function normalizeStartPointGrid(startPoints) {
   return projectedPoints.map(({ alongGrid, alongRoad }) => {
     const rowIndex = findClusterIndex(gridValues, alongGrid);
     const columnIndex = findClusterIndex(roadValues, alongRoad);
-    const lateralOffset = (columnIndex - (roadValues.length - 1) * 0.5) * laneWidth;
+    const lateralOffset =
+      (columnIndex - (roadValues.length - 1) * 0.5) * laneWidth;
     const forwardOffset =
       ((gridValues.length - 1) * 0.5 - rowIndex) * rowDepth;
     const correctedScenePosition = centroid
@@ -691,7 +706,9 @@ function buildSceneStartPoint(startPoint) {
   const forward = sourceVectorToScene(startPoint.basisZ);
   const right = new THREE.Vector3().crossVectors(up, forward).normalize();
   const rotationMatrix = new THREE.Matrix4().makeBasis(right, up, forward);
-  const quaternion = new THREE.Quaternion().setFromRotationMatrix(rotationMatrix);
+  const quaternion = new THREE.Quaternion().setFromRotationMatrix(
+    rotationMatrix,
+  );
 
   return {
     position,
