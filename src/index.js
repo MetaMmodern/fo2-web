@@ -32,8 +32,10 @@ const colorFilterPass = createColorFilterPass(renderer, {
   addTexture: arenaEnvironmentAssetUrls.filterAddTexture,
   subTexture: arenaEnvironmentAssetUrls.filterSubTexture,
 });
+colorFilterPass.applyWeatherProfile(arenaEnvironmentAssetUrls.weatherProfile);
 let chaseCamera = null;
 let drivingSimulation = null;
+let environmentController = null;
 
 if (typeof window !== "undefined") {
   window.__flatoutDebug = {
@@ -64,6 +66,7 @@ Promise.all([
   }),
 ])
   .then(async ([environment, { trackRoot, startPoints }, { carRoot, tireRoot }, cameraConfig]) => {
+    environmentController = environment;
     placeVehicleOnTrack(trackRoot, carRoot, startPoints);
     drivingSimulation = await createDrivingSimulation({
       trackRoot,
@@ -87,8 +90,12 @@ function animate() {
   const deltaSeconds = Math.min(frameClock.getDelta(), 0.1);
   drivingSimulation?.update(deltaSeconds);
   chaseCamera?.update(deltaSeconds);
+  environmentController?.update(camera);
   if (!chaseCamera) {
     controls.update();
   }
-  colorFilterPass.render(scene, camera);
+  colorFilterPass.render(scene, camera, {
+    scene: environmentController?.getOverlayScene?.(),
+    camera: environmentController?.getOverlayCamera?.(),
+  });
 }

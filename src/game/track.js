@@ -604,7 +604,7 @@ function normalizeStartPointGrid(startPoints) {
   const laneWidth = averageClusterStep(gridValues);
   const rowDepth = averageClusterStep(roadValues);
 
-  return projectedPoints.map(({ startPoint, alongGrid, alongRoad }) => {
+  return projectedPoints.map(({ alongGrid, alongRoad }) => {
     const rowIndex = findClusterIndex(gridValues, alongGrid);
     const columnIndex = findClusterIndex(roadValues, alongRoad);
     const lateralOffset = (columnIndex - (roadValues.length - 1) * 0.5) * laneWidth;

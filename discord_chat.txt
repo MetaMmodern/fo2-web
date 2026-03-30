@@ -1,0 +1,23 @@
+metamodern — 11:11
+Hello guys! I'm building some personal small demo, trying to recreate the fo2 looks. Do you have any info on the lighting, glow, bloom, color spacing, filters,  etc. and the logic behind it's application inside the game? I could find the links to your repo, but it's apparently private, can't open it. 
+Zack — 12:58
+All of the game's shaders are in the bfs, under data/shaders, the object shader names start with pro_, and the post process shader names start with post_ 
+The colour grading is handled using a LUT system, in the post_colorremap_by_alpha shader
+It stores the luminance in the alpha channel, and uses that to pick a colour to mix with, either by adding or subtracting
+The game is old, so lighting is done traditionally with forward rendering, each object shader either uses duplicated code or its own method to calculate lighting
+Zack — 13:07
+Bloom is done by box-blurring the render target using 4 samples, as that's the maximum texture samples you can have in dx9, I imagine they add both the blurred and non-blurred version together to get the final result but I don't know that for sure
+metamodern — 14:40
+Fantastic, thanks @Zack ! And do you believe there's nothing beyond what you described that impacts final render? Is this all info extracted from a .exe file?
+I have the unpacked bfs archives and have seen the shaders, wasn't obvious how they're used though, so thank you.
+I'll definitely share the final result here once(if) I get it.
+Zack — 14:51
+Well, its not everything, we've decompiled some of the direct x stuff but not all of it. What I know is based on reading/modifying the shader code, and frame debugger tools like pix.
+Zack — 15:00
+If you want more detail about that LUT system, I've been asked about it before: https://github.com/ZackWilde27/FlatOut2-HLSLToSHA/issues/2
+GitHub
+How does "filters" work? · Issue #2 · ZackWilde27/FlatOut2-HLSLToSHA
+Maybe you figured out which shader and how the images from the "global/filters" directory are used?
+Maybe you figured out which shader and how the images from the "global/filters" directory are used?
+metamodern — 15:13
+Great, that's good for now. Thanks again

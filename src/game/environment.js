@@ -4,6 +4,7 @@ const DEBUG_HORIZON = false;
 const ENVIRONMENT_SCALE = 0.02;
 const SKY_TEXTURE_ROTATION = -Math.PI * 0.35;
 const HORIZON_ROTATION = Math.PI * 0.18;
+const FLARE_OVERLAY_DEPTH = 0.5;
 const DEFAULT_ENVIRONMENT_VALUES = {
   skyPlaneSize: 3300,
   skyPlaneAltitude: 188,
@@ -13,18 +14,29 @@ const DEFAULT_ENVIRONMENT_VALUES = {
 };
 
 export async function loadArenaEnvironment(scene, assetUrls) {
-  const atmosphere = await loadAtmosphere(
-    assetUrls.atmosphere,
-    assetUrls.atmospherePreset,
-  );
+  const weatherProfile = assetUrls.weatherProfile ?? null;
+  const resolvedFlareConfigUrl = resolveFlareConfigUrl(assetUrls, weatherProfile);
+  const [atmosphere, flareConfig] = await Promise.all([
+    loadAtmosphere(
+      assetUrls.atmosphere,
+      assetUrls.atmospherePreset,
+    ),
+    loadFlareConfig(resolvedFlareConfigUrl),
+  ]);
   const textureLoader = new THREE.TextureLoader();
-  const sunDirection = atmosphere.sunDirection.clone().normalize();
-  const sunPosition = sunDirection.clone().multiplyScalar(1000);
+  const sunPosition = weatherProfile?.sunPosition?.clone() ??
+    atmosphere.sunDirection.clone().normalize().multiplyScalar(1000);
+  const sunDirection = sunPosition.clone().normalize();
+  const flarePosition = weatherProfile?.flarePosition?.clone() ?? sunPosition.clone();
   scene.background = null;
   scene.environment = null;
 
-  const skyTopTexture = textureLoader.load(assetUrls.skyTopTexture);
-  configureSkyPlaneTexture(skyTopTexture);
+  const skyTopTexture = assetUrls.skyTopTexture
+    ? textureLoader.load(assetUrls.skyTopTexture)
+    : null;
+  if (skyTopTexture) {
+    configureSkyPlaneTexture(skyTopTexture);
+  }
 
   const horizonTexture = textureLoader.load(assetUrls.horizonTexture);
   configureHorizonTexture(horizonTexture);
@@ -32,19 +44,31 @@ export async function loadArenaEnvironment(scene, assetUrls) {
   const environmentValues = {
     skyPlaneSize: DEFAULT_ENVIRONMENT_VALUES.skyPlaneSize,
     skyPlaneAltitude: DEFAULT_ENVIRONMENT_VALUES.skyPlaneAltitude,
-    horizonRadius: DEFAULT_ENVIRONMENT_VALUES.horizonRadius,
-    horizonBase: DEFAULT_ENVIRONMENT_VALUES.horizonBase,
-    horizonHeight: DEFAULT_ENVIRONMENT_VALUES.horizonHeight,
+    horizonRadius:
+      weatherProfile?.horizonRadius != null
+        ? weatherProfile.horizonRadius * 0.05
+        : DEFAULT_ENVIRONMENT_VALUES.horizonRadius,
+    horizonBase:
+      weatherProfile?.horizonBase != null
+        ? weatherProfile.horizonBase * 0.02
+        : DEFAULT_ENVIRONMENT_VALUES.horizonBase,
+    horizonHeight:
+      weatherProfile?.horizonHeight != null
+        ? weatherProfile.horizonHeight * 0.036
+        : DEFAULT_ENVIRONMENT_VALUES.horizonHeight,
   };
 
-  const skyPlane = createSkyPlane({
-    size: environmentValues.skyPlaneSize,
-    altitude: environmentValues.skyPlaneAltitude,
-    texture: skyTopTexture,
-  });
-  skyPlane.material.map.rotation = SKY_TEXTURE_ROTATION;
-  skyPlane.material.map.needsUpdate = true;
-  scene.add(skyPlane);
+  const skyPlane = skyTopTexture
+    ? createSkyPlane({
+        size: environmentValues.skyPlaneSize,
+        altitude: environmentValues.skyPlaneAltitude,
+        texture: skyTopTexture,
+      })
+    : null;
+  if (skyPlane?.material?.map) {
+    skyPlane.material.map.rotation = SKY_TEXTURE_ROTATION;
+    scene.add(skyPlane);
+  }
 
   const horizonLayer = createHorizonLayer({
     radius: environmentValues.horizonRadius,
@@ -55,74 +79,57 @@ export async function loadArenaEnvironment(scene, assetUrls) {
   horizonLayer.rotation.y = HORIZON_ROTATION;
   scene.add(horizonLayer);
 
-  const skyLightColor = pickGradientColor(atmosphere.skyGradient, 0.78, new THREE.Color(0xb9d8ff));
-  const horizonLightColor = pickGradientColor(atmosphere.skyGradient, 0.52, new THREE.Color(0x8ab6e8));
-  const groundLightColor = horizonLightColor.clone().lerp(new THREE.Color(0x8d6640), 0.72);
-  const ambientLightColor = skyLightColor.clone().lerp(horizonLightColor, 0.45);
+  const sunLightColor = vector4ToColor(weatherProfile?.sunColor)
+    ?? pickGradientColor(atmosphere.skyGradient, 0.78, new THREE.Color(0xb9d8ff));
+  const ambientLightColor = vector4ToColor(weatherProfile?.ambientColor)
+    ?? pickGradientColor(atmosphere.skyGradient, 0.52, new THREE.Color(0x8ab6e8));
+  const specularLightColor = vector4ToColor(weatherProfile?.specularColor)
+    ?? sunLightColor.clone();
+  const groundLightColor = ambientLightColor.clone().lerp(new THREE.Color(0xc39a68), 0.38);
+  scene.fog = null;
 
   const ambientLight = new THREE.AmbientLight(
     ambientLightColor,
-    0.55 * atmosphere.skyAmbient + 0.35 * atmosphere.cloudAmbient,
+    weatherProfile?.ambientIntensity ?? (0.72 * atmosphere.skyAmbient + 0.42 * atmosphere.cloudAmbient),
   );
   scene.add(ambientLight);
 
   const hemisphereLight = new THREE.HemisphereLight(
-    skyLightColor,
+    sunLightColor,
     groundLightColor,
-    1.15 * atmosphere.skyAmbient + 0.55 * atmosphere.cloudAmbient,
+    0.72 * (weatherProfile?.ambientIntensity ?? (1.35 * atmosphere.skyAmbient + 0.6 * atmosphere.cloudAmbient)),
   );
   scene.add(hemisphereLight);
 
   const sunLight = new THREE.DirectionalLight(
-    0xfff2cf,
-    atmosphere.sunIntensity * 1.4,
+    specularLightColor,
+    (weatherProfile?.sunIntensity ?? atmosphere.sunIntensity) * 1.18,
   );
   sunLight.position.copy(sunPosition);
   sunLight.castShadow = true;
   scene.add(sunLight);
 
-  const glowTexture = textureLoader.load(assetUrls.glowTexture);
+  const glowTexture = textureLoader.load(
+    resolveFlareGlowTextureUrl(assetUrls, flareConfig),
+  );
   glowTexture.colorSpace = THREE.SRGBColorSpace;
   glowTexture.flipY = true;
   glowTexture.wrapS = THREE.ClampToEdgeWrapping;
   glowTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-  const flareTexture = textureLoader.load(assetUrls.flareTexture);
+  const flareTexture = textureLoader.load(
+    resolveFlareTextureUrl(assetUrls, flareConfig),
+  );
   flareTexture.colorSpace = THREE.SRGBColorSpace;
   flareTexture.flipY = true;
   flareTexture.wrapS = THREE.ClampToEdgeWrapping;
   flareTexture.wrapT = THREE.ClampToEdgeWrapping;
 
-  const glowSprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: glowTexture,
-      color: 0xfff3c6,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      fog: false,
-    }),
-  );
-  glowSprite.position.copy(sunPosition);
-  glowSprite.scale.set(170, 170, 1);
-  glowSprite.frustumCulled = false;
-  scene.add(glowSprite);
-
-  const flareSprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: flareTexture,
-      color: 0xffffff,
-      transparent: true,
-      depthWrite: false,
-      opacity: 0.22,
-      blending: THREE.AdditiveBlending,
-      fog: false,
-    }),
-  );
-  flareSprite.position.copy(sunPosition);
-  flareSprite.scale.set(240, 240, 1);
-  flareSprite.frustumCulled = false;
-  scene.add(flareSprite);
+  const flareOverlay = createSunFlareOverlay({
+    glowTexture,
+    flareTexture,
+    flareConfig,
+  });
 
   const environmentController = createEnvironmentController({
     scene,
@@ -137,10 +144,12 @@ export async function loadArenaEnvironment(scene, assetUrls) {
     sunLight,
     sunDirection,
     sunPosition,
+    flarePosition,
     glowTexture,
     flareTexture,
-    glowSprite,
-    flareSprite,
+    flareConfig,
+    flareOverlay,
+    weatherProfile,
   });
 
   scene.userData.arenaEnvironment = environmentController;
@@ -166,6 +175,9 @@ function createEnvironmentController(state) {
     state.values[key] = value;
 
     if (key === "skyPlaneSize") {
+      if (!state.skyPlane) {
+        return;
+      }
       state.skyPlane.geometry.dispose();
       state.skyPlane.geometry = new THREE.PlaneGeometry(value, value, 1, 1);
       state.skyPlane.geometry.rotateX(-Math.PI / 2);
@@ -173,6 +185,9 @@ function createEnvironmentController(state) {
     }
 
     if (key === "skyPlaneAltitude") {
+      if (!state.skyPlane) {
+        return;
+      }
       state.skyPlane.position.y = value;
       return;
     }
@@ -190,6 +205,15 @@ function createEnvironmentController(state) {
     getValues() {
       return { ...state.values };
     },
+    update(camera) {
+      state.flareOverlay?.update(camera, state.flarePosition);
+    },
+    getOverlayScene() {
+      return state.flareOverlay?.scene ?? null;
+    },
+    getOverlayCamera() {
+      return state.flareOverlay?.camera ?? null;
+    },
     setValue(key, value) {
       if (!(key in state.values) || !Number.isFinite(value)) {
         return;
@@ -199,6 +223,110 @@ function createEnvironmentController(state) {
     },
     ...state,
   };
+}
+
+function createSunFlareOverlay({ glowTexture, flareTexture, flareConfig }) {
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const center = new THREE.Vector2();
+  const sunNdc = new THREE.Vector3();
+  const glowMaterial = new THREE.SpriteMaterial({
+    map: glowTexture,
+    color: 0xffd68a,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+    sizeAttenuation: false,
+  });
+  const glowSprite = new THREE.Sprite(glowMaterial);
+  glowSprite.position.set(0, 0, FLARE_OVERLAY_DEPTH);
+  glowSprite.renderOrder = 1000;
+  glowSprite.frustumCulled = false;
+  scene.add(glowSprite);
+
+  const flareSprites = flareConfig.flares.map((flare) => {
+    const map = flareTexture.clone();
+    map.repeat.set(
+      flare.uvBottomRight.x - flare.uvTopLeft.x,
+      flare.uvBottomRight.y - flare.uvTopLeft.y,
+    );
+    map.offset.set(flare.uvTopLeft.x, 1 - flare.uvBottomRight.y);
+    const material = new THREE.SpriteMaterial({
+      map,
+      color: 0xfff4cc,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+      sizeAttenuation: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(0, 0, FLARE_OVERLAY_DEPTH);
+    sprite.renderOrder = 1001;
+    sprite.frustumCulled = false;
+    scene.add(sprite);
+    return { config: flare, sprite, material };
+  });
+
+  return {
+    scene,
+    camera,
+    update(viewCamera, sunWorldPosition) {
+      sunNdc.copy(sunWorldPosition).project(viewCamera);
+      const sunVisible =
+        sunNdc.z > -1 &&
+        sunNdc.z < 1 &&
+        Math.abs(sunNdc.x) < 1.35 &&
+        Math.abs(sunNdc.y) < 1.35;
+
+      if (!sunVisible) {
+        glowSprite.visible = false;
+        for (const flare of flareSprites) {
+          flare.sprite.visible = false;
+        }
+        return;
+      }
+
+      const aspect = viewCamera.aspect || 1;
+      const centerDistance = Math.min(
+        1,
+        Math.sqrt(sunNdc.x * sunNdc.x + sunNdc.y * sunNdc.y),
+      );
+      const presence = THREE.MathUtils.clamp(1.1 - centerDistance * 0.75, 0, 1);
+      const baseAngle = Math.atan2(sunNdc.y - center.y, sunNdc.x - center.x);
+
+      glowSprite.visible = true;
+      glowSprite.position.set(sunNdc.x, sunNdc.y, FLARE_OVERLAY_DEPTH);
+      setOverlaySpriteScale(glowSprite, flareConfig.glowSizeDeg, viewCamera.fov, aspect);
+      glowMaterial.opacity = 0.45 + presence * 0.75;
+
+      for (const flare of flareSprites) {
+        const { config, sprite, material } = flare;
+        sprite.visible = true;
+        sprite.position.set(
+          sunNdc.x * -config.location,
+          sunNdc.y * -config.location,
+          FLARE_OVERLAY_DEPTH,
+        );
+        sprite.material.rotation = baseAngle * config.angleScale + config.angleRotation;
+        setOverlaySpriteScale(sprite, config.sizeDeg, viewCamera.fov, aspect);
+
+        const sharpnessWeight = THREE.MathUtils.clamp(config.sharpness / 6.5, 0.15, 1.0);
+        const locationWeight = THREE.MathUtils.clamp(1.05 - Math.abs(config.location) * 0.1, 0.2, 1.0);
+        material.opacity = presence * sharpnessWeight * locationWeight * 0.75;
+      }
+    },
+  };
+}
+
+function setOverlaySpriteScale(sprite, sizeDeg, fovDeg, aspect) {
+  const scaleY = (sizeDeg / Math.max(fovDeg, 1e-4)) * 2;
+  sprite.scale.set(scaleY / Math.max(aspect, 1e-4), scaleY, 1);
 }
 
 function disposeHierarchy(root) {
@@ -238,6 +366,11 @@ async function loadAtmosphere(trackAtmosphereUrl, presetAtmosphereUrl) {
   };
 }
 
+async function loadFlareConfig(flareConfigUrl) {
+  const text = await fetchText(flareConfigUrl, "flare config");
+  return parseFlareConfig(text);
+}
+
 async function fetchText(url, label) {
   const response = await fetch(url);
 
@@ -267,6 +400,73 @@ function parseVector3(text, key, fallback) {
   return values.length === 3 ? values : fallback;
 }
 
+function parseFlareConfig(text) {
+  const glowSizeDeg = parseNumber(text, "GlowSize", 25);
+  const flareBlocks = extractIndexedBlocks(text);
+
+  return {
+    glowMapName: parseQuotedValue(text, "GlowMap"),
+    flareMapName: parseQuotedValue(text, "FlareMap"),
+    glowSizeDeg,
+    flares: flareBlocks.map((block) => ({
+      uvTopLeft: parseVector2Block(block, "UVTopLeft", [0, 0]),
+      uvBottomRight: parseVector2Block(block, "UVBottomRight", [1, 1]),
+      sizeDeg: parseNumber(block, "Size", 8),
+      sharpness: parseNumber(block, "Sharpness", 1),
+      location: parseNumber(block, "Location", 0),
+      angleScale: parseNumber(block, "AngleScale", 0),
+      angleRotation: parseNumber(block, "AngleRotation", 0),
+    })),
+  };
+}
+
+function parseQuotedValue(text, key) {
+  const match = text.match(new RegExp(`${key}\\s*=\\s*"([^"]+)"`, "i"));
+  return match ? match[1] : null;
+}
+
+function extractIndexedBlocks(text) {
+  const blocks = [];
+  const startPattern = /\[\d+\]\s*=\s*\{/g;
+  let match = startPattern.exec(text);
+
+  while (match) {
+    let depth = 1;
+    let index = match.index + match[0].length;
+    const contentStart = index;
+
+    while (index < text.length && depth > 0) {
+      const char = text[index];
+      if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+      }
+      index += 1;
+    }
+
+    if (depth === 0) {
+      blocks.push(text.slice(contentStart, index - 1));
+    }
+    startPattern.lastIndex = index;
+    match = startPattern.exec(text);
+  }
+
+  return blocks;
+}
+
+function parseVector2Block(text, key, fallback) {
+  const match = text.match(new RegExp(`${key}\\s*=\\s*\\{\\s*([^,}]+)\\s*,\\s*([^}]+)\\}`));
+  if (!match) {
+    return new THREE.Vector2(...fallback);
+  }
+
+  return new THREE.Vector2(
+    Number.parseFloat(match[1]),
+    Number.parseFloat(match[2]),
+  );
+}
+
 function parseGradientColors(text) {
   const matches = Array.from(
     text.matchAll(/\[\d+\]\s*=\s*\{\s*([^}]+)\}/g),
@@ -284,9 +484,7 @@ function parseGradientColors(text) {
         .filter((value) => Number.isFinite(value)),
     )
     .filter((values) => values.length === 3)
-    .map((values) =>
-      values.map((value) => THREE.MathUtils.clamp(value * 1.15, 0, 1)),
-    );
+    .map((values) => values.map((value) => THREE.MathUtils.clamp(value, 0, 1)));
 }
 
 function pickGradientColor(gradient, normalizedPosition, fallbackColor) {
@@ -317,6 +515,29 @@ function configureSkyPlaneTexture(texture) {
   texture.center.set(0.5, 0.5);
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
+}
+
+function vector4ToColor(value) {
+  if (!value) {
+    return null;
+  }
+
+  return new THREE.Color(value.x, value.y, value.z);
+}
+
+function resolveFlareConfigUrl(assetUrls, weatherProfile) {
+  const flareFileName = weatherProfile?.flareFile?.toLowerCase?.();
+  return assetUrls.flareConfigByName?.[flareFileName] ?? assetUrls.flareConfig;
+}
+
+function resolveFlareGlowTextureUrl(assetUrls, flareConfig) {
+  const flareName = flareConfig?.glowMapName?.toLowerCase?.();
+  return assetUrls.flareGlowTextureByName?.[flareName] ?? assetUrls.glowTexture;
+}
+
+function resolveFlareTextureUrl(assetUrls, flareConfig) {
+  const flareName = flareConfig?.flareMapName?.toLowerCase?.();
+  return assetUrls.flareTextureByName?.[flareName] ?? assetUrls.flareTexture;
 }
 
 function createSkyPlane({ size, altitude, texture }) {
@@ -365,7 +586,7 @@ function createHorizonLayer({ radius, base, height, texture }) {
       alphaTest: 0.02,
       side: THREE.BackSide,
       depthWrite: false,
-      fog: false,
+      fog: true,
     });
 
     if (material.map) {
@@ -375,7 +596,6 @@ function createHorizonLayer({ radius, base, height, texture }) {
       material.map.wrapT = THREE.ClampToEdgeWrapping;
       material.map.repeat.set(1, stripHeight);
       material.map.offset.set(0, offsetY);
-      material.map.needsUpdate = true;
     }
 
     const wall = new THREE.Mesh(wallGeometry, material);

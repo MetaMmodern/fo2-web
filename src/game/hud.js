@@ -81,5 +81,4 @@ export function updateHud(hud, carRoot, tireRoot) {
       <div class="hud-text">${Array.from(materialNames).join(", ") || "none"}</div>
     </div>
   `;
-
 }

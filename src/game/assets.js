@@ -7,13 +7,21 @@ import arenaTrackAtmosphereUrl from "url:../data/tracks/arena/arena1/a/data/atmo
 import arenaTrackLightmapUrl from "url:../data/tracks/arena/arena1/a/lighting/lightmap1_w2.png";
 import arenaHorizonTextureUrl from "url:../data/tracks/arena/textures/arena_one_background.png";
 import arenaSkyTopTextureUrl from "url:../data/global/skybox/arena_day_u.png";
-import desertAddFilterUrl from "url:../data/global/filters/desert_add.tga";
-import desertSubFilterUrl from "url:../data/global/filters/desert_sub.tga";
-import clearAtmosphereUrl from "url:../data/global/atmosphere/clear.ini";
+import defaultAddFilterUrl from "url:../data/global/filters/default_add.tga";
+import defaultSubFilterUrl from "url:../data/global/filters/default_sub.tga";
+import greyAtmosphereUrl from "url:../data/global/atmosphere/grey.ini";
 import defaultCloudBottomUrl from "url:../data/global/atmosphere/default_clouds_bottom.png";
 import defaultCloudTopUrl from "url:../data/global/atmosphere/default_clouds_top.png";
-import arenaGlowTextureUrl from "url:../data/global/flares/day_glow.png";
-import arenaFlareTextureUrl from "url:../data/global/flares/day_flares.png";
+import dayGlowTextureUrl from "url:../data/global/flares/day_glow.png";
+import dayFlareTextureUrl from "url:../data/global/flares/day_flares.png";
+import dayFlareConfigUrl from "url:../data/global/flares/day.ini";
+import canalDayGlowTextureUrl from "url:../data/global/flares/canalday_glow.png";
+import canalDayFlareTextureUrl from "url:../data/global/flares/canalday_flares.png";
+import canalDayFlareConfigUrl from "url:../data/global/flares/canalday.ini";
+import eveningGlowTextureUrl from "url:../data/global/flares/evening_glow.png";
+import eveningFlareTextureUrl from "url:../data/global/flares/evening_flares.png";
+import eveningFlareConfigUrl from "url:../data/global/flares/sunevening.ini";
+import { ARENA1_HOT_DAY_PROFILE } from "./arenaWeatherProfile";
 import carCameraConfigUrl from "url:../data/cars/car_1/camera.ini";
 import carBodyConfigUrl from "url:../data/cars/car_1/body.ini";
 import carTireConfigUrl from "url:../data/cars/car_1/tires.ini";
@@ -55,15 +63,32 @@ export const trackAssetUrls = {
 
 export const arenaEnvironmentAssetUrls = {
   atmosphere: arenaTrackAtmosphereUrl,
-  atmospherePreset: clearAtmosphereUrl,
+  atmospherePreset: greyAtmosphereUrl,
   horizonTexture: arenaHorizonTextureUrl,
   skyTopTexture: arenaSkyTopTextureUrl,
-  filterAddTexture: desertAddFilterUrl,
-  filterSubTexture: desertSubFilterUrl,
+  filterAddTexture: defaultAddFilterUrl,
+  filterSubTexture: defaultSubFilterUrl,
   cloudBottomTexture: defaultCloudBottomUrl,
   cloudTopTexture: defaultCloudTopUrl,
-  glowTexture: arenaGlowTextureUrl,
-  flareTexture: arenaFlareTextureUrl,
+  flareConfig: dayFlareConfigUrl,
+  glowTexture: dayGlowTextureUrl,
+  flareTexture: dayFlareTextureUrl,
+  flareConfigByName: {
+    "day.ini": dayFlareConfigUrl,
+    "canalday.ini": canalDayFlareConfigUrl,
+    "sunevening.ini": eveningFlareConfigUrl,
+  },
+  flareGlowTextureByName: {
+    "day_glow.tga": dayGlowTextureUrl,
+    "canalday_glow.tga": canalDayGlowTextureUrl,
+    "evening_glow.tga": eveningGlowTextureUrl,
+  },
+  flareTextureByName: {
+    "day_flares.tga": dayFlareTextureUrl,
+    "canalday_flares.tga": canalDayFlareTextureUrl,
+    "evening_flares.tga": eveningFlareTextureUrl,
+  },
+  weatherProfile: ARENA1_HOT_DAY_PROFILE,
 };
 
 export const textureUrls = {
