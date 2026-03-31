@@ -85,6 +85,13 @@ canvas {
   margin-top: 8px;
 }
 
+.hud-control-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .hud-control-label,
 .hud-value {
   display: block;
@@ -106,4 +113,10 @@ canvas {
   background: rgba(255, 248, 234, 0.08);
   color: #f3f3f3;
   font: inherit;
+}
+
+.hud-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #ddd2b3;
 }

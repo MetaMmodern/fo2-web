@@ -1,5 +1,12 @@
 # Flatout OSS Notes
 
+## Ghidra Baseline
+
+- Use [reference/ghidra_projects/fo2_zack_result.rep](/Users/metamodern/Documents/Github/Personal/flatout_oss/reference/ghidra_projects/fo2_zack_result.rep) as the active Ghidra project baseline.
+- Treat [reference/ghidra_projects/flatout2.rep](/Users/metamodern/Documents/Github/Personal/flatout_oss/reference/ghidra_projects/flatout2.rep) as legacy only.
+- The address book remains valid without remapping because both projects target the same `FlatOut2.exe` hash.
+- Project-specific guidance lives in [README.md](/Users/metamodern/Documents/Github/Personal/flatout_oss/reference/ghidra_projects/README.md).
+
 ## Arena Track Textures
 
 - The arena track texture pipeline now uses PNG files for rendering.
@@ -25,6 +32,12 @@
 - Press `1` to reduce the keyboard movement step.
 - Press `2` to increase the keyboard movement step.
 - Keyboard movement uses a fixed step per second, so it does not accelerate over time.
+
+## Camera Direction
+
+- Future gameplay camera work should follow the recovered native camera system, not a single hardcoded chase camera.
+- The original game uses multiple authored camera profiles plus runtime tracker tuning from `Data.Camera.*`.
+- Start from [GHIDRA_VISUAL_ADDRESSBOOK.md](/Users/metamodern/Documents/Github/Personal/flatout_oss/GHIDRA_VISUAL_ADDRESSBOOK.md) and [CAMERA_BEHAVIOR_FINDINGS_2026-03-31.md](/Users/metamodern/Documents/Github/Personal/flatout_oss/ghidra_findings/CAMERA_BEHAVIOR_FINDINGS_2026-03-31.md) before changing gameplay camera behavior.
 
 ## Driving Prototype
 

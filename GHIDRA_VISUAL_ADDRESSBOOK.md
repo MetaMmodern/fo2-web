@@ -2,11 +2,107 @@
 
 Purpose: a stable “map” of the *visual* runtime anchors we’ve already recovered from `reference/FlatOut2.exe`, so we don’t redo redundant passes.
 
+Project baseline:
+- Active Ghidra project for ongoing RE/porting work: `reference/ghidra_projects/fo2_zack_result.rep`
+- Legacy project retained only for historical comparison: `reference/ghidra_projects/flatout2.rep`
+- No address remap is currently needed: both projects target the same executable hash (`MD5 40078c35de1366488d7c3dc761008cd4`), so the addresses in this document remain valid.
+- Function names may differ between projects; when in doubt, trust the address first and the label second.
+
 Source of truth notes:
 - `VISUAL_GHIDRA_RUNTIME_FINDINGS_2026-03-29.md:1`
+- `ghidra_findings/PROJECT_COMPARISON_FLATOUT2_VS_ZACK_2026-03-31.md:1`
 
 Binary:
 - `reference/FlatOut2.exe` (PE32 / x86, ImageBase `0x00400000`)
+
+---
+
+## Driving / Collision / Vehicle Physics
+
+Source of truth notes:
+- `ghidra_findings/DRIVING_COLLISION_FINDINGS_2026-03-31.md:1`
+
+### Core anchors
+
+- `FUN_00431b50` @ `0x00431b50` — Car runtime setup: loads `panels.ini`, `body.bgm`, `crash.dat`; resolves wheel/tire anchors; reads `CollisionFull*`, `CollisionBottom*`, and `CollisionTop*`.
+- `FUN_00414ea0` @ `0x00414ea0` — Collision sound bootstrap: loads `data/sound/collision_sounds.bed`; registers `CollisionSoundTypes` and fixed event groups including `SuspensionBottomOut`.
+- `FUN_0043aa30` @ `0x0043aa30` — Tire dynamics config consumer for `Data.Physics.TireDynamics`.
+- `FUN_00469f50` @ `0x00469f50` — Registers `Data.Physics.Car.Steering_PC` defaults and speed-limited steering behavior.
+- `FUN_00454c60` @ `0x00454c60` — Reads the larger car physics tree: differential, throttle/brake/speed curves, gearbox, suspension, tires, and engine.
+
+### Key strings / config keys
+
+- `CollisionFullMin` @ `0x0066a44c`
+- `CollisionFullMax` @ `0x0066a438`
+- `CollisionBottomMin` @ `0x0066a424`
+- `CollisionBottomMax` @ `0x0066a410`
+- `CollisionTopMin` @ `0x0066a400`
+- `CollisionTopMax` @ `0x0066a3f0`
+- `BodyCollision` @ `0x0067bf3c`
+- `RayCollision` @ `0x0067bf1c`
+- `CameraCollision` @ `0x0067bf2c`
+- `CollisionSoundTypes` @ `0x00669540`
+- `SuspensionBottomOut` @ `0x00669510`
+- `Data.Physics.TireDynamics` @ `0x0066a940`
+- `Data.Physics.Car.Steering_PC` @ `0x0066d798`
+- `FrontSuspensionLift` @ `0x0066b5a0`
+- `RearSuspensionLift` @ `0x0066b554`
+- `FrontDifferential` @ `0x0066bb08`
+- `RearDifferential` @ `0x0066baf4`
+
+### Practical implications
+
+- The original vehicle runtime is explicitly data-driven for:
+  - body collision volumes
+  - tire dynamics
+  - steering response
+  - suspension geometry
+  - differential / throttle / brake / speed curves
+- The native game distinguishes floor/body/ray/camera collision concepts; those should not be collapsed into one generic mesh-contact rule in the long term.
+
+---
+
+## Camera System
+
+Source of truth notes:
+- `ghidra_findings/CAMERA_BEHAVIOR_FINDINGS_2026-03-31.md:1`
+
+### Core anchors
+
+- `UpdateCamera` @ `0x004725c0` — Per-frame camera update entry from the player host; dispatches into the camera manager after main vehicle/environment updates.
+- `CreateCameraManager` @ `0x004d65b0` — Camera bootstrap; loads ragdoll camera profile, installs crash/stunt/goal trackers, and registers camera update callbacks.
+- `CameraManager_LoadCameraIniProfiles` @ `0x004d6c90` — Loads `data/camera.ini`, `data/trackintro_camera.ini`, and `data/start_camera.ini`.
+- `CameraManager_UpdateTrackers` @ `0x004d6e70` — Iterates installed camera tracker objects and advances them each frame.
+- `CameraManager_RegisterCarTrackerConfig` @ `0x004d70f0` — Registers `Data.Camera.CarCameraTracker` and `Data.Camera.CameraDamageShake`.
+- `CarCameraTracker_Update` @ `0x004d7910` — Normal driving tracker update; smooths heading/yaw and vertical response from `Data.Camera.CarCameraTracker`, then applies separate roll/shake work. Do not model this as direct full chassis quaternion inheritance.
+- `CameraManager_RegisterFixedHeadConfig` @ `0x004cffb0` — Registers `Data.Camera.FixedHead`.
+- `FixedHeadCameraTracker_Update` @ `0x004d7520` — Fixed-head / hood-like tracker update path.
+- `CameraDamageShake_Update` @ `0x004d8320` — Separate damage-shake layer called after the driving tracker update.
+- `CameraManager_RegisterStuntTrackerConfig` @ `0x004db660` — Registers `Data.Camera.StuntCameraTracker`.
+- `CameraManager_RegisterGoalCameraConfig` @ `0x004d9100` — Registers `Data.Camera.GoalCameraBasketball`, `GoalCameraTargets`, and `GoalCameraLocations`.
+- `CameraManager_RegisterGoalCameraDelayConfig` @ `0x0047e120` — Registers `Data.Camera.GoalCameraDelay`.
+
+### Key strings / config keys
+
+- `Data.Camera.CarCameraTracker` @ `0x00674410`
+- `Data.Camera.CameraDamageShake` @ `0x006743f0`
+- `Data.Camera.FixedHead` @ `0x00674248`
+- `Data.Camera.StuntCameraTracker` @ `0x006748e4`
+- `Data.Camera.GoalCameraLocations` @ `0x006744fc`
+- `Data.Camera.GoalCameraTargets` @ `0x0067451c`
+- `Data.Camera.GoalCameraBasketball` @ `0x0067453c`
+- `Data.Camera.GoalCameraDelay` @ `0x0066f3cc`
+- `data/camera.ini` @ `0x0067438c`
+- `data/trackintro_camera.ini` @ `0x00674370`
+- `data/start_camera.ini` @ `0x00674358`
+- `data/drivers/ragdoll/camera.ini` @ `0x006743b8`
+
+### Practical implications
+
+- The native camera system is layered: authored camera profiles from INI files plus runtime tracker tuning from `Data.Camera.*`.
+- Per-car driving cameras are authored content, not one universal hardcoded offset.
+- Stunt, goal, intro, start, and ragdoll cameras are separate behaviors and should not be collapsed into a single chase rig.
+- Normal driving camera behavior should not pitch with raw body acceleration by inheriting the car body's full quaternion; stunt tilt belongs to the stunt tracker, not the normal car tracker.
 
 ---
 

@@ -131,6 +131,8 @@ function attachTires(carRoot, tireRoot) {
     const tireClone = tireTemplate.clone(true);
     tireClone.name = `${anchorName}_tire`;
     tireClone.position.copy(anchor.position);
+    tireClone.userData.basePosition = anchor.position.clone();
+    tireClone.userData.baseQuaternion = tireClone.quaternion.clone();
     carRoot.add(tireClone);
   });
 }

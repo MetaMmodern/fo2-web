@@ -4,6 +4,11 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 const textureNameAliases = {
   colormap: "col",
 };
+const DOWN = new THREE.Vector3(0, -1, 0);
+const FORWARD = new THREE.Vector3();
+const raycastOrigin = new THREE.Vector3();
+const worldNormal = new THREE.Vector3();
+const defaultWheelSpawnLift = 0.35;
 
 export async function loadTrack(assetUrls, scene, renderer) {
   const [trackRoot, trackMaterialInfo, startPoints] = await Promise.all([
@@ -28,16 +33,36 @@ export async function loadTrack(assetUrls, scene, renderer) {
   alignTrackAtOrigin(trackRoot);
   scene.add(trackRoot);
 
-  return { trackRoot, startPoints };
+  return {
+    trackRoot,
+    startPoints,
+    floorSampler: createTrackFloorSampler(trackRoot),
+  };
 }
 
-export function placeVehicleOnTrack(trackRoot, carRoot, startPoints = []) {
+export function placeVehicleOnTrack(
+  trackRoot,
+  carRoot,
+  startPoints = [],
+  floorSampler = null,
+) {
+  const sampler = floorSampler ?? createTrackFloorSampler(trackRoot);
+
   if (startPoints.length > 0) {
     const spawnPoint = transformStartPointToScene(startPoints[0]);
+    const spawnX = trackRoot.position.x + spawnPoint.position.x;
+    const spawnZ = trackRoot.position.z + spawnPoint.position.z;
+    const sampledFloor =
+      sampler?.sample(new THREE.Vector3(spawnX, trackRoot.position.y + 12, spawnZ)) ??
+      null;
+    const spawnY =
+      sampledFloor?.point.y ??
+      trackRoot.position.y + spawnPoint.position.y;
+
     carRoot.position.set(
-      trackRoot.position.x + spawnPoint.position.x,
-      trackRoot.position.y + spawnPoint.position.y + 0.35,
-      trackRoot.position.z + spawnPoint.position.z,
+      spawnX,
+      spawnY + defaultWheelSpawnLift,
+      spawnZ,
     );
     carRoot.quaternion.copy(spawnPoint.quaternion);
     carRoot.rotateY(Math.PI);
@@ -48,8 +73,104 @@ export function placeVehicleOnTrack(trackRoot, carRoot, startPoints = []) {
   const trackSize = new THREE.Vector3();
   trackBox.getSize(trackSize);
 
-  carRoot.position.set(0, 3, trackSize.z * 0.22);
+  const fallbackX = 0;
+  const fallbackZ = trackSize.z * 0.22;
+  const sampledFloor =
+    sampler?.sample(new THREE.Vector3(fallbackX, trackBox.max.y + 12, fallbackZ)) ??
+    null;
+
+  carRoot.position.set(
+    fallbackX,
+    (sampledFloor?.point.y ?? 3) + defaultWheelSpawnLift,
+    fallbackZ,
+  );
   carRoot.rotation.set(0, Math.PI, 0);
+}
+
+export function createTrackFloorSampler(trackRoot) {
+  const meshes = [];
+  const raycaster = new THREE.Raycaster();
+  raycaster.firstHitOnly = false;
+  raycaster.far = 128;
+
+  trackRoot.traverse((node) => {
+    if (!node.isMesh || !node.geometry) {
+      return;
+    }
+
+    if (!node.visible) {
+      return;
+    }
+
+    node.updateWorldMatrix(true, false);
+    meshes.push(node);
+  });
+
+  return {
+    sample(worldPosition, options = {}) {
+      if (meshes.length === 0 || !worldPosition) {
+        return null;
+      }
+
+      const rayHeight = options.rayHeight ?? 12;
+      const minUpDot = options.minUpDot ?? 0.2;
+      raycastOrigin.copy(worldPosition);
+      raycastOrigin.y += rayHeight;
+      raycaster.set(raycastOrigin, DOWN);
+      raycaster.far = options.rayDistance ?? rayHeight + 32;
+      const intersections = raycaster.intersectObjects(meshes, false);
+
+      if (intersections.length === 0) {
+        return null;
+      }
+
+      let fallbackHit = null;
+
+      for (const hit of intersections) {
+        const hitNormal = resolveWorldHitNormal(hit);
+
+        if (!fallbackHit) {
+          fallbackHit = buildTrackFloorHit(hit, hitNormal);
+        }
+
+        if (hitNormal.y >= minUpDot) {
+          return buildTrackFloorHit(hit, hitNormal);
+        }
+      }
+
+      return fallbackHit;
+    },
+    raycast(origin, direction, options = {}) {
+      if (meshes.length === 0 || !origin || !direction || direction.lengthSq() < 1e-8) {
+        return null;
+      }
+
+      raycastOrigin.copy(origin);
+      FORWARD.copy(direction).normalize();
+      raycaster.set(raycastOrigin, FORWARD);
+      raycaster.far = options.rayDistance ?? 8;
+      const intersections = raycaster.intersectObjects(meshes, false);
+
+      if (intersections.length === 0) {
+        return null;
+      }
+
+      const minUpDot = options.minUpDot ?? -1;
+      const maxUpDot = options.maxUpDot ?? 1;
+
+      for (const hit of intersections) {
+        const hitNormal = resolveWorldHitNormal(hit);
+
+        if (hitNormal.y < minUpDot || hitNormal.y > maxUpDot) {
+          continue;
+        }
+
+        return buildTrackFloorHit(hit, hitNormal);
+      }
+
+      return null;
+    },
+  };
 }
 
 function loadGltf(url) {
@@ -520,6 +641,89 @@ function alignTrackAtOrigin(trackRoot) {
   trackRoot.position.x -= center.x;
   trackRoot.position.z -= center.z;
   trackRoot.position.y -= box.min.y;
+}
+
+function resolveWorldHitNormal(hit) {
+  if (!hit?.face) {
+    return worldNormal.set(0, 1, 0);
+  }
+
+  return worldNormal
+    .copy(hit.face.normal)
+    .transformDirection(hit.object.matrixWorld)
+    .normalize();
+}
+
+function buildTrackFloorHit(hit, normal) {
+  const material = Array.isArray(hit.object.material)
+    ? hit.object.material[hit.face?.materialIndex ?? 0]
+    : hit.object.material;
+  const materialName = material?.name ?? "";
+
+  return {
+    point: hit.point.clone(),
+    normal: normal.clone(),
+    distance: hit.distance,
+    materialName,
+    surfaceType: classifySurfaceType(materialName),
+    object: hit.object,
+  };
+}
+
+function classifySurfaceType(materialName) {
+  const normalizedName = materialName.toLowerCase();
+
+  if (
+    normalizedName.includes("sand") ||
+    normalizedName.includes("beach") ||
+    normalizedName.includes("desert")
+  ) {
+    return "sand";
+  }
+
+  if (
+    normalizedName.includes("gravel") ||
+    normalizedName.includes("rock") ||
+    normalizedName.includes("stone")
+  ) {
+    return "gravel";
+  }
+
+  if (
+    normalizedName.includes("mud") ||
+    normalizedName.includes("dirt") ||
+    normalizedName.includes("soil")
+  ) {
+    return "dirt";
+  }
+
+  if (
+    normalizedName.includes("grass") ||
+    normalizedName.includes("field") ||
+    normalizedName.includes("forest")
+  ) {
+    return "grass";
+  }
+
+  if (
+    normalizedName.includes("hazard") ||
+    normalizedName.includes("metal") ||
+    normalizedName.includes("concrete") ||
+    normalizedName.includes("wall")
+  ) {
+    return "hazard";
+  }
+
+  if (
+    normalizedName.includes("road") ||
+    normalizedName.includes("asphalt") ||
+    normalizedName.includes("tarmac") ||
+    normalizedName.includes("track")
+  ) {
+    return "tarmac";
+  }
+
+  return "default";
 }
 
 function promoteSecondaryUvSet(geometry) {

@@ -32,10 +32,20 @@ import { loadVehicle } from "./game/vehicle";
 const { scene, camera, renderer, controls } = createSceneApp();
 const drivingInput = createDrivingInput();
 const initialTrack = getTrackById(defaultSelection.trackId);
+const cameraDebug = {
+  enableDynamics: true,
+  headingResponseScale: 1,
+  positionResponseScale: 1,
+  lookResponseScale: 1,
+  verticalFactorScale: 1,
+  rotateFactorScale: 1,
+  shakeScale: 1,
+};
 const hud = createHud({
   tracks: trackCatalog,
   cars: carCatalog,
   selection: { ...defaultSelection },
+  cameraDebug,
   onTrackChange(trackId) {
     applySelection({ trackId });
   },
@@ -59,6 +69,7 @@ colorFilterPass.applyWeatherProfile(initialTrack.environment.weatherProfile);
 const selection = { ...defaultSelection };
 const sceneState = {
   trackRoot: null,
+  floorSampler: null,
   startPoints: [],
   carRoot: null,
   tireRoot: null,
@@ -158,6 +169,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       scene.remove(sceneState.trackRoot);
       disposeHierarchy(sceneState.trackRoot);
       sceneState.trackRoot = null;
+      sceneState.floorSampler = null;
       sceneState.startPoints = [];
     }
 
@@ -174,6 +186,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
 
     const loadedTrack = await loadTrack(track, scene, renderer);
     sceneState.trackRoot = loadedTrack.trackRoot;
+    sceneState.floorSampler = loadedTrack.floorSampler;
     sceneState.startPoints = loadedTrack.startPoints;
   }
 
@@ -210,13 +223,19 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     sceneState.tireRoot = tireRoot;
 
     if (sceneState.trackRoot) {
-      placeVehicleOnTrack(sceneState.trackRoot, carRoot, sceneState.startPoints);
+      placeVehicleOnTrack(
+        sceneState.trackRoot,
+        carRoot,
+        sceneState.startPoints,
+        sceneState.floorSampler,
+      );
     }
 
     sceneState.drivingSimulation = await createDrivingSimulation({
       carRoot,
       assetUrls: vehicleAssetUrls,
       input: drivingInput,
+      trackFloorSampler: sceneState.floorSampler,
     });
     sceneState.chaseCamera = createChaseCamera(
       camera,
@@ -224,6 +243,9 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       carRoot,
       {
         ...(cameraConfig ?? {}),
+        debugControls: cameraDebug,
+        getDynamics: () => sceneState.drivingSimulation?.getCameraState?.() ?? null,
+        trackFloorSampler: sceneState.floorSampler,
         initialState: previousCameraState,
       },
     );
@@ -232,11 +254,13 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       sceneState.trackRoot,
       sceneState.carRoot,
       sceneState.startPoints,
+      sceneState.floorSampler,
     );
     sceneState.drivingSimulation = await createDrivingSimulation({
       carRoot: sceneState.carRoot,
       assetUrls: buildVehicleAssetUrls(car, skin),
       input: drivingInput,
+      trackFloorSampler: sceneState.floorSampler,
     });
   }
 }
