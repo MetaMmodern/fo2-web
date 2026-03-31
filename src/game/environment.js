@@ -15,19 +15,21 @@ const DEFAULT_ENVIRONMENT_VALUES = {
 
 export async function loadTrackEnvironment(scene, assetUrls) {
   const weatherProfile = assetUrls.weatherProfile ?? null;
-  const resolvedFlareConfigUrl = resolveFlareConfigUrl(assetUrls, weatherProfile);
+  const resolvedFlareConfigUrl = resolveFlareConfigUrl(
+    assetUrls,
+    weatherProfile,
+  );
   const [atmosphere, flareConfig] = await Promise.all([
-    loadAtmosphere(
-      assetUrls.atmosphere,
-      assetUrls.atmospherePreset,
-    ),
+    loadAtmosphere(assetUrls.atmosphere, assetUrls.atmospherePreset),
     loadFlareConfig(resolvedFlareConfigUrl),
   ]);
   const textureLoader = new THREE.TextureLoader();
-  const sunPosition = weatherProfile?.sunPosition?.clone() ??
+  const sunPosition =
+    weatherProfile?.sunPosition?.clone() ??
     atmosphere.sunDirection.clone().normalize().multiplyScalar(1000);
   const sunDirection = sunPosition.clone().normalize();
-  const flarePosition = weatherProfile?.flarePosition?.clone() ?? sunPosition.clone();
+  const flarePosition =
+    weatherProfile?.flarePosition?.clone() ?? sunPosition.clone();
   scene.background = null;
   scene.environment = null;
 
@@ -120,25 +122,32 @@ export async function loadTrackEnvironment(scene, assetUrls) {
   horizonLayer.rotation.y = HORIZON_ROTATION;
   scene.add(horizonLayer);
 
-  const sunLightColor = vector4ToColor(weatherProfile?.sunColor)
-    ?? pickGradientColor(atmosphere.skyGradient, 0.78, new THREE.Color(0xb9d8ff));
-  const ambientLightColor = vector4ToColor(weatherProfile?.ambientColor)
-    ?? pickGradientColor(atmosphere.skyGradient, 0.52, new THREE.Color(0x8ab6e8));
-  const specularLightColor = vector4ToColor(weatherProfile?.specularColor)
-    ?? sunLightColor.clone();
-  const groundLightColor = ambientLightColor.clone().lerp(new THREE.Color(0xc39a68), 0.38);
+  const sunLightColor =
+    vector4ToColor(weatherProfile?.sunColor) ??
+    pickGradientColor(atmosphere.skyGradient, 0.78, new THREE.Color(0xb9d8ff));
+  const ambientLightColor =
+    vector4ToColor(weatherProfile?.ambientColor) ??
+    pickGradientColor(atmosphere.skyGradient, 0.52, new THREE.Color(0x8ab6e8));
+  const specularLightColor =
+    vector4ToColor(weatherProfile?.specularColor) ?? sunLightColor.clone();
+  const groundLightColor = ambientLightColor
+    .clone()
+    .lerp(new THREE.Color(0xc39a68), 0.38);
   scene.fog = null;
 
   const ambientLight = new THREE.AmbientLight(
     ambientLightColor,
-    weatherProfile?.ambientIntensity ?? (0.72 * atmosphere.skyAmbient + 0.42 * atmosphere.cloudAmbient),
+    weatherProfile?.ambientIntensity ??
+      0.72 * atmosphere.skyAmbient + 0.42 * atmosphere.cloudAmbient,
   );
   scene.add(ambientLight);
 
   const hemisphereLight = new THREE.HemisphereLight(
     sunLightColor,
     groundLightColor,
-    0.72 * (weatherProfile?.ambientIntensity ?? (1.35 * atmosphere.skyAmbient + 0.6 * atmosphere.cloudAmbient)),
+    0.72 *
+      (weatherProfile?.ambientIntensity ??
+        1.35 * atmosphere.skyAmbient + 0.6 * atmosphere.cloudAmbient),
   );
   scene.add(hemisphereLight);
 
@@ -384,7 +393,12 @@ function createSunFlareOverlay({ glowTexture, flareTexture, flareConfig }) {
 
       glowSprite.visible = true;
       glowSprite.position.set(sunNdc.x, sunNdc.y, FLARE_OVERLAY_DEPTH);
-      setOverlaySpriteScale(glowSprite, flareConfig.glowSizeDeg, viewCamera.fov, aspect);
+      setOverlaySpriteScale(
+        glowSprite,
+        flareConfig.glowSizeDeg,
+        viewCamera.fov,
+        aspect,
+      );
       glowMaterial.opacity = 0.45 + presence * 0.75;
 
       for (const flare of flareSprites) {
@@ -395,11 +409,20 @@ function createSunFlareOverlay({ glowTexture, flareTexture, flareConfig }) {
           sunNdc.y * -config.location,
           FLARE_OVERLAY_DEPTH,
         );
-        sprite.material.rotation = baseAngle * config.angleScale + config.angleRotation;
+        sprite.material.rotation =
+          baseAngle * config.angleScale + config.angleRotation;
         setOverlaySpriteScale(sprite, config.sizeDeg, viewCamera.fov, aspect);
 
-        const sharpnessWeight = THREE.MathUtils.clamp(config.sharpness / 6.5, 0.15, 1.0);
-        const locationWeight = THREE.MathUtils.clamp(1.05 - Math.abs(config.location) * 0.1, 0.2, 1.0);
+        const sharpnessWeight = THREE.MathUtils.clamp(
+          config.sharpness / 6.5,
+          0.15,
+          1.0,
+        );
+        const locationWeight = THREE.MathUtils.clamp(
+          1.05 - Math.abs(config.location) * 0.1,
+          0.2,
+          1.0,
+        );
         material.opacity = presence * sharpnessWeight * locationWeight * 0.75;
       }
     },
@@ -417,7 +440,9 @@ function disposeHierarchy(root) {
       node.geometry.dispose();
     }
 
-    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    const materials = Array.isArray(node.material)
+      ? node.material
+      : [node.material];
     materials.forEach((material) => material?.dispose?.());
   });
 }
@@ -427,7 +452,11 @@ async function loadAtmosphere(trackAtmosphereUrl, presetAtmosphereUrl) {
     fetchText(trackAtmosphereUrl, "track atmosphere"),
     fetchText(presetAtmosphereUrl, "atmosphere preset"),
   ]);
-  const sunDirection = parseVector3(trackText, "Sun_Direction", [0, 0.707107, 0.707107]);
+  const sunDirection = parseVector3(
+    trackText,
+    "Sun_Direction",
+    [0, 0.707107, 0.707107],
+  );
   const skyGradient = parseGradientColors(presetText);
 
   return {
@@ -538,7 +567,9 @@ function extractIndexedBlocks(text) {
 }
 
 function parseVector2Block(text, key, fallback) {
-  const match = text.match(new RegExp(`${key}\\s*=\\s*\\{\\s*([^,}]+)\\s*,\\s*([^}]+)\\}`));
+  const match = text.match(
+    new RegExp(`${key}\\s*=\\s*\\{\\s*([^,}]+)\\s*,\\s*([^}]+)\\}`),
+  );
   if (!match) {
     return new THREE.Vector2(...fallback);
   }
@@ -550,12 +581,14 @@ function parseVector2Block(text, key, fallback) {
 }
 
 function parseGradientColors(text) {
-  const matches = Array.from(
-    text.matchAll(/\[\d+\]\s*=\s*\{\s*([^}]+)\}/g),
-  );
+  const matches = Array.from(text.matchAll(/\[\d+\]\s*=\s*\{\s*([^}]+)\}/g));
 
   if (matches.length === 0) {
-    return [[0.86, 0.92, 0.95], [0.62, 0.78, 0.92], [0.22, 0.42, 0.6]];
+    return [
+      [0.86, 0.92, 0.95],
+      [0.62, 0.78, 0.92],
+      [0.22, 0.42, 0.6],
+    ];
   }
 
   return matches
@@ -648,21 +681,9 @@ function createSkyPlane({ size, altitude, texture }) {
 }
 
 function createGradientSkyDome({ radius, gradient }) {
-  const topColor = pickGradientColor(
-    gradient,
-    0,
-    new THREE.Color(0x9dc3ea),
-  );
-  const midColor = pickGradientColor(
-    gradient,
-    0.45,
-    new THREE.Color(0x7eabda),
-  );
-  const bottomColor = pickGradientColor(
-    gradient,
-    1,
-    new THREE.Color(0xc9b79b),
-  );
+  const topColor = pickGradientColor(gradient, 0, new THREE.Color(0x9dc3ea));
+  const midColor = pickGradientColor(gradient, 0.45, new THREE.Color(0x7eabda));
+  const bottomColor = pickGradientColor(gradient, 1, new THREE.Color(0xc9b79b));
   const geometry = new THREE.SphereGeometry(radius, 32, 16);
   const material = new THREE.ShaderMaterial({
     uniforms: {

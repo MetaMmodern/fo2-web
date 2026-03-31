@@ -12,11 +12,7 @@ import {
   trackCatalog,
 } from "./game/catalog";
 import { loadTrackEnvironment } from "./game/environment";
-import {
-  createHud,
-  syncHudSelection,
-  updateHudTelemetry,
-} from "./game/hud";
+import { createHud, syncHudSelection, updateHudTelemetry } from "./game/hud";
 import { createDrivingInput } from "./game/input";
 import { createTextureRegistry, prepareMaterials } from "./game/materials";
 import { createDrivingSimulation } from "./game/physics";
@@ -99,7 +95,9 @@ if (typeof window !== "undefined") {
   };
 }
 
-queueTransition(() => loadSceneSelection({ reloadTrack: true, reloadCar: true }));
+queueTransition(() =>
+  loadSceneSelection({ reloadTrack: true, reloadCar: true }),
+);
 
 const frameClock = new THREE.Clock();
 
@@ -237,18 +235,14 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       input: drivingInput,
       trackFloorSampler: sceneState.floorSampler,
     });
-    sceneState.chaseCamera = createChaseCamera(
-      camera,
-      controls,
-      carRoot,
-      {
-        ...(cameraConfig ?? {}),
-        debugControls: cameraDebug,
-        getDynamics: () => sceneState.drivingSimulation?.getCameraState?.() ?? null,
-        trackFloorSampler: sceneState.floorSampler,
-        initialState: previousCameraState,
-      },
-    );
+    sceneState.chaseCamera = createChaseCamera(camera, controls, carRoot, {
+      ...(cameraConfig ?? {}),
+      debugControls: cameraDebug,
+      getDynamics: () =>
+        sceneState.drivingSimulation?.getCameraState?.() ?? null,
+      trackFloorSampler: sceneState.floorSampler,
+      initialState: previousCameraState,
+    });
   } else if (reloadTrack && sceneState.trackRoot && sceneState.carRoot) {
     placeVehicleOnTrack(
       sceneState.trackRoot,
@@ -268,7 +262,9 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
 function disposeHierarchy(root) {
   root.traverse((node) => {
     node.geometry?.dispose?.();
-    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    const materials = Array.isArray(node.material)
+      ? node.material
+      : [node.material];
 
     materials.forEach((material) => {
       material?.map?.dispose?.();

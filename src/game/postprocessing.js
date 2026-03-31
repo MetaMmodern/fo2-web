@@ -10,28 +10,40 @@ const FO2_COMBINE_SUBTRACT = -0.5;
 
 export function createColorFilterPass(renderer, assetUrls) {
   const initialSize = renderer.getDrawingBufferSize(new THREE.Vector2());
-  const renderTarget = createFullscreenTarget(initialSize.x, initialSize.y, true);
-  if (renderer.capabilities.isWebGL2) {
-    renderTarget.samples = 4;
-  }
+  const renderTarget = createFullscreenTarget(
+    initialSize.x,
+    initialSize.y,
+    true,
+  );
+  // if (renderer.capabilities.isWebGL2) {
+  renderTarget.samples = 4;
+  // }
   const luminanceTarget = createFullscreenTarget(initialSize.x, initialSize.y);
   const filteredTarget = createFullscreenTarget(initialSize.x, initialSize.y);
   const maskedTarget = createFullscreenTarget(initialSize.x, initialSize.y);
   const bloomFullTarget = createFullscreenTarget(initialSize.x, initialSize.y);
-  const postTargets = Array.from(
-    { length: FO2_INTERMEDIATE_COUNT },
-    () => createPostTarget(),
+  const postTargets = Array.from({ length: FO2_INTERMEDIATE_COUNT }, () =>
+    createPostTarget(),
   );
 
   const tgaLoader = new TGALoader();
-  let addTexture = tgaLoader.load(assetUrls.addTexture, () => rebuildRemapLut());
-  let subTexture = tgaLoader.load(assetUrls.subTexture, () => rebuildRemapLut());
+  let addTexture = tgaLoader.load(assetUrls.addTexture, () =>
+    rebuildRemapLut(),
+  );
+  let subTexture = tgaLoader.load(assetUrls.subTexture, () =>
+    rebuildRemapLut(),
+  );
   configureRampTexture(addTexture);
   configureRampTexture(subTexture);
 
   const remapLutData = new Uint8Array(256 * 4);
   remapLutData.fill(128);
-  const remapLutTexture = new THREE.DataTexture(remapLutData, 256, 1, THREE.RGBAFormat);
+  const remapLutTexture = new THREE.DataTexture(
+    remapLutData,
+    256,
+    1,
+    THREE.RGBAFormat,
+  );
   remapLutTexture.colorSpace = THREE.NoColorSpace;
   remapLutTexture.magFilter = THREE.NearestFilter;
   remapLutTexture.minFilter = THREE.NearestFilter;
@@ -174,7 +186,12 @@ export function createColorFilterPass(renderer, assetUrls) {
   const box4Material = new THREE.ShaderMaterial({
     uniforms: {
       tInput: { value: postTargets[0].texture },
-      texelSize: { value: new THREE.Vector2(1 / FO2_POST_BUFFER_SIZE, 1 / FO2_POST_BUFFER_SIZE) },
+      texelSize: {
+        value: new THREE.Vector2(
+          1 / FO2_POST_BUFFER_SIZE,
+          1 / FO2_POST_BUFFER_SIZE,
+        ),
+      },
       sampleScale: { value: 1.0 },
     },
     vertexShader: FULLSCREEN_VERTEX_SHADER,
@@ -316,7 +333,9 @@ export function createColorFilterPass(renderer, assetUrls) {
   }
 
   function resize() {
-    const drawingBufferSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const drawingBufferSize = renderer.getDrawingBufferSize(
+      new THREE.Vector2(),
+    );
     renderTarget.setSize(drawingBufferSize.x, drawingBufferSize.y);
     luminanceTarget.setSize(drawingBufferSize.x, drawingBufferSize.y);
     filteredTarget.setSize(drawingBufferSize.x, drawingBufferSize.y);
@@ -344,11 +363,17 @@ export function createColorFilterPass(renderer, assetUrls) {
       renderFullscreen(luminanceMaterial, luminanceTarget);
       renderFullscreen(remapMaterial, filteredTarget);
 
-      highpassMaterial.uniforms.sampleScale.value = bloomState.bloomDownsampled ? 2.0 : 1.0;
+      highpassMaterial.uniforms.sampleScale.value = bloomState.bloomDownsampled
+        ? 2.0
+        : 1.0;
       renderFullscreen(highpassMaterial, postTargets[0]);
 
       let currentTarget = postTargets[0];
-      for (let passIndex = 0; passIndex < bloomState.bloomPasses; passIndex += 1) {
+      for (
+        let passIndex = 0;
+        passIndex < bloomState.bloomPasses;
+        passIndex += 1
+      ) {
         box4Material.uniforms.tInput.value = currentTarget.texture;
         box4Material.uniforms.sampleScale.value = passIndex + 1;
         const nextTarget = postTargets[1 + (passIndex % 2)];
@@ -417,7 +442,10 @@ export function createColorFilterPass(renderer, assetUrls) {
       }
       rebuildRemapLut();
     },
-    setFilterTextures({ addTexture: nextAddTexture, subTexture: nextSubTexture }) {
+    setFilterTextures({
+      addTexture: nextAddTexture,
+      subTexture: nextSubTexture,
+    }) {
       if (nextAddTexture) {
         addTexture?.dispose?.();
         addTexture = tgaLoader.load(nextAddTexture, (loadedTexture) => {
@@ -466,7 +494,11 @@ export function createColorFilterPass(renderer, assetUrls) {
         bloomState.bloomFromLuminance = bloomFromLuminance;
       }
       if (Number.isFinite(bloomPasses)) {
-        bloomState.bloomPasses = THREE.MathUtils.clamp(Math.round(bloomPasses), 1, 4);
+        bloomState.bloomPasses = THREE.MathUtils.clamp(
+          Math.round(bloomPasses),
+          1,
+          4,
+        );
       }
       if (Number.isFinite(combineBaseScale)) {
         bloomState.combineBaseScale = combineBaseScale;
@@ -481,7 +513,11 @@ export function createColorFilterPass(renderer, assetUrls) {
         bloomState.maxOverBrighting = maxOverBrighting;
       }
       if (Number.isFinite(bloomIntensity)) {
-        const clamped = THREE.MathUtils.clamp(bloomIntensity, 0, FO2_BLOOM_INTENSITY_MAX);
+        const clamped = THREE.MathUtils.clamp(
+          bloomIntensity,
+          0,
+          FO2_BLOOM_INTENSITY_MAX,
+        );
         bloomState.bloomIntensityDiv4 = clamped * FO2_BLOOM_INTENSITY_DIV4;
       }
       if (bloomColor != null) {
@@ -519,21 +555,29 @@ export function createColorFilterPass(renderer, assetUrls) {
     const normalizedThreshold = bloomState.bloomTolerance;
     const normalizedScale =
       bloomState.bloomTolerance <= 1.0
-        ? bloomState.bloomScale / Math.max(1.0 - bloomState.bloomTolerance, 1e-4)
+        ? bloomState.bloomScale /
+          Math.max(1.0 - bloomState.bloomTolerance, 1e-4)
         : bloomState.bloomScale;
 
     highpassMaterial.uniforms.threshold.value = normalizedThreshold;
-    highpassMaterial.uniforms.intensityDiv4.value = bloomState.bloomIntensityDiv4 * normalizedScale;
+    highpassMaterial.uniforms.intensityDiv4.value =
+      bloomState.bloomIntensityDiv4 * normalizedScale;
     highpassMaterial.uniforms.colorBloom.value = bloomState.colorBloom;
-    highpassMaterial.uniforms.bloomFromLuminance.value = bloomState.bloomFromLuminance;
+    highpassMaterial.uniforms.bloomFromLuminance.value =
+      bloomState.bloomFromLuminance;
   }
 
   function syncFinalUniforms() {
-    highpassMaterial.uniforms.bloomColorPremul.value.copy(bloomState.bloomColorPremul);
+    highpassMaterial.uniforms.bloomColorPremul.value.copy(
+      bloomState.bloomColorPremul,
+    );
     combineMaterial.uniforms.baseScale.value = bloomState.combineBaseScale;
     maskMaterial.uniforms.maskStrength.value = bloomState.maskedBloomStrength;
-    finalMaterial.uniforms.bloomColorPremul.value.copy(bloomState.bloomColorPremul);
-    finalMaterial.uniforms.finalBloomStrength.value = bloomState.finalBloomStrength;
+    finalMaterial.uniforms.bloomColorPremul.value.copy(
+      bloomState.bloomColorPremul,
+    );
+    finalMaterial.uniforms.finalBloomStrength.value =
+      bloomState.finalBloomStrength;
     finalMaterial.uniforms.maxOverBrighting.value = bloomState.maxOverBrighting;
   }
 
@@ -546,9 +590,15 @@ export function createColorFilterPass(renderer, assetUrls) {
 
     const globalAdd = remapState.globalColorAdd;
     const globalSub = remapState.globalColorSub;
-    const globalOffsetR = globalAdd.r * remapState.globalAddIntensity - globalSub.r * remapState.globalSubIntensity;
-    const globalOffsetG = globalAdd.g * remapState.globalAddIntensity - globalSub.g * remapState.globalSubIntensity;
-    const globalOffsetB = globalAdd.b * remapState.globalAddIntensity - globalSub.b * remapState.globalSubIntensity;
+    const globalOffsetR =
+      globalAdd.r * remapState.globalAddIntensity -
+      globalSub.r * remapState.globalSubIntensity;
+    const globalOffsetG =
+      globalAdd.g * remapState.globalAddIntensity -
+      globalSub.g * remapState.globalSubIntensity;
+    const globalOffsetB =
+      globalAdd.b * remapState.globalAddIntensity -
+      globalSub.b * remapState.globalSubIntensity;
 
     for (let index = 0; index < 256; index += 1) {
       const u = index / 255;
@@ -567,9 +617,15 @@ export function createColorFilterPass(renderer, assetUrls) {
         (subSample[2] - 0.5) * remapState.luminanceFilterSubIntensity +
         globalOffsetB;
       const lutIndex = index * 4;
-      remapLutData[lutIndex] = Math.round(THREE.MathUtils.clamp(offsetR + 0.5, 0, 1) * 255);
-      remapLutData[lutIndex + 1] = Math.round(THREE.MathUtils.clamp(offsetG + 0.5, 0, 1) * 255);
-      remapLutData[lutIndex + 2] = Math.round(THREE.MathUtils.clamp(offsetB + 0.5, 0, 1) * 255);
+      remapLutData[lutIndex] = Math.round(
+        THREE.MathUtils.clamp(offsetR + 0.5, 0, 1) * 255,
+      );
+      remapLutData[lutIndex + 1] = Math.round(
+        THREE.MathUtils.clamp(offsetG + 0.5, 0, 1) * 255,
+      );
+      remapLutData[lutIndex + 2] = Math.round(
+        THREE.MathUtils.clamp(offsetB + 0.5, 0, 1) * 255,
+      );
       remapLutData[lutIndex + 3] = 255;
     }
 
@@ -596,7 +652,10 @@ function createFullscreenTarget(width, height, withDepth = false) {
 }
 
 function createPostTarget() {
-  const target = createFullscreenTarget(FO2_POST_BUFFER_SIZE, FO2_POST_BUFFER_SIZE);
+  const target = createFullscreenTarget(
+    FO2_POST_BUFFER_SIZE,
+    FO2_POST_BUFFER_SIZE,
+  );
   target.texture.minFilter = THREE.LinearFilter;
   target.texture.magFilter = THREE.LinearFilter;
   return target;
@@ -605,7 +664,11 @@ function createPostTarget() {
 function sampleRampTexture(image, normalizedU) {
   const width = image.width ?? 1;
   const height = image.height ?? 1;
-  const x = THREE.MathUtils.clamp(Math.round(normalizedU * (width - 1)), 0, width - 1);
+  const x = THREE.MathUtils.clamp(
+    Math.round(normalizedU * (width - 1)),
+    0,
+    width - 1,
+  );
   const y = Math.floor(height * 0.5);
   const stride = image.data.length / (width * height);
   const pixelIndex = (y * width + x) * stride;

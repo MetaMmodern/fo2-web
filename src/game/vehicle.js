@@ -1,7 +1,12 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-export async function loadVehicle(assetUrls, scene, controls, prepareMaterials) {
+export async function loadVehicle(
+  assetUrls,
+  scene,
+  controls,
+  prepareMaterials,
+) {
   const gltfLoader = createVehicleLoader(assetUrls.textureOverrides);
   const [carGltf, tireGltf] = await Promise.all([
     loadGltf(gltfLoader, assetUrls.carModel),
@@ -99,7 +104,9 @@ function addHoodUnderside(carRoot) {
       return;
     }
 
-    const sourceMaterials = Array.isArray(obj.material) ? obj.material : [obj.material];
+    const sourceMaterials = Array.isArray(obj.material)
+      ? obj.material
+      : [obj.material];
     const undersideMaterials = sourceMaterials.map((material) => {
       if (!material) {
         return material;
@@ -107,7 +114,9 @@ function addHoodUnderside(carRoot) {
 
       const undersideMaterial = material.clone();
       undersideMaterial.side = THREE.BackSide;
-      undersideMaterial.color = undersideMaterial.color.clone().multiplyScalar(0.78);
+      undersideMaterial.color = undersideMaterial.color
+        .clone()
+        .multiplyScalar(0.78);
       undersideMaterial.depthWrite = true;
       undersideMaterial.polygonOffset = true;
       undersideMaterial.polygonOffsetFactor = 1;
@@ -116,7 +125,9 @@ function addHoodUnderside(carRoot) {
     });
 
     obj.material =
-      undersideMaterials.length === 1 ? undersideMaterials[0] : undersideMaterials;
+      undersideMaterials.length === 1
+        ? undersideMaterials[0]
+        : undersideMaterials;
     obj.castShadow = false;
     obj.receiveShadow = true;
   });

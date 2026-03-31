@@ -53,17 +53,13 @@ export function placeVehicleOnTrack(
     const spawnX = trackRoot.position.x + spawnPoint.position.x;
     const spawnZ = trackRoot.position.z + spawnPoint.position.z;
     const sampledFloor =
-      sampler?.sample(new THREE.Vector3(spawnX, trackRoot.position.y + 12, spawnZ)) ??
-      null;
+      sampler?.sample(
+        new THREE.Vector3(spawnX, trackRoot.position.y + 12, spawnZ),
+      ) ?? null;
     const spawnY =
-      sampledFloor?.point.y ??
-      trackRoot.position.y + spawnPoint.position.y;
+      sampledFloor?.point.y ?? trackRoot.position.y + spawnPoint.position.y;
 
-    carRoot.position.set(
-      spawnX,
-      spawnY + defaultWheelSpawnLift,
-      spawnZ,
-    );
+    carRoot.position.set(spawnX, spawnY + defaultWheelSpawnLift, spawnZ);
     carRoot.quaternion.copy(spawnPoint.quaternion);
     carRoot.rotateY(Math.PI);
     return;
@@ -76,8 +72,9 @@ export function placeVehicleOnTrack(
   const fallbackX = 0;
   const fallbackZ = trackSize.z * 0.22;
   const sampledFloor =
-    sampler?.sample(new THREE.Vector3(fallbackX, trackBox.max.y + 12, fallbackZ)) ??
-    null;
+    sampler?.sample(
+      new THREE.Vector3(fallbackX, trackBox.max.y + 12, fallbackZ),
+    ) ?? null;
 
   carRoot.position.set(
     fallbackX,
@@ -141,7 +138,12 @@ export function createTrackFloorSampler(trackRoot) {
       return fallbackHit;
     },
     raycast(origin, direction, options = {}) {
-      if (meshes.length === 0 || !origin || !direction || direction.lengthSq() < 1e-8) {
+      if (
+        meshes.length === 0 ||
+        !origin ||
+        !direction ||
+        direction.lengthSq() < 1e-8
+      ) {
         return null;
       }
 
@@ -177,12 +179,7 @@ function loadGltf(url, textureUrls = {}) {
   const loader = createTrackLoader(textureUrls);
 
   return new Promise((resolve, reject) => {
-    loader.load(
-      url,
-      (gltf) => resolve(gltf.scene),
-      undefined,
-      reject,
-    );
+    loader.load(url, (gltf) => resolve(gltf.scene), undefined, reject);
   });
 }
 
@@ -212,9 +209,7 @@ function resolveTrackTextureUrl(url, textureUrls) {
   const normalizedBaseName = normalizeTextureName(fileName);
 
   return (
-    textureUrls[normalizedFileName] ??
-    textureUrls[normalizedBaseName] ??
-    null
+    textureUrls[normalizedFileName] ?? textureUrls[normalizedBaseName] ?? null
   );
 }
 
@@ -574,12 +569,7 @@ function shouldUseTextureLedStaticPrelit(normalizedName) {
   );
 }
 
-function createTerrainMaterial({
-  name,
-  colorMap,
-  detailMap,
-  useVertexColors,
-}) {
+function createTerrainMaterial({ name, colorMap, detailMap, useVertexColors }) {
   const material = new THREE.MeshBasicMaterial({
     name,
     map: colorMap,
@@ -790,9 +780,7 @@ function parseStartPoints(startPointsText) {
     startPointsText.matchAll(/\[\d+\]\s*=\s*\{([\s\S]*?)\n\t\}/g),
   );
 
-  return blocks
-    .map((match) => parseStartPointBlock(match[1]))
-    .filter(Boolean);
+  return blocks.map((match) => parseStartPointBlock(match[1])).filter(Boolean);
 }
 
 function parseStartPointBlock(blockText) {
@@ -863,8 +851,7 @@ function normalizeStartPointGrid(startPoints) {
     const columnIndex = findClusterIndex(roadValues, alongRoad);
     const lateralOffset =
       (columnIndex - (roadValues.length - 1) * 0.5) * laneWidth;
-    const forwardOffset =
-      ((gridValues.length - 1) * 0.5 - rowIndex) * rowDepth;
+    const forwardOffset = ((gridValues.length - 1) * 0.5 - rowIndex) * rowDepth;
     const correctedScenePosition = centroid
       .clone()
       .addScaledVector(gridAxis, lateralOffset)

@@ -101,7 +101,8 @@ export function createChaseCamera(camera, controls, object, options = {}) {
   const getDynamics = options.getDynamics ?? null;
   const trackFloorSampler = options.trackFloorSampler ?? null;
   const debugControls = options.debugControls ?? null;
-  let presetIndex = initialState?.presetIndex ?? options.initialPresetIndex ?? 0;
+  let presetIndex =
+    initialState?.presetIndex ?? options.initialPresetIndex ?? 0;
   presetIndex = THREE.MathUtils.clamp(presetIndex, 0, presets.length - 1);
   let orbitMode = Boolean(initialState?.orbitMode);
   let orbitKeyboardStep = 20;
@@ -219,7 +220,9 @@ export function createChaseCamera(camera, controls, object, options = {}) {
 
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
-  controls.domElement.addEventListener("wheel", onOrbitWheel, { passive: false });
+  controls.domElement.addEventListener("wheel", onOrbitWheel, {
+    passive: false,
+  });
 
   return {
     update(deltaSeconds) {
@@ -472,10 +475,7 @@ function parseIniNumber(text, key) {
 
 function parseIniVector(text, key, sectionName) {
   const match = text.match(
-    new RegExp(
-      `${sectionName}[\\s\\S]*?${key}\\s*=\\s*\\{\\s*([^}]+)\\}`,
-      "m",
-    ),
+    new RegExp(`${sectionName}[\\s\\S]*?${key}\\s*=\\s*\\{\\s*([^}]+)\\}`, "m"),
   );
 
   if (!match) {
@@ -495,15 +495,15 @@ function parseIniVector(text, key, sectionName) {
 }
 
 function parseTrackerData(text) {
-  const trackerMatch = text.match(
-    /TrackerData\s*=\s*\{([\s\S]*?)\n\t\t\}/m,
-  );
+  const trackerMatch = text.match(/TrackerData\s*=\s*\{([\s\S]*?)\n\t\t\}/m);
 
   if (!trackerMatch) {
     return null;
   }
 
-  const stiffnessMatch = trackerMatch[1].match(/Stiffness\s*=\s*\{\s*([^}]+)\}/);
+  const stiffnessMatch = trackerMatch[1].match(
+    /Stiffness\s*=\s*\{\s*([^}]+)\}/,
+  );
 
   if (!stiffnessMatch) {
     return null;
@@ -600,7 +600,9 @@ function resolveCameraTargetOffset(cameraConfig) {
     return convertCameraOffsetToScene(cameraConfig.targetOffset);
   }
 
-  const positionOffset = convertCameraOffsetToScene(cameraConfig.positionOffset);
+  const positionOffset = convertCameraOffsetToScene(
+    cameraConfig.positionOffset,
+  );
   const targetOffset = positionOffset.clone();
 
   if (cameraConfig.positionType === 3 || cameraConfig.positionType === 4) {
@@ -686,8 +688,13 @@ function resolveCarTrackerPose(
   desiredUp,
 ) {
   const trackerConfig = preset.carTrackerConfig;
-  const yawRotation = new THREE.Quaternion().setFromAxisAngle(WORLD_UP, headingAngle);
-  const forward = new THREE.Vector3().copy(LOCAL_FORWARD).applyQuaternion(yawRotation);
+  const yawRotation = new THREE.Quaternion().setFromAxisAngle(
+    WORLD_UP,
+    headingAngle,
+  );
+  const forward = new THREE.Vector3()
+    .copy(LOCAL_FORWARD)
+    .applyQuaternion(yawRotation);
   const right = new THREE.Vector3().crossVectors(forward, WORLD_UP).normalize();
   const baseTarget = new THREE.Vector3()
     .copy(preset.targetOffset)
@@ -738,14 +745,21 @@ function resolveFixedHeadPose(
   desiredUp,
 ) {
   const fixedHeadConfig = preset.fixedHeadConfig;
-  const objectUp = new THREE.Vector3(0, 1, 0).applyQuaternion(object.quaternion).normalize();
+  const objectUp = new THREE.Vector3(0, 1, 0)
+    .applyQuaternion(object.quaternion)
+    .normalize();
   const localPosition = preset.positionOffset
     .clone()
     .multiply(fixedHeadConfig.locationScale);
-  const forward = new THREE.Vector3().copy(LOCAL_FORWARD).applyQuaternion(object.quaternion);
+  const forward = new THREE.Vector3()
+    .copy(LOCAL_FORWARD)
+    .applyQuaternion(object.quaternion);
   const right = new THREE.Vector3().crossVectors(forward, objectUp).normalize();
 
-  desiredPosition.copy(localPosition).applyQuaternion(object.quaternion).add(object.position);
+  desiredPosition
+    .copy(localPosition)
+    .applyQuaternion(object.quaternion)
+    .add(object.position);
   desiredLookTarget.copy(desiredPosition);
   desiredLookTarget.addScaledVector(
     right,
@@ -787,7 +801,14 @@ function applyGroundClamp(trackFloorSampler, desiredPosition, preset) {
   }
 }
 
-function advanceCameraSpring(current, velocity, target, response, damping, deltaSeconds) {
+function advanceCameraSpring(
+  current,
+  velocity,
+  target,
+  response,
+  damping,
+  deltaSeconds,
+) {
   const alpha = 1 - Math.exp(-Math.max(response, 0.01) * deltaSeconds);
   current.lerp(target, alpha);
   velocity
@@ -908,8 +929,13 @@ function sanitizeCameraDebugNumber(value, fallback) {
 function stabilizeCameraAim(position, target, stableLookDirection) {
   const delta = new THREE.Vector3().subVectors(target, position);
 
-  if (delta.lengthSq() < MIN_CAMERA_TARGET_DISTANCE * MIN_CAMERA_TARGET_DISTANCE) {
-    target.copy(position).addScaledVector(stableLookDirection, MIN_CAMERA_TARGET_DISTANCE);
+  if (
+    delta.lengthSq() <
+    MIN_CAMERA_TARGET_DISTANCE * MIN_CAMERA_TARGET_DISTANCE
+  ) {
+    target
+      .copy(position)
+      .addScaledVector(stableLookDirection, MIN_CAMERA_TARGET_DISTANCE);
     return;
   }
 
