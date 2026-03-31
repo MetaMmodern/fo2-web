@@ -15,9 +15,9 @@ export function createColorFilterPass(renderer, assetUrls) {
     initialSize.y,
     true,
   );
-  // if (renderer.capabilities.isWebGL2) {
-  renderTarget.samples = 4;
-  // }
+  if (renderer.capabilities.isWebGL2) {
+    renderTarget.samples = 4;
+  }
   const luminanceTarget = createFullscreenTarget(initialSize.x, initialSize.y);
   const filteredTarget = createFullscreenTarget(initialSize.x, initialSize.y);
   const maskedTarget = createFullscreenTarget(initialSize.x, initialSize.y);
