@@ -6,6 +6,12 @@ import {
 
 const carsById = new Map(carCatalog.map((car) => [car.id, car]));
 const tracksById = new Map(trackCatalog.map((track) => [track.id, track]));
+const legacyTireTextureIds = [
+  ...Array.from({ length: 19 }, (_, index) => `tire_${String(index + 1).padStart(2, "0")}`),
+  "tire_010",
+  "tire_011",
+  "tire_016",
+];
 
 export { carCatalog, defaultSelection, trackCatalog };
 
@@ -64,9 +70,10 @@ export function buildVehicleAssetUrls(car, skin) {
     textureOverrides[`${availableSkin.id}_damaged.dds`] = skin.texture;
   }
 
-  for (let index = 1; index <= 19; index += 1) {
-    textureOverrides[`tire_${String(index).padStart(2, "0")}.dds`] = car.sharedTextures.tire;
-  }
+  legacyTireTextureIds.forEach((textureId) => {
+    textureOverrides[`${textureId}.dds`] = car.sharedTextures.tire;
+    textureOverrides[`${textureId}.tga`] = car.sharedTextures.tire;
+  });
 
   return {
     carModel: car.carModel,

@@ -67,6 +67,8 @@ const MAX_SUSPENSION_TRAVEL = 0.26;
 const CONTACT_RAY_HEIGHT = 3.5;
 const CONTACT_RAY_DISTANCE = 12;
 const WALL_COLLISION_SKIN = 0.08;
+const FIXED_SUBSTEP_DT = 0.01;
+const MAX_SUBSTEPS = 100;
 
 export async function createDrivingSimulation({
   carRoot,
@@ -134,76 +136,36 @@ export async function createDrivingSimulation({
       const steerInput = THREE.MathUtils.clamp(input?.steer ?? 0, -1, 1);
       const handbrake = THREE.MathUtils.clamp(input?.handbrake ?? 0, 0, 1);
 
-      const horizontalSpeedKph = horizontalSpeed(state.velocity) * 3.6;
-      const steerTarget = computeSteerTarget(
-        steerInput,
-        horizontalSpeedKph,
-        handbrake,
-      );
-      const steerRate = THREE.MathUtils.lerp(
-        STEERING_PROFILE.digitalSpeedRange[0],
-        STEERING_PROFILE.digitalSpeedRange[1],
-        Math.abs(steerInput),
-      );
-      const steerSnapRate =
-        Math.abs(steerTarget) > Math.abs(state.steerState)
-          ? steerRate
-          : STEERING_PROFILE.centeringSpeed;
-      state.steerState = moveToward(state.steerState, steerTarget, steerSnapRate * dt);
+      if (dt <= 0) {
+        return;
+      }
+
+      const substepCount = MAX_SUBSTEPS;
+      // FlatOut 2 runs 100 fixed substeps per frame (FUN_0042c650) with a tiny constant dt.
+      // Break the current frame delta into MAX_SUBSTEPS micro-steps so the total simulated time still equals dt.
+      const stepDt = Math.max(dt / substepCount, 1e-6);
+
+      for (let step = 0; step < substepCount; step += 1) {
+        simulateFixedSubstep(
+          state,
+          steerInput,
+          throttle,
+          brake,
+          handbrake,
+          tireConfig,
+          vehicleLength,
+          stepDt,
+        );
+      }
+
       state.steerVisual = moveToward(state.steerVisual, state.steerState, 6 * dt);
 
-      const forward = getYawForward(state.yaw, TMP_FORWARD);
-      const right = getYawRight(forward, TMP_RIGHT);
-      let forwardSpeed = state.velocity.dot(forward);
-      let lateralSpeed = state.velocity.dot(right);
-
-      if (throttle > 0) {
-        forwardSpeed += ENGINE_ACCELERATION * throttle * state.surfaceGrip * dt;
-      } else if (brake > 0) {
-        if (forwardSpeed > 0.75) {
-          forwardSpeed = Math.max(forwardSpeed - SERVICE_BRAKE * brake * dt, 0);
-        } else {
-          forwardSpeed = Math.max(
-            forwardSpeed - REVERSE_ACCELERATION * brake * dt,
-            -MAX_REVERSE_SPEED,
-          );
-        }
-      }
-
-      const rollingDrag =
-        (0.55 + tireConfig.rollingResistance * 1.2 + handbrake * 2.8) * dt;
-      const aeroDrag =
-        tireConfig.inducedDragCoeff * Math.abs(forwardSpeed) * 0.012 * dt;
-
-      if (throttle <= 0) {
-        forwardSpeed = dampTowardZero(forwardSpeed, rollingDrag + aeroDrag);
-      }
-
-      const baseLateralGrip = computeLateralGrip(
-        tireConfig,
-        Math.abs(forwardSpeed),
-        state.surfaceGrip,
-      );
-      const lateralGrip = THREE.MathUtils.lerp(baseLateralGrip, 1.1, handbrake);
-      lateralSpeed = dampTowardZero(lateralSpeed, lateralGrip * dt);
-
-      const yawRateScale = handbrake > 0 ? 1.35 : 1.0;
-      const yawDelta =
-        state.steerState *
-        computeSpeedLimitedSteer(horizontalSpeedKph) *
-        yawRateScale *
-        (forwardSpeed / vehicleLength) *
-        Math.max(state.surfaceGrip, 0.45) *
-        1.9 *
-        dt;
-      state.yaw += yawDelta;
-
-      const updatedForward = getYawForward(state.yaw, TMP_FORWARD);
-      const updatedRight = getYawRight(updatedForward, TMP_RIGHT);
+      const cameraForward = getYawForward(state.yaw, TMP_FORWARD);
+      const updatedRight = getYawRight(cameraForward, TMP_RIGHT);
       TMP_HORIZONTAL
-        .copy(updatedForward)
-        .multiplyScalar(forwardSpeed)
-        .addScaledVector(updatedRight, lateralSpeed);
+        .copy(cameraForward)
+        .multiplyScalar(state.velocity.dot(cameraForward))
+        .addScaledVector(updatedRight, state.velocity.dot(updatedRight));
       state.velocity.x = TMP_HORIZONTAL.x;
       state.velocity.z = TMP_HORIZONTAL.z;
 
@@ -244,6 +206,8 @@ export async function createDrivingSimulation({
       }
 
       state.cameraShake = Math.max(state.cameraShake - dt * 1.6, 0);
+      const forwardSpeed = state.velocity.dot(cameraForward);
+      const lateralSpeed = state.velocity.dot(updatedRight);
       updateCameraState(state, carRoot, dt, forwardSpeed, lateralSpeed);
 
       const resetPressed = Boolean(input?.resetPressed);
@@ -516,6 +480,89 @@ function computeSpeedLimitedSteer(speedKph) {
   }
 
   return limits[limits.length - 1] * STEERING_PROFILE.steeringLimitRate;
+}
+
+function simulateFixedSubstep(
+  state,
+  steerInput,
+  throttle,
+  brake,
+  handbrake,
+  tireConfig,
+  vehicleLength,
+  dt,
+) {
+  const forward = getYawForward(state.yaw, TMP_FORWARD);
+  const right = getYawRight(forward, TMP_RIGHT);
+  const horizontalSpeedKph = horizontalSpeed(state.velocity) * 3.6;
+
+  updateSteerState(state, steerInput, handbrake, horizontalSpeedKph, dt);
+
+  let forwardSpeed = state.velocity.dot(forward);
+  let lateralSpeed = state.velocity.dot(right);
+
+  if (throttle > 0) {
+    forwardSpeed += ENGINE_ACCELERATION * throttle * state.surfaceGrip * dt;
+  } else if (brake > 0) {
+    if (forwardSpeed > 0.75) {
+      forwardSpeed = Math.max(forwardSpeed - SERVICE_BRAKE * brake * dt, 0);
+    } else {
+      forwardSpeed = Math.max(
+        forwardSpeed - REVERSE_ACCELERATION * brake * dt,
+        -MAX_REVERSE_SPEED,
+      );
+    }
+  }
+
+  const rollingDrag =
+    (0.55 + tireConfig.rollingResistance * 1.2 + handbrake * 2.8) * dt;
+  const aeroDrag =
+    tireConfig.inducedDragCoeff * Math.abs(forwardSpeed) * 0.012 * dt;
+  if (throttle <= 0) {
+    forwardSpeed = dampTowardZero(forwardSpeed, rollingDrag + aeroDrag);
+  }
+
+  const baseLateralGrip = computeLateralGrip(
+    tireConfig,
+    Math.abs(forwardSpeed),
+    state.surfaceGrip,
+  );
+  const lateralGrip =
+    THREE.MathUtils.lerp(baseLateralGrip, 1.1, handbrake);
+  lateralSpeed = dampTowardZero(lateralSpeed, lateralGrip * dt);
+
+  const yawRateScale = handbrake > 0 ? 1.35 : 1.0;
+  const yawDelta =
+    state.steerState *
+    computeSpeedLimitedSteer(horizontalSpeedKph) *
+    yawRateScale *
+    (forwardSpeed / Math.max(vehicleLength, 0.1)) *
+    Math.max(state.surfaceGrip, 0.45) *
+    1.9 *
+    dt;
+  state.yaw += yawDelta;
+
+  const updatedForward = getYawForward(state.yaw, TMP_FORWARD);
+  const updatedRight = getYawRight(updatedForward, TMP_RIGHT);
+  state.velocity
+    .copy(updatedForward)
+    .multiplyScalar(forwardSpeed)
+    .addScaledVector(updatedRight, lateralSpeed);
+}
+
+function updateSteerState(state, steerInput, handbrake, horizontalSpeedKph, dt) {
+  const steerTarget = computeSteerTarget(steerInput, horizontalSpeedKph, handbrake);
+  const steerRate = THREE.MathUtils.lerp(
+    STEERING_PROFILE.digitalSpeedRange[0],
+    STEERING_PROFILE.digitalSpeedRange[1],
+    Math.abs(steerInput),
+  );
+  const steerSnapRate =
+    Math.abs(steerTarget) > Math.abs(state.steerState)
+      ? steerRate
+      : STEERING_PROFILE.centeringSpeed;
+
+  state.steerState = moveToward(state.steerState, steerTarget, steerSnapRate * dt);
 }
 
 function computeLateralGrip(tireConfig, speed, surfaceGrip) {

@@ -26,6 +26,7 @@ const DEFAULT_DAMAGE_SHAKE_CONFIG = {
   maxInput: 1.1,
   scaleInput: 0.12,
 };
+const MIN_CAMERA_TARGET_DISTANCE = 0.5;
 
 export function createSceneApp(container = document.body) {
   const scene = new THREE.Scene();
@@ -106,6 +107,7 @@ export function createChaseCamera(camera, controls, object, options = {}) {
   let orbitKeyboardStep = 20;
   let shakeTime = 0;
   let smoothedHeading = getTrackerHeading(getDynamics?.() ?? null, object);
+  const stableLookDirection = new THREE.Vector3(0, 0, -1);
   const orbitKeys = new Set();
   const onOrbitWheel = (event) => {
     if (!orbitMode) {
@@ -149,6 +151,7 @@ export function createChaseCamera(camera, controls, object, options = {}) {
   smoothedPosition.copy(desiredPosition);
   smoothedLookTarget.copy(desiredLookTarget);
   smoothedUp.copy(desiredUp);
+  stabilizeCameraAim(smoothedPosition, smoothedLookTarget, stableLookDirection);
   camera.position.copy(smoothedPosition);
   controls.target.copy(smoothedLookTarget);
   controls.enabled = orbitMode;
@@ -240,14 +243,17 @@ export function createChaseCamera(camera, controls, object, options = {}) {
       const preset = presets[presetIndex];
       const debugSettings = resolveCameraDebugSettings(debugControls);
       const targetHeading = getTrackerHeading(dynamics, object);
-      smoothedHeading = debugSettings.enableDynamics
-        ? smoothAngleToward(
-            smoothedHeading,
-            targetHeading,
-            preset.lookResponse * debugSettings.headingResponseScale,
-            deltaSeconds,
-          )
-        : targetHeading;
+      smoothedHeading =
+        preset.trackerType === 2
+          ? targetHeading
+          : debugSettings.enableDynamics
+            ? smoothAngleToward(
+                smoothedHeading,
+                targetHeading,
+                preset.lookResponse * debugSettings.headingResponseScale,
+                deltaSeconds,
+              )
+            : targetHeading;
       resolveDesiredCameraPose(
         object,
         preset,
@@ -274,9 +280,11 @@ export function createChaseCamera(camera, controls, object, options = {}) {
         smoothedLookTarget,
         targetVelocity,
         desiredLookTarget,
-        debugSettings.enableDynamics
-          ? preset.lookResponse * debugSettings.lookResponseScale
-          : 1000,
+        preset.trackerType === 2
+          ? 1000
+          : debugSettings.enableDynamics
+            ? preset.lookResponse * debugSettings.lookResponseScale
+            : 1000,
         preset.lookDamping,
         deltaSeconds,
       );
@@ -303,6 +311,8 @@ export function createChaseCamera(camera, controls, object, options = {}) {
           return shakeTime;
         },
       );
+
+      stabilizeCameraAim(renderPosition, renderTarget, stableLookDirection);
 
       camera.position.copy(renderPosition);
       controls.target.copy(renderTarget);
@@ -422,7 +432,7 @@ function parseVehicleCameraConfig(cameraIniText) {
       positionOffset: convertCameraOffsetToScene(cameraConfig.positionOffset),
       targetOffset: resolveCameraTargetOffset(cameraConfig),
       fov: cameraConfig.fov ?? 100,
-      nearClipping: cameraConfig.nearClipping ?? 0.05,
+      nearClipping: 0.05,
       farClipping: cameraConfig.farClipping ?? 1000,
       minGround: cameraConfig.trackerData?.minGround ?? 1,
       clampGround: cameraConfig.trackerData?.clampGround ?? 0.3,
@@ -644,8 +654,6 @@ function resolveDesiredCameraPose(
       object,
       preset,
       dynamics,
-      debugSettings,
-      headingAngle,
       desiredPosition,
       desiredLookTarget,
       desiredUp,
@@ -692,7 +700,7 @@ function resolveCarTrackerPose(
     .add(object.position);
   desiredLookTarget.copy(baseTarget);
 
-  if (dynamics && debugSettings.enableDynamics) {
+  if (preset.trackerType !== 2 && dynamics && debugSettings.enableDynamics) {
     const verticalGate = inverseLerpClamped(
       trackerConfig.verticalVelocityMin,
       trackerConfig.verticalVelocityMax,
@@ -895,6 +903,17 @@ function resolveCameraDebugSettings(debugControls) {
 
 function sanitizeCameraDebugNumber(value, fallback) {
   return Number.isFinite(value) ? value : fallback;
+}
+
+function stabilizeCameraAim(position, target, stableLookDirection) {
+  const delta = new THREE.Vector3().subVectors(target, position);
+
+  if (delta.lengthSq() < MIN_CAMERA_TARGET_DISTANCE * MIN_CAMERA_TARGET_DISTANCE) {
+    target.copy(position).addScaledVector(stableLookDirection, MIN_CAMERA_TARGET_DISTANCE);
+    return;
+  }
+
+  stableLookDirection.copy(delta).normalize();
 }
 
 function smoothAngleToward(current, target, response, deltaSeconds) {

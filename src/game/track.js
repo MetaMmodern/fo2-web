@@ -12,7 +12,7 @@ const defaultWheelSpawnLift = 0.35;
 
 export async function loadTrack(assetUrls, scene, renderer) {
   const [trackRoot, trackMaterialInfo, startPoints] = await Promise.all([
-    loadGltf(assetUrls.model),
+    loadGltf(assetUrls.model, assetUrls.trackTextures),
     loadTrackMaterialInfo(assetUrls.log),
     loadStartPoints(assetUrls.startPoints),
   ]);
@@ -173,8 +173,8 @@ export function createTrackFloorSampler(trackRoot) {
   };
 }
 
-function loadGltf(url) {
-  const loader = new GLTFLoader();
+function loadGltf(url, textureUrls = {}) {
+  const loader = createTrackLoader(textureUrls);
 
   return new Promise((resolve, reject) => {
     loader.load(
@@ -184,6 +184,42 @@ function loadGltf(url) {
       reject,
     );
   });
+}
+
+function createTrackLoader(textureUrls = {}) {
+  const loadingManager = new THREE.LoadingManager();
+
+  loadingManager.setURLModifier((url) => {
+    if (!url || url === "null") {
+      return createTransparentTextureDataUrl();
+    }
+
+    const resolvedTextureUrl = resolveTrackTextureUrl(url, textureUrls);
+
+    if (resolvedTextureUrl) {
+      return resolvedTextureUrl;
+    }
+
+    return url;
+  });
+
+  return new GLTFLoader(loadingManager);
+}
+
+function resolveTrackTextureUrl(url, textureUrls) {
+  const fileName = url.replace(/^.*[\\/]/, "");
+  const normalizedFileName = fileName.toLowerCase();
+  const normalizedBaseName = normalizeTextureName(fileName);
+
+  return (
+    textureUrls[normalizedFileName] ??
+    textureUrls[normalizedBaseName] ??
+    null
+  );
+}
+
+function createTransparentTextureDataUrl() {
+  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==";
 }
 
 async function loadTrackMaterialInfo(logUrl) {

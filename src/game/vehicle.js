@@ -32,9 +32,12 @@ function loadGltf(loader, url) {
 
 function createVehicleLoader(textureOverrides = {}) {
   const loadingManager = new THREE.LoadingManager();
-  const normalizedOverrides = new Map(
-    Object.entries(textureOverrides).map(([key, value]) => [key.toLowerCase(), value]),
-  );
+  const normalizedOverrides = new Map();
+
+  Object.entries(textureOverrides).forEach(([key, value]) => {
+    normalizedOverrides.set(key.toLowerCase(), value);
+    normalizedOverrides.set(normalizeTextureOverrideKey(key), value);
+  });
 
   loadingManager.setURLModifier((url) => {
     if (!url || url === "null") {
@@ -42,13 +45,14 @@ function createVehicleLoader(textureOverrides = {}) {
     }
 
     const normalizedUrl = url.replace(/^.*[\\/]/, "").toLowerCase();
+    const normalizedTextureKey = normalizeTextureOverrideKey(url);
 
     if (normalizedOverrides.has(normalizedUrl)) {
       return normalizedOverrides.get(normalizedUrl);
     }
 
-    if (normalizedUrl.endsWith(".dds")) {
-      return createTransparentTextureDataUrl();
+    if (normalizedOverrides.has(normalizedTextureKey)) {
+      return normalizedOverrides.get(normalizedTextureKey);
     }
 
     return url;
@@ -59,6 +63,13 @@ function createVehicleLoader(textureOverrides = {}) {
 
 function createTransparentTextureDataUrl() {
   return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==";
+}
+
+function normalizeTextureOverrideKey(url) {
+  return url
+    .replace(/^.*[\\/]/, "")
+    .replace(/\.[^.]+$/, "")
+    .toLowerCase();
 }
 
 function centerCarAtOrigin(root, controls) {

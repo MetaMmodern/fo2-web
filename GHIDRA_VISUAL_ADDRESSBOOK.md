@@ -21,6 +21,7 @@ Binary:
 
 Source of truth notes:
 - `ghidra_findings/DRIVING_COLLISION_FINDINGS_2026-03-31.md:1`
+- `ghidra_findings/DRIVING_RUNTIME_CONTROL_FINDINGS_2026-03-31.md:1`
 
 ### Core anchors
 
@@ -29,6 +30,18 @@ Source of truth notes:
 - `FUN_0043aa30` @ `0x0043aa30` — Tire dynamics config consumer for `Data.Physics.TireDynamics`.
 - `FUN_00469f50` @ `0x00469f50` — Registers `Data.Physics.Car.Steering_PC` defaults and speed-limited steering behavior.
 - `FUN_00454c60` @ `0x00454c60` — Reads the larger car physics tree: differential, throttle/brake/speed curves, gearbox, suspension, tires, and engine.
+- `FUN_0046c8e0` @ `0x0046c8e0` — Local-player per-frame control path: samples controller state, shapes steer/gas/brake/handbrake inputs, then calls the vehicle step.
+- `0x0046f510` — Unnamed local-player steering/input shaping block recovered from disassembly; applies speed-bucket steering limits, analog centering, and final clamp before `FUN_0046fa50`.
+- `FUN_0046fa50` @ `0x0046fa50` — Post-input drive helper: writes control channels into vehicle state and manages auto-shift / shift cooldown behavior.
+- `AIPlayer_WriteVehicleControls` @ `0x00409520` — AI per-frame control writer; emits steer/throttle/brake/handbrake/gear requests into the same vehicle control channels used by the local player.
+- `FUN_00429250` @ `0x00429250` — Vehicle input normalization step; clamps input channels and stores per-frame timing/velocity snapshots.
+- `FUN_0042c650` @ `0x0042c650` — Main vehicle simulation entry traced here; clears step accumulators, resolves wheel contact state, then runs 100 fixed `0.01` substeps.
+- `FUN_00429640` @ `0x00429640` — Chassis/drag/steering propagation stage within each vehicle substep.
+- `FUN_00429be0` @ `0x00429be0` — Main wheel/tire force and yaw-torque accumulation stage within each substep.
+- `FUN_00441ae0` @ `0x00441ae0` — Wheel steer-angle clamp stage after car-level steer input is computed.
+- `FUN_00441f10` @ `0x00441f10` — Auto gear-selection helper based on projected forward speed and gearbox thresholds.
+- `FUN_00442160` @ `0x00442160` — Shift request/state-machine entry.
+- `FUN_00454b50` @ `0x00454b50` — Builds the runtime engine curve table from `PeakPower*`, `PeakTorque*`, `RedLineRpm`, `RpmLimit`, and `ZeroPowerRpm`.
 
 ### Key strings / config keys
 
@@ -58,6 +71,9 @@ Source of truth notes:
   - steering response
   - suspension geometry
   - differential / throttle / brake / speed curves
+- The original runtime does local and AI control generation first, then hands normalized inputs into a fixed-step vehicle simulation loop. It is not one ad hoc frame-sized arcade update.
+- The traced vehicle simulation entry runs `100` fixed `0.01` substeps via `FUN_0042c650`; missing that structure will materially change steering, acceleration, and stability.
+- `SpeedLimit` is currently only confirmed in `Car_ReadHandling` and `SetCarStats`, not in the traced runtime simulation path, so do not assume it is an in-race hard speed cap.
 - The native game distinguishes floor/body/ray/camera collision concepts; those should not be collapsed into one generic mesh-contact rule in the long term.
 
 ---
