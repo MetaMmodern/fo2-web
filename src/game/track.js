@@ -505,6 +505,7 @@ function createStaticPrelitMaterial({
   alphaTest,
   side,
   brightnessScale,
+  lightMap,
 }) {
   const material = new THREE.MeshBasicMaterial({
     name,
@@ -535,20 +536,20 @@ function getStaticPrelitSettings(materialName) {
   if (shouldUseTextureLedStaticPrelit(normalizedName)) {
     return {
       useVertexColors: false,
-      brightnessScale: 1.05,
+      brightnessScale: 1.25,
     };
   }
 
   if (normalizedName.includes("wirefence")) {
     return {
       useVertexColors: true,
-      brightnessScale: 7.5,
+      brightnessScale: 1.5,
     };
   }
 
   return {
     useVertexColors: true,
-    brightnessScale: 6.0,
+    brightnessScale: 1.3,
   };
 }
 

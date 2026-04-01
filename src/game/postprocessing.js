@@ -290,8 +290,8 @@ export function createColorFilterPass(renderer, assetUrls) {
       tFiltered: { value: filteredTarget.texture },
       tBloom: { value: bloomFullTarget.texture },
       tMasked: { value: maskedTarget.texture },
-      bloomColorPremul: { value: bloomState.bloomColorPremul },
       finalBloomStrength: { value: bloomState.finalBloomStrength },
+      maskedBloomStrength: { value: bloomState.maskedBloomStrength },
       maxOverBrighting: { value: bloomState.maxOverBrighting },
     },
     vertexShader: FULLSCREEN_VERTEX_SHADER,
@@ -301,6 +301,7 @@ export function createColorFilterPass(renderer, assetUrls) {
       uniform sampler2D tMasked;
       uniform float finalBloomStrength;
       uniform float maxOverBrighting;
+      uniform float maskedBloomStrength;
 
       varying vec2 vUv;
 
@@ -313,7 +314,7 @@ export function createColorFilterPass(renderer, assetUrls) {
         vec4 bloomSample = texture2D(tBloom, vUv);
         vec4 maskedSample = texture2D(tMasked, vUv);
         vec3 bloomContribution = bloomSample.rgb * finalBloomStrength;
-        bloomContribution += bloomSample.rgb * maskedSample.a;
+        bloomContribution += maskedSample.rgb * maskedBloomStrength;
         vec3 finalScreen = clamp(filteredSample.rgb + bloomContribution, 0.0, max(1.0, maxOverBrighting));
         gl_FragColor = vec4(screenToLinear(clamp(finalScreen, 0.0, 1.0)), filteredSample.a);
         #include <colorspace_fragment>
@@ -573,11 +574,10 @@ export function createColorFilterPass(renderer, assetUrls) {
     );
     combineMaterial.uniforms.baseScale.value = bloomState.combineBaseScale;
     maskMaterial.uniforms.maskStrength.value = bloomState.maskedBloomStrength;
-    finalMaterial.uniforms.bloomColorPremul.value.copy(
-      bloomState.bloomColorPremul,
-    );
     finalMaterial.uniforms.finalBloomStrength.value =
       bloomState.finalBloomStrength;
+    finalMaterial.uniforms.maskedBloomStrength.value =
+      bloomState.maskedBloomStrength;
     finalMaterial.uniforms.maxOverBrighting.value = bloomState.maxOverBrighting;
   }
 

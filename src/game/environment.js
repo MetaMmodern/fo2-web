@@ -145,7 +145,7 @@ export async function loadTrackEnvironment(scene, assetUrls) {
   const hemisphereLight = new THREE.HemisphereLight(
     sunLightColor,
     groundLightColor,
-    0.72 *
+    0.35 *
       (weatherProfile?.ambientIntensity ??
         1.35 * atmosphere.skyAmbient + 0.6 * atmosphere.cloudAmbient),
   );
@@ -153,7 +153,7 @@ export async function loadTrackEnvironment(scene, assetUrls) {
 
   const sunLight = new THREE.DirectionalLight(
     specularLightColor,
-    (weatherProfile?.sunIntensity ?? atmosphere.sunIntensity) * 1.18,
+    (weatherProfile?.sunIntensity ?? atmosphere.sunIntensity) * 1.35,
   );
   sunLight.position.copy(sunPosition);
   sunLight.castShadow = true;

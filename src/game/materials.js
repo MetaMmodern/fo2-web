@@ -50,7 +50,7 @@ function createMaterialForName(name, getTexture) {
       name: materialName,
       map: getTexture("skin"),
       color: 0xffffff,
-      vertexColors: false,
+      vertexColors: true,
     });
   }
 
@@ -133,17 +133,17 @@ function createMaterialForName(name, getTexture) {
 
     let lightColor = 0xffffff;
     let emissiveColor = 0x141414;
-    let emissiveIntensity = 0.16;
+    let emissiveIntensity = 0.32;
 
     if (isFront) {
       emissiveColor = 0xffefc1;
-      emissiveIntensity = 0.28;
+      emissiveIntensity = 0.55;
     } else if (isBrake) {
       emissiveColor = 0xa11200;
-      emissiveIntensity = 0.26;
+      emissiveIntensity = 0.65;
     } else if (isReverse) {
       emissiveColor = 0xa8c8ff;
-      emissiveIntensity = 0.2;
+      emissiveIntensity = 0.5;
     }
 
     return new THREE.MeshStandardMaterial({
