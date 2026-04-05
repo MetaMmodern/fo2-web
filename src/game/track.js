@@ -10,7 +10,12 @@ const raycastOrigin = new THREE.Vector3();
 const worldNormal = new THREE.Vector3();
 const defaultWheelSpawnLift = 0.35;
 
-export async function loadTrack(assetUrls, scene, renderer) {
+export async function loadTrack(
+  assetUrls,
+  scene,
+  renderer,
+  environmentState = null,
+) {
   const [trackRoot, trackMaterialInfo, startPoints] = await Promise.all([
     loadGltf(assetUrls.model, assetUrls.trackTextures),
     loadTrackMaterialInfo(assetUrls.log),
@@ -22,13 +27,12 @@ export async function loadTrack(assetUrls, scene, renderer) {
     assetUrls.trackTextures,
     maxAnisotropy,
   );
-  const trackLightMap = loadTrackLightMap(assetUrls.lightmap, maxAnisotropy);
 
   prepareTrackMaterials(
     trackRoot,
     trackMaterialInfo,
     getTrackTexture,
-    trackLightMap,
+    environmentState,
   );
   alignTrackAtOrigin(trackRoot);
   scene.add(trackRoot);
@@ -335,17 +339,6 @@ function createTrackTextureRegistry(textureUrls, maxAnisotropy) {
   };
 }
 
-function loadTrackLightMap(lightMapUrl, maxAnisotropy) {
-  const textureLoader = new THREE.TextureLoader();
-  const texture = textureLoader.load(lightMapUrl);
-  texture.flipY = false;
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = maxAnisotropy;
-  return texture;
-}
-
 function normalizeTextureName(textureName) {
   if (!textureName) {
     return null;
@@ -363,7 +356,7 @@ function prepareTrackMaterials(
   root,
   trackMaterialInfo,
   getTrackTexture,
-  trackLightMap,
+  environmentState,
 ) {
   root.traverse((obj) => {
     if (!obj.isMesh) {
@@ -371,7 +364,7 @@ function prepareTrackMaterials(
     }
 
     obj.castShadow = false;
-    obj.receiveShadow = true;
+    obj.receiveShadow = false;
 
     promoteSecondaryUvSet(obj.geometry);
 
@@ -386,8 +379,7 @@ function prepareTrackMaterials(
         trackMaterialInfo,
         getTrackTexture,
         usesVertexColors,
-        Boolean(obj.geometry?.getAttribute("uv2")),
-        trackLightMap,
+        environmentState,
       ),
     );
 
@@ -401,8 +393,7 @@ function createTrackMaterial(
   trackMaterialInfo,
   getTrackTexture,
   usesVertexColors,
-  hasLightMapUv,
-  trackLightMap,
+  environmentState,
 ) {
   if (!sourceMaterial) {
     return sourceMaterial;
@@ -420,198 +411,396 @@ function createTrackMaterial(
   const isWindowShader = materialInfo?.shaderId === 34;
   const isLeafLikeShader =
     materialInfo?.shaderId === 20 || materialInfo?.shaderId === 21;
-  const shouldUseLightMap =
-    hasLightMapUv && !isAlphaMaterial && !isWindowShader;
-  const isTerrainShader = materialInfo?.shaderId === 2;
-  const isStaticPrelitShader = materialInfo?.shaderId === 0;
-
-  if (isStaticPrelitShader) {
-    const staticPrelitSettings = getStaticPrelitSettings(sourceMaterial.name);
-    return createStaticPrelitMaterial({
-      name: sourceMaterial.name,
-      map: diffuseTexture,
-      useVertexColors: usesVertexColors && staticPrelitSettings.useVertexColors,
-      transparent: isAlphaMaterial || isLeafLikeShader,
-      alphaTest: isAlphaMaterial || isLeafLikeShader ? 0.35 : 0,
-      side:
-        isAlphaMaterial || isLeafLikeShader
-          ? THREE.DoubleSide
-          : THREE.FrontSide,
-      brightnessScale: staticPrelitSettings.brightnessScale,
-    });
-  }
-
   if (isWindowShader) {
-    return new THREE.MeshStandardMaterial({
+    return new THREE.MeshBasicMaterial({
       name: sourceMaterial.name,
       map: diffuseTexture,
       color: 0xd7e4ea,
       vertexColors: usesVertexColors,
       transparent: true,
       opacity: 0.45,
-      roughness: 0.1,
-      metalness: 0.08,
       depthWrite: false,
-      lightMap: shouldUseLightMap ? trackLightMap : null,
-      lightMapIntensity: 1.1,
     });
   }
 
   if (isAlphaMaterial || isLeafLikeShader) {
-    return new THREE.MeshStandardMaterial({
+    return new THREE.MeshBasicMaterial({
       name: sourceMaterial.name,
       map: diffuseTexture,
       color: 0xffffff,
       vertexColors: usesVertexColors,
       transparent: true,
       alphaTest: 0.35,
-      roughness: 0.9,
-      metalness: 0,
       side: THREE.DoubleSide,
-      lightMap: shouldUseLightMap ? trackLightMap : null,
-      lightMapIntensity: 1.05,
     });
   }
 
-  if (isTerrainShader) {
+  if (materialInfo?.shaderId === 0) {
+    return createStaticTrackMaterial({
+      name: sourceMaterial.name,
+      map: diffuseTexture,
+      useVertexColors: usesVertexColors,
+      brightnessScale: 2.0,
+    });
+  }
+
+  if (materialInfo?.shaderId === 1) {
     return createTerrainMaterial({
       name: sourceMaterial.name,
-      colorMap: trackLightMap,
-      detailMap: detailTexture || diffuseTexture,
+      colorMap:
+        (materialInfo.useColormap && environmentState?.trackLightMap) ||
+        diffuseTexture,
+      detailMap: detailTexture,
       useVertexColors: usesVertexColors,
+      brightnessScale: 1.0,
     });
   }
 
-  return new THREE.MeshStandardMaterial({
+  if (materialInfo?.shaderId === 2) {
+    return createTerrainSpecularMaterial({
+      name: sourceMaterial.name,
+      colorMap:
+        (materialInfo.useColormap && environmentState?.trackLightMap) ||
+        diffuseTexture,
+      detailMap: detailTexture,
+      useVertexColors: usesVertexColors,
+      environmentState,
+    });
+  }
+
+  if (materialInfo?.shaderId === 3) {
+    return createDynamicTrackMaterial({
+      name: sourceMaterial.name,
+      map: diffuseTexture,
+      useVertexColors: usesVertexColors,
+      environmentState,
+      transparent: false,
+      alphaTest: 0,
+      side: THREE.FrontSide,
+      specular: false,
+    });
+  }
+
+  if (materialInfo?.shaderId === 4) {
+    return createDynamicTrackMaterial({
+      name: sourceMaterial.name,
+      map: diffuseTexture,
+      useVertexColors: usesVertexColors,
+      environmentState,
+      transparent: isAlphaMaterial,
+      alphaTest: isAlphaMaterial ? 0.35 : 0,
+      side: isAlphaMaterial ? THREE.DoubleSide : THREE.FrontSide,
+      specular: true,
+    });
+  }
+
+  return new THREE.MeshBasicMaterial({
     name: sourceMaterial.name,
     map: diffuseTexture,
     color: 0xffffff,
     vertexColors: usesVertexColors,
-    roughness: 0.88,
-    metalness: 0,
-    lightMap: shouldUseLightMap ? trackLightMap : null,
-    lightMapIntensity: 1.1,
-    emissiveMap: null,
-    emissive: new THREE.Color(0x000000),
-    emissiveIntensity: 0,
   });
 }
 
-function createStaticPrelitMaterial({
+function createStaticTrackMaterial({
   name,
   map,
   useVertexColors,
+  brightnessScale,
+}) {
+  const material = createTrackShaderMaterial({
+    name,
+    uniforms: {
+      uMap: { value: map },
+      uBrightnessScale: { value: brightnessScale },
+    },
+    useVertexColors,
+    vertexShader: buildStaticTrackVertexShader(useVertexColors),
+    fragmentShader: buildStaticTrackFragmentShader(useVertexColors),
+  });
+  material.userData.textureRefs = map ? [map] : [];
+  return material;
+}
+
+function createTerrainMaterial({
+  name,
+  colorMap,
+  detailMap,
+  useVertexColors,
+  brightnessScale,
+}) {
+  const material = createTrackShaderMaterial({
+    name,
+    uniforms: {
+      uColorMap: { value: colorMap },
+      uDetailMap: { value: detailMap },
+      uHasDetailMap: { value: detailMap ? 1 : 0 },
+      uBrightnessScale: { value: brightnessScale },
+    },
+    useVertexColors,
+    vertexShader: buildTerrainVertexShader(useVertexColors),
+    fragmentShader: buildTerrainFragmentShader(useVertexColors, false),
+  });
+  material.userData.textureRefs = [colorMap, detailMap].filter(Boolean);
+  return material;
+}
+
+function createTerrainSpecularMaterial({
+  name,
+  colorMap,
+  detailMap,
+  useVertexColors,
+  environmentState,
+}) {
+  const material = createTrackShaderMaterial({
+    name,
+    uniforms: {
+      uColorMap: { value: colorMap },
+      uDetailMap: { value: detailMap },
+      uHasDetailMap: { value: detailMap ? 1 : 0 },
+      uSunDirection: {
+        value:
+          environmentState?.sunDirection ?? new THREE.Vector3(0.3, 0.8, -0.5),
+      },
+      uSpecularColor: {
+        value: environmentState?.specularColor ?? new THREE.Color(0xffffff),
+      },
+      uSpecularIntensity: {
+        value: environmentState?.specularIntensity ?? 0.65,
+      },
+      uMaxOverBrighting: {
+        value: environmentState?.maxOverBrighting ?? 1.79,
+      },
+      uBrightnessScale: { value: 1.0 },
+    },
+    useVertexColors,
+    vertexShader: buildTerrainVertexShader(useVertexColors, true),
+    fragmentShader: buildTerrainFragmentShader(useVertexColors, true),
+  });
+  material.userData.textureRefs = [colorMap, detailMap].filter(Boolean);
+  return material;
+}
+
+function createDynamicTrackMaterial({
+  name,
+  map,
+  useVertexColors,
+  environmentState,
   transparent,
   alphaTest,
   side,
-  brightnessScale,
-  lightMap,
+  specular,
 }) {
-  const material = new THREE.MeshBasicMaterial({
+  const material = createTrackShaderMaterial({
     name,
-    map,
-    color: 0xffffff,
+    uniforms: {
+      uMap: { value: map },
+      uSunDirection: {
+        value:
+          environmentState?.sunDirection ?? new THREE.Vector3(0.3, 0.8, -0.5),
+      },
+      uSunColor: {
+        value: environmentState?.sunColor ?? new THREE.Color(0xffe6c7),
+      },
+      uSunIntensity: { value: environmentState?.sunIntensity ?? 1.25 },
+      uAmbientColor: {
+        value: environmentState?.ambientColor ?? new THREE.Color(0x404040),
+      },
+      uAmbientIntensity: { value: environmentState?.ambientIntensity ?? 0.9 },
+      uSpecularColor: {
+        value: environmentState?.specularColor ?? new THREE.Color(0xfff3db),
+      },
+      uSpecularIntensity: {
+        value: environmentState?.specularIntensity ?? 0.65,
+      },
+      uMaxOverBrighting: {
+        value: environmentState?.maxOverBrighting ?? 1.79,
+      },
+    },
+    useVertexColors,
     transparent,
     alphaTest,
     side,
-    vertexColors: useVertexColors,
+    vertexShader: buildDynamicTrackVertexShader(useVertexColors, specular),
+    fragmentShader: buildDynamicTrackFragmentShader(useVertexColors, specular),
   });
-
-  material.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <map_fragment>",
-      `#include <map_fragment>
-      diffuseColor.rgb = clamp(diffuseColor.rgb * ${brightnessScale.toFixed(2)}, 0.0, 1.0);`,
-    );
-  };
-  material.customProgramCacheKey = () =>
-    `flatout-static-prelit-${name}-${brightnessScale.toFixed(2)}`;
-
+  material.userData.textureRefs = map ? [map] : [];
   return material;
 }
 
-function getStaticPrelitSettings(materialName) {
-  const normalizedName = materialName?.toLowerCase() ?? "";
-
-  if (shouldUseTextureLedStaticPrelit(normalizedName)) {
-    return {
-      useVertexColors: false,
-      brightnessScale: 1.25,
-    };
-  }
-
-  if (normalizedName.includes("wirefence")) {
-    return {
-      useVertexColors: true,
-      brightnessScale: 1.5,
-    };
-  }
-
-  return {
-    useVertexColors: true,
-    brightnessScale: 1.3,
-  };
-}
-
-function shouldUseTextureLedStaticPrelit(normalizedName) {
-  return (
-    normalizedName.startsWith("wall_") ||
-    normalizedName === "curbwalls" ||
-    normalizedName.includes("audience_stand") ||
-    normalizedName.includes("racingaudiencestand") ||
-    normalizedName.includes("racingwatchtower") ||
-    normalizedName === "concrete_blocks" ||
-    normalizedName.startsWith("warehouse_") ||
-    normalizedName.startsWith("control_tower_") ||
-    normalizedName.startsWith("track_office_") ||
-    normalizedName.startsWith("roof_") ||
-    normalizedName.startsWith("screen_frame") ||
-    normalizedName === "lights_a"
-  );
-}
-
-function createTerrainMaterial({ name, colorMap, detailMap, useVertexColors }) {
-  const material = new THREE.MeshBasicMaterial({
+function createTrackShaderMaterial({
+  name,
+  uniforms,
+  useVertexColors,
+  transparent = false,
+  alphaTest = 0,
+  side = THREE.FrontSide,
+  vertexShader,
+  fragmentShader,
+}) {
+  return new THREE.ShaderMaterial({
     name,
-    map: colorMap,
-    color: 0xffffff,
+    uniforms: {
+      ...uniforms,
+      uAlphaTest: { value: alphaTest },
+    },
     vertexColors: useVertexColors,
+    transparent,
+    alphaTest,
+    side,
+    vertexShader,
+    fragmentShader,
   });
+}
 
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.detailMap = { value: detailMap };
+function buildStaticTrackVertexShader(useVertexColors) {
+  return `
+    varying vec2 vUv;
+    varying vec4 vColor;
+    void main() {
+      vUv = uv;
+      vColor = vec4(1.0);
+      ${useVertexColors ? "vColor = vec4(color.rgb, 1.0);" : ""}
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+}
 
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        "#include <uv_pars_vertex>",
-        `#include <uv_pars_vertex>
-        attribute vec2 uv2;
-        varying vec2 vTerrainDetailUv;`,
-      )
-      .replace(
-        "#include <uv_vertex>",
-        `#include <uv_vertex>
-        vTerrainDetailUv = uv2;`,
-      );
+function buildStaticTrackFragmentShader(useVertexColors) {
+  return `
+    uniform sampler2D uMap;
+    uniform float uBrightnessScale;
+    uniform float uAlphaTest;
+    varying vec2 vUv;
+    varying vec4 vColor;
+    void main() {
+      vec4 texel = texture2D(uMap, vUv);
+      vec4 shaded = texel * ${useVertexColors ? "vColor" : "vec4(1.0)"};
+      shaded.rgb = clamp(shaded.rgb * uBrightnessScale, 0.0, 1.0);
+      if (shaded.a <= uAlphaTest) discard;
+      gl_FragColor = shaded;
+    }
+  `;
+}
 
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        "#include <map_pars_fragment>",
-        `#include <map_pars_fragment>
-        uniform sampler2D detailMap;
-        varying vec2 vTerrainDetailUv;`,
-      )
-      .replace(
-        "#include <map_fragment>",
-        `#include <map_fragment>
-        vec4 terrainDetail = texture2D(detailMap, vTerrainDetailUv);
-        diffuseColor.rgb *= terrainDetail.rgb;
-        diffuseColor.a *= terrainDetail.a;`,
-      );
-  };
-  material.customProgramCacheKey = () => "flatout-terrain-colormap-detail-v1";
+function buildTerrainVertexShader(useVertexColors, withSpecular = false) {
+  return `
+    attribute vec2 uv2;
+    varying vec2 vUv;
+    varying vec2 vUv2;
+    varying vec4 vColor;
+    varying vec3 vWorldNormal;
+    varying vec3 vWorldPosition;
+    void main() {
+      vUv = uv;
+      vUv2 = uv2;
+      vColor = vec4(1.0);
+      ${useVertexColors ? "vColor = vec4(color.rgb, 1.0);" : ""}
+      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+      vWorldPosition = worldPosition.xyz;
+      vWorldNormal = normalize(mat3(modelMatrix) * normal);
+      gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    }
+  `;
+}
 
-  return material;
+function buildTerrainFragmentShader(useVertexColors, withSpecular) {
+  return `
+    uniform sampler2D uColorMap;
+    uniform sampler2D uDetailMap;
+    uniform int uHasDetailMap;
+    uniform vec3 uSunDirection;
+    uniform vec3 uSpecularColor;
+    uniform float uSpecularIntensity;
+    uniform float uMaxOverBrighting;
+    uniform float uBrightnessScale;
+    uniform float uAlphaTest;
+    varying vec2 vUv;
+    varying vec2 vUv2;
+    varying vec4 vColor;
+    varying vec3 vWorldNormal;
+    varying vec3 vWorldPosition;
+    void main() {
+      vec4 colorSample = texture2D(uColorMap, vUv2);
+      vec4 detailSample = uHasDetailMap == 1 ? texture2D(uDetailMap, vUv) : vec4(1.0);
+      vec4 shaded = colorSample * detailSample;
+      shaded *= ${useVertexColors ? "vColor" : "vec4(1.0)"};
+      shaded.rgb *= max(uBrightnessScale, 1.0);
+      ${
+        withSpecular
+          ? `
+      vec3 n = normalize(vWorldNormal);
+      vec3 l = normalize(uSunDirection);
+      vec3 v = normalize(cameraPosition - vWorldPosition);
+      vec3 h = normalize(v + l);
+      float ndotl = max(dot(n, l), 0.0);
+      float spec = pow(max(dot(n, h), 0.0), 16.0) * step(0.0, ndotl);
+      shaded.rgb += uSpecularColor * (uSpecularIntensity * spec);
+      shaded.rgb = min(shaded.rgb, vec3(uMaxOverBrighting));`
+          : ""
+      }
+      if (shaded.a <= uAlphaTest) discard;
+      gl_FragColor = shaded;
+    }
+  `;
+}
+
+function buildDynamicTrackVertexShader(useVertexColors, withSpecular) {
+  return `
+    varying vec2 vUv;
+    varying vec4 vColor;
+    varying vec3 vWorldNormal;
+    varying vec3 vWorldPosition;
+    void main() {
+      vUv = uv;
+      vColor = vec4(1.0);
+      ${useVertexColors ? "vColor = vec4(color.rgb, 1.0);" : ""}
+      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+      vWorldPosition = worldPosition.xyz;
+      vWorldNormal = normalize(mat3(modelMatrix) * normal);
+      gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    }
+  `;
+}
+
+function buildDynamicTrackFragmentShader(useVertexColors, withSpecular) {
+  return `
+    uniform sampler2D uMap;
+    uniform vec3 uSunDirection;
+    uniform vec3 uSunColor;
+    uniform float uSunIntensity;
+    uniform vec3 uAmbientColor;
+    uniform float uAmbientIntensity;
+    uniform vec3 uSpecularColor;
+    uniform float uSpecularIntensity;
+    uniform float uMaxOverBrighting;
+    uniform float uAlphaTest;
+    varying vec2 vUv;
+    varying vec4 vColor;
+    varying vec3 vWorldNormal;
+    varying vec3 vWorldPosition;
+    void main() {
+      vec4 texel = texture2D(uMap, vUv);
+      vec3 n = normalize(vWorldNormal);
+      vec3 l = normalize(uSunDirection);
+      float ndotl = max(dot(n, l), 0.0);
+      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * ndotl);
+      vec4 shaded = texel * ${useVertexColors ? "vColor" : "vec4(1.0)"};
+      shaded.rgb *= lighting * 2.0;
+      ${
+        withSpecular
+          ? `
+      vec3 v = normalize(cameraPosition - vWorldPosition);
+      vec3 h = normalize(v + l);
+      float spec = pow(max(dot(n, h), 0.0), 16.0) * step(0.0, ndotl);
+      shaded.rgb += uSpecularColor * (uSpecularIntensity * spec * texel.a);`
+          : ""
+      }
+      shaded.rgb = min(shaded.rgb, vec3(uMaxOverBrighting));
+      if (shaded.a <= uAlphaTest) discard;
+      gl_FragColor = shaded;
+    }
+  `;
 }
 
 function pickTrackTextureName(materialInfo) {

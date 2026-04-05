@@ -114,9 +114,15 @@ function addHoodUnderside(carRoot) {
 
       const undersideMaterial = material.clone();
       undersideMaterial.side = THREE.BackSide;
-      undersideMaterial.color = undersideMaterial.color
-        .clone()
-        .multiplyScalar(0.78);
+      if (undersideMaterial.color?.clone) {
+        undersideMaterial.color = undersideMaterial.color
+          .clone()
+          .multiplyScalar(0.78);
+      }
+      if (undersideMaterial.uniforms?.uColorMul?.value?.multiplyScalar) {
+        undersideMaterial.uniforms.uColorMul.value =
+          undersideMaterial.uniforms.uColorMul.value.clone().multiplyScalar(0.78);
+      }
       undersideMaterial.depthWrite = true;
       undersideMaterial.polygonOffset = true;
       undersideMaterial.polygonOffsetFactor = 1;
@@ -129,7 +135,7 @@ function addHoodUnderside(carRoot) {
         ? undersideMaterials[0]
         : undersideMaterials;
     obj.castShadow = false;
-    obj.receiveShadow = true;
+    obj.receiveShadow = false;
   });
 
   hood.parent.add(hoodUnderside);

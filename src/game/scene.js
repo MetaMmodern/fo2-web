@@ -30,7 +30,7 @@ const MIN_CAMERA_TARGET_DISTANCE = 0.5;
 
 export function createSceneApp(container = document.body) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf2f2ee);
+  scene.background = new THREE.Color(0x8fb6e8);
 
   const camera = new THREE.PerspectiveCamera(
     60,
@@ -46,8 +46,7 @@ export function createSceneApp(container = document.body) {
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);

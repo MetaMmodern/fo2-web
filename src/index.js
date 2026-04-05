@@ -12,6 +12,7 @@ import {
   trackCatalog,
 } from "./game/catalog";
 import { loadTrackEnvironment } from "./game/environment";
+import { createTrackEnvironmentState } from "./game/environmentState";
 import { createHud, syncHudSelection, updateHudTelemetry } from "./game/hud";
 import { createDrivingInput } from "./game/input";
 import { createTextureRegistry, prepareMaterials } from "./game/materials";
@@ -71,6 +72,7 @@ const sceneState = {
   tireRoot: null,
   chaseCamera: null,
   drivingSimulation: null,
+  environmentState: null,
   environmentController: null,
 };
 let transitionChain = Promise.resolve();
@@ -81,11 +83,14 @@ if (typeof window !== "undefined") {
     camera,
     renderer,
     controls,
-    get colorFilterPass() {
-      return colorFilterPass;
-    },
     get chaseCamera() {
       return sceneState.chaseCamera;
+    },
+    get environmentState() {
+      return sceneState.environmentState;
+    },
+    get environmentController() {
+      return sceneState.environmentController;
     },
     disableChaseCamera() {
       sceneState.chaseCamera?.dispose?.();
@@ -172,6 +177,9 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     }
 
     sceneState.environmentController?.dispose?.();
+    sceneState.environmentController = null;
+    sceneState.environmentState?.dispose?.();
+    sceneState.environmentState = createTrackEnvironmentState(track, renderer);
     sceneState.environmentController = await loadTrackEnvironment(
       scene,
       track.environment,
@@ -182,7 +190,12 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     });
     colorFilterPass.applyWeatherProfile(track.environment.weatherProfile);
 
-    const loadedTrack = await loadTrack(track, scene, renderer);
+    const loadedTrack = await loadTrack(
+      track,
+      scene,
+      renderer,
+      sceneState.environmentState,
+    );
     sceneState.trackRoot = loadedTrack.trackRoot;
     sceneState.floorSampler = loadedTrack.floorSampler;
     sceneState.startPoints = loadedTrack.startPoints;
@@ -209,7 +222,11 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     );
     const [{ carRoot, tireRoot }, cameraConfig] = await Promise.all([
       loadVehicle(vehicleAssetUrls, scene, controls, (root) =>
-        prepareMaterials(root, textureRegistry.getTexture),
+        prepareMaterials(
+          root,
+          textureRegistry.getTexture,
+          sceneState.environmentState,
+        ),
       ),
       loadVehicleCameraConfig(vehicleAssetUrls.cameraConfig).catch((error) => {
         console.warn("Falling back to default chase camera config:", error);
@@ -270,6 +287,7 @@ function disposeHierarchy(root) {
       material?.map?.dispose?.();
       material?.lightMap?.dispose?.();
       material?.emissiveMap?.dispose?.();
+      material?.userData?.textureRefs?.forEach((texture) => texture?.dispose?.());
       material?.dispose?.();
     });
   });

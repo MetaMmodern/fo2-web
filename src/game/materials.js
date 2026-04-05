@@ -1,5 +1,10 @@
 import * as THREE from "three";
 
+const DEFAULT_SUN_DIRECTION = new THREE.Vector3(0.3, 0.8, -0.5);
+const DEFAULT_SUN_COLOR = new THREE.Color(0xffe6c7);
+const DEFAULT_AMBIENT_COLOR = new THREE.Color(0x414141);
+const DEFAULT_SPECULAR_COLOR = new THREE.Color(0xfff3db);
+
 export function createTextureRegistry(textureUrls, maxAnisotropy = 1) {
   const textureLoader = new THREE.TextureLoader();
   const textureCache = new Map();
@@ -20,21 +25,28 @@ export function createTextureRegistry(textureUrls, maxAnisotropy = 1) {
   return { getTexture };
 }
 
-export function prepareMaterials(root, getTexture) {
+export function prepareMaterials(root, getTexture, environmentState = null) {
   root.traverse((obj) => {
     if (!obj.isMesh) {
       return;
     }
 
-    obj.castShadow = true;
-    obj.receiveShadow = true;
+    obj.castShadow = false;
+    obj.receiveShadow = false;
 
     const sourceMaterials = Array.isArray(obj.material)
       ? obj.material
       : [obj.material];
 
     const mappedMaterials = sourceMaterials.map((material) =>
-      material ? createMaterialForName(material.name, getTexture) : material,
+      material
+        ? createMaterialForName(
+            material.name,
+            getTexture,
+            environmentState,
+            Boolean(obj.geometry?.getAttribute("color")),
+          )
+        : material,
     );
 
     obj.material =
@@ -42,25 +54,32 @@ export function prepareMaterials(root, getTexture) {
   });
 }
 
-function createMaterialForName(name, getTexture) {
+function createMaterialForName(
+  name,
+  getTexture,
+  environmentState,
+  useVertexColors,
+) {
   const materialName = name ?? "";
 
   if (name === "body") {
-    return new THREE.MeshBasicMaterial({
+    return createCarBodyMaterial({
       name: materialName,
-      map: getTexture("skin"),
-      color: 0xffffff,
-      vertexColors: true,
+      baseMap: getTexture("skin"),
+      reflectMap: getTexture("common"),
+      useVertexColors,
+      environmentState,
     });
   }
 
   if (name === "common" || name === "shear") {
-    return new THREE.MeshStandardMaterial({
+    return createDynamicVehicleMaterial({
       name: materialName,
       map: getTexture("common"),
-      color: 0xffffff,
-      roughness: 0.7,
-      metalness: 0.04,
+      useVertexColors,
+      environmentState,
+      specularStrength: 0.2,
+      specularPower: 16,
     });
   }
 
@@ -70,95 +89,62 @@ function createMaterialForName(name, getTexture) {
     name === "scalespring" ||
     name === "scaleshock"
   ) {
-    return new THREE.MeshStandardMaterial({
+    return createDynamicVehicleMaterial({
       name: materialName,
       map: getTexture("shock"),
-      color: 0xffffff,
+      useVertexColors,
+      environmentState,
       transparent: true,
       alphaTest: 0.05,
-      roughness: 0.55,
-      metalness: 0.18,
+      side: THREE.DoubleSide,
+      specularStrength: 0.12,
+      specularPower: 12,
     });
   }
 
   if (name === "interior") {
-    return new THREE.MeshStandardMaterial({
+    return createDynamicVehicleMaterial({
       name: materialName,
       map: getTexture("interior"),
-      color: 0xffffff,
-      roughness: 0.78,
-      metalness: 0.02,
+      useVertexColors,
+      environmentState,
+      specularStrength: 0.08,
+      specularPower: 10,
     });
   }
 
   if (name.startsWith("window")) {
-    const material = new THREE.MeshStandardMaterial({
+    return createCarWindowMaterial({
       name: materialName,
-      map: getTexture("windows"),
-      color: 0x8ea2ad,
-      transparent: true,
-      opacity: 0.5,
-      roughness: 0.08,
-      metalness: 0.05,
-      depthWrite: false,
-      side: THREE.DoubleSide,
+      baseMap: getTexture("windows"),
+      reflectMap: getTexture("common"),
+      environmentState,
     });
-
-    material.onBeforeCompile = (shader) => {
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          "#include <common>",
-          `#include <common>
-          float flatoutWindowFresnel(vec3 viewDir, vec3 normal) {
-            float facing = 1.0 - abs(dot(normalize(viewDir), normalize(normal)));
-            return pow(clamp(facing, 0.0, 1.0), 5.0);
-          }`,
-        )
-        .replace(
-          "#include <opaque_fragment>",
-          `float flatoutFresnel = flatoutWindowFresnel(vViewPosition, normal);
-          outgoingLight = mix(outgoingLight * 0.52, vec3(0.72, 0.82, 0.90), flatoutFresnel * 0.9);
-          diffuseColor.a = max(diffuseColor.a, 0.48);
-          #include <opaque_fragment>`,
-        );
-    };
-    material.customProgramCacheKey = () => "flatout-window-fresnel-v1";
-    return material;
   }
 
   if (name.startsWith("light_")) {
     const isFront = name.startsWith("light_front");
     const isBrake = name.startsWith("light_brake");
     const isReverse = name.startsWith("light_reverse");
+    let glowColor = new THREE.Color(0xffffff);
 
-    let lightColor = 0xffffff;
-    let emissiveColor = 0x141414;
-    let emissiveIntensity = 0.32;
-
-    if (isFront) {
-      emissiveColor = 0xffefc1;
-      emissiveIntensity = 0.55;
-    } else if (isBrake) {
-      emissiveColor = 0xa11200;
-      emissiveIntensity = 0.65;
+    if (isBrake) {
+      glowColor = new THREE.Color(0xff3a20);
     } else if (isReverse) {
-      emissiveColor = 0xa8c8ff;
-      emissiveIntensity = 0.5;
+      glowColor = new THREE.Color(0xa8c8ff);
+    } else if (isFront) {
+      glowColor = new THREE.Color(0xffefc1);
     }
 
-    return new THREE.MeshStandardMaterial({
+    return createCarLightMaterial({
       name: materialName,
-      map: getTexture("lights"),
-      color: lightColor,
+      baseMap: getTexture("lights"),
+      glowMap: getTexture("lights"),
+      useVertexColors,
+      environmentState,
+      glowColor,
       transparent: isFront,
       alphaTest: 0.02,
-      emissiveMap: getTexture("lights"),
-      emissive: new THREE.Color(emissiveColor),
-      emissiveIntensity,
-      roughness: 0.18,
-      metalness: 0.04,
-      depthWrite: !isFront,
-      side: THREE.DoubleSide,
     });
   }
 
@@ -173,31 +159,405 @@ function createMaterialForName(name, getTexture) {
   }
 
   if (name === "tire") {
-    return new THREE.MeshStandardMaterial({
+    return createDynamicVehicleMaterial({
       name: materialName,
       map: getTexture("tire"),
-      color: 0xffffff,
-      roughness: 0.84,
-      metalness: 0.02,
+      useVertexColors,
+      environmentState,
+      specularStrength: 0.1,
+      specularPower: 24,
     });
   }
 
   if (name === "rim") {
-    return new THREE.MeshStandardMaterial({
+    return createDynamicVehicleMaterial({
       name: materialName,
       map: getTexture("tire"),
-      color: 0xffffff,
+      useVertexColors,
+      environmentState,
       transparent: true,
       alphaTest: 0.12,
-      roughness: 0.38,
-      metalness: 0.32,
+      specularStrength: 0.32,
+      specularPower: 28,
     });
   }
 
-  return new THREE.MeshStandardMaterial({
+  return createDynamicVehicleMaterial({
     name: materialName,
-    color: 0x777777,
-    roughness: 0.72,
-    metalness: 0.04,
+    map: getTexture("common"),
+    useVertexColors,
+    environmentState,
+    specularStrength: 0.14,
+    specularPower: 16,
   });
+}
+
+function createDynamicVehicleMaterial({
+  name,
+  map,
+  useVertexColors,
+  environmentState,
+  transparent = false,
+  alphaTest = 0,
+  side = THREE.FrontSide,
+  specularStrength = 0.14,
+  specularPower = 16,
+}) {
+  const material = createVehicleShaderMaterial({
+    name,
+    uniforms: {
+      uMap: { value: map },
+      uSunDirection: {
+        value:
+          environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
+      },
+      uSunColor: {
+        value: environmentState?.sunColor ?? DEFAULT_SUN_COLOR.clone(),
+      },
+      uSunIntensity: { value: environmentState?.sunIntensity ?? 1.25 },
+      uAmbientColor: {
+        value: environmentState?.ambientColor ?? DEFAULT_AMBIENT_COLOR.clone(),
+      },
+      uAmbientIntensity: { value: environmentState?.ambientIntensity ?? 0.9 },
+      uSpecularColor: {
+        value:
+          environmentState?.specularColor ?? DEFAULT_SPECULAR_COLOR.clone(),
+      },
+      uSpecularIntensity: {
+        value: environmentState?.specularIntensity ?? specularStrength,
+      },
+      uSpecularPower: { value: specularPower },
+      uMaxOverBrighting: {
+        value: environmentState?.maxOverBrighting ?? 1.79,
+      },
+      uColorMul: { value: new THREE.Color(1, 1, 1) },
+    },
+    useVertexColors,
+    transparent,
+    alphaTest,
+    side,
+    vertexShader: buildVehicleVertexShader(useVertexColors),
+    fragmentShader: buildDynamicVehicleFragmentShader(useVertexColors, true),
+  });
+  material.userData.textureRefs = map ? [map] : [];
+  return material;
+}
+
+function createCarBodyMaterial({
+  name,
+  baseMap,
+  reflectMap,
+  useVertexColors,
+  environmentState,
+}) {
+  const material = createVehicleShaderMaterial({
+    name,
+    uniforms: {
+      uBaseMap: { value: baseMap },
+      uReflectMap: { value: reflectMap },
+      uSunDirection: {
+        value:
+          environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
+      },
+      uSunColor: {
+        value: environmentState?.sunColor ?? DEFAULT_SUN_COLOR.clone(),
+      },
+      uSunIntensity: { value: environmentState?.sunIntensity ?? 1.25 },
+      uAmbientColor: {
+        value: environmentState?.ambientColor ?? DEFAULT_AMBIENT_COLOR.clone(),
+      },
+      uAmbientIntensity: { value: environmentState?.ambientIntensity ?? 0.9 },
+      uSpecularColor: {
+        value:
+          environmentState?.specularColor ?? DEFAULT_SPECULAR_COLOR.clone(),
+      },
+      uSpecularIntensity: {
+        value: environmentState?.specularIntensity ?? 0.65,
+      },
+      uMaxOverBrighting: {
+        value: environmentState?.maxOverBrighting ?? 1.79,
+      },
+      uFresnelBias: { value: 0.15 },
+      uFresnelScale: { value: 0.85 },
+      uColorMul: { value: new THREE.Color(1, 1, 1) },
+    },
+    useVertexColors,
+    vertexShader: buildVehicleVertexShader(useVertexColors),
+    fragmentShader: buildCarBodyFragmentShader(useVertexColors),
+  });
+  material.userData.textureRefs = [baseMap, reflectMap].filter(Boolean);
+  return material;
+}
+
+function createCarWindowMaterial({
+  name,
+  baseMap,
+  reflectMap,
+  environmentState,
+}) {
+  const material = createVehicleShaderMaterial({
+    name,
+    uniforms: {
+      uBaseMap: { value: baseMap },
+      uReflectMap: { value: reflectMap },
+      uSpecularColor: {
+        value:
+          environmentState?.specularColor ?? DEFAULT_SPECULAR_COLOR.clone(),
+      },
+      uColorMul: { value: new THREE.Color(1, 1, 1) },
+      uFresnelBias: { value: 0.25 },
+      uFresnelScale: { value: 0.5 },
+      uWindowBrightness: { value: 0.5 },
+    },
+    transparent: true,
+    side: THREE.DoubleSide,
+    vertexShader: buildVehicleVertexShader(false),
+    fragmentShader: buildCarWindowFragmentShader(),
+  });
+  material.depthWrite = false;
+  material.userData.textureRefs = [baseMap, reflectMap].filter(Boolean);
+  return material;
+}
+
+function createCarLightMaterial({
+  name,
+  baseMap,
+  glowMap,
+  useVertexColors,
+  environmentState,
+  glowColor,
+  transparent = false,
+  alphaTest = 0,
+}) {
+  const material = createVehicleShaderMaterial({
+    name,
+    uniforms: {
+      uBaseMap: { value: baseMap },
+      uGlowMap: { value: glowMap },
+      uSunDirection: {
+        value:
+          environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
+      },
+      uSunColor: {
+        value: environmentState?.sunColor ?? DEFAULT_SUN_COLOR.clone(),
+      },
+      uSunIntensity: { value: environmentState?.sunIntensity ?? 1.25 },
+      uAmbientColor: {
+        value: environmentState?.ambientColor ?? DEFAULT_AMBIENT_COLOR.clone(),
+      },
+      uAmbientIntensity: { value: environmentState?.ambientIntensity ?? 0.9 },
+      uGlowColor: { value: glowColor.clone() },
+      uMaxOverBrighting: {
+        value: environmentState?.maxOverBrighting ?? 1.79,
+      },
+      uColorMul: { value: new THREE.Color(1, 1, 1) },
+    },
+    useVertexColors,
+    transparent,
+    alphaTest,
+    side: THREE.DoubleSide,
+    vertexShader: buildVehicleVertexShader(useVertexColors),
+    fragmentShader: buildCarLightFragmentShader(useVertexColors),
+  });
+  material.depthWrite = !transparent;
+  material.userData.textureRefs = [baseMap, glowMap].filter(Boolean);
+  return material;
+}
+
+function createVehicleShaderMaterial({
+  name,
+  uniforms,
+  useVertexColors = false,
+  transparent = false,
+  alphaTest = 0,
+  side = THREE.FrontSide,
+  vertexShader,
+  fragmentShader,
+}) {
+  return new THREE.ShaderMaterial({
+    name,
+    uniforms: {
+      ...uniforms,
+      uAlphaTest: { value: alphaTest },
+    },
+    vertexColors: useVertexColors,
+    transparent,
+    alphaTest,
+    side,
+    vertexShader,
+    fragmentShader,
+  });
+}
+
+function buildVehicleVertexShader(useVertexColors) {
+  return `
+    varying vec2 vUv;
+    varying vec4 vColor;
+    varying vec3 vWorldNormal;
+    varying vec3 vWorldPosition;
+    varying vec3 vViewDirection;
+    varying vec3 vReflectDirection;
+    void main() {
+      vUv = uv;
+      vColor = vec4(1.0);
+      ${useVertexColors ? "vColor = vec4(color.rgb, 1.0);" : ""}
+      vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+      vec3 worldNormal = normalize(mat3(modelMatrix) * normal);
+      vec3 viewDirection = normalize(cameraPosition - worldPosition.xyz);
+      vWorldPosition = worldPosition.xyz;
+      vWorldNormal = worldNormal;
+      vViewDirection = viewDirection;
+      vReflectDirection = reflect(-viewDirection, worldNormal);
+      gl_Position = projectionMatrix * viewMatrix * worldPosition;
+    }
+  `;
+}
+
+function buildDynamicVehicleFragmentShader(useVertexColors, withSpecular) {
+  return `
+    uniform sampler2D uMap;
+    uniform vec3 uSunDirection;
+    uniform vec3 uSunColor;
+    uniform float uSunIntensity;
+    uniform vec3 uAmbientColor;
+    uniform float uAmbientIntensity;
+    uniform vec3 uSpecularColor;
+    uniform float uSpecularIntensity;
+    uniform float uSpecularPower;
+    uniform float uMaxOverBrighting;
+    uniform vec3 uColorMul;
+    uniform float uAlphaTest;
+    varying vec2 vUv;
+    varying vec4 vColor;
+    varying vec3 vWorldNormal;
+    varying vec3 vViewDirection;
+    void main() {
+      vec4 texel = texture2D(uMap, vUv) * vec4(uColorMul, 1.0);
+      vec4 shaded = texel * ${useVertexColors ? "vColor" : "vec4(1.0)"};
+      vec3 n = normalize(vWorldNormal);
+      vec3 l = normalize(uSunDirection);
+      vec3 v = normalize(vViewDirection);
+      float ndotl = max(dot(n, l), 0.0);
+      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * ndotl);
+      shaded.rgb *= lighting * 2.0;
+      ${
+        withSpecular
+          ? `
+      vec3 h = normalize(v + l);
+      float spec = pow(max(dot(n, h), 0.0), uSpecularPower) * step(0.0, ndotl);
+      shaded.rgb += uSpecularColor * (uSpecularIntensity * spec);`
+          : ""
+      }
+      shaded.rgb = min(shaded.rgb, vec3(uMaxOverBrighting));
+      if (shaded.a <= uAlphaTest) discard;
+      gl_FragColor = shaded;
+    }
+  `;
+}
+
+function buildCarBodyFragmentShader(useVertexColors) {
+  return `
+    uniform sampler2D uBaseMap;
+    uniform sampler2D uReflectMap;
+    uniform vec3 uSunDirection;
+    uniform vec3 uSunColor;
+    uniform float uSunIntensity;
+    uniform vec3 uAmbientColor;
+    uniform float uAmbientIntensity;
+    uniform vec3 uSpecularColor;
+    uniform float uSpecularIntensity;
+    uniform float uMaxOverBrighting;
+    uniform vec3 uColorMul;
+    uniform float uFresnelBias;
+    uniform float uFresnelScale;
+    uniform float uAlphaTest;
+    varying vec2 vUv;
+    varying vec4 vColor;
+    varying vec3 vWorldNormal;
+    varying vec3 vViewDirection;
+    varying vec3 vReflectDirection;
+    void main() {
+      vec4 baseSample = texture2D(uBaseMap, vUv) * vec4(uColorMul, 1.0);
+      vec4 reflectSample = texture2D(uReflectMap, vUv);
+      vec4 shaded = baseSample * ${useVertexColors ? "vColor" : "vec4(1.0)"};
+      vec3 n = normalize(vWorldNormal);
+      vec3 l = normalize(uSunDirection);
+      vec3 v = normalize(vViewDirection);
+      float ndotl = max(dot(n, l), 0.0);
+      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * ndotl);
+      vec3 litBase = shaded.rgb * lighting * 2.0;
+      vec3 h = normalize(v + l);
+      float spec = pow(max(dot(n, h), 0.0), 32.0) * step(0.0, ndotl);
+      float fresnel = uFresnelBias + uFresnelScale * pow(1.0 - abs(dot(v, n)), 5.0);
+      vec3 skyReflect = mix(uAmbientColor, uSunColor, clamp(vReflectDirection.y * 0.5 + 0.5, 0.0, 1.0));
+      vec3 reflected = reflectSample.rgb * skyReflect;
+      vec3 color = mix(litBase + uSpecularColor * (uSpecularIntensity * spec), reflected, clamp(baseSample.a * fresnel, 0.0, 1.0));
+      color = min(color, vec3(uMaxOverBrighting));
+      if (baseSample.a <= uAlphaTest) discard;
+      gl_FragColor = vec4(color, baseSample.a);
+    }
+  `;
+}
+
+function buildCarWindowFragmentShader() {
+  return `
+    uniform sampler2D uBaseMap;
+    uniform sampler2D uReflectMap;
+    uniform vec3 uSpecularColor;
+    uniform vec3 uColorMul;
+    uniform float uFresnelBias;
+    uniform float uFresnelScale;
+    uniform float uWindowBrightness;
+    uniform float uAlphaTest;
+    varying vec2 vUv;
+    varying vec3 vWorldNormal;
+    varying vec3 vViewDirection;
+    varying vec3 vReflectDirection;
+    void main() {
+      vec4 baseSample = texture2D(uBaseMap, vUv) * vec4(uColorMul, 1.0);
+      vec4 reflectSample = texture2D(uReflectMap, vUv);
+      vec3 n = normalize(vWorldNormal);
+      vec3 v = normalize(vViewDirection);
+      float fresnel = uFresnelBias + uFresnelScale * pow(1.0 - abs(dot(v, n)), 5.0);
+      vec3 reflected = reflectSample.rgb * uSpecularColor;
+      vec3 color = reflected * fresnel;
+      float alpha = clamp((1.0 - fresnel) * uWindowBrightness + baseSample.a * 0.2, 0.0, 1.0);
+      if (alpha <= uAlphaTest) discard;
+      gl_FragColor = vec4(color, alpha);
+    }
+  `;
+}
+
+function buildCarLightFragmentShader(useVertexColors) {
+  return `
+    uniform sampler2D uBaseMap;
+    uniform sampler2D uGlowMap;
+    uniform vec3 uSunDirection;
+    uniform vec3 uSunColor;
+    uniform float uSunIntensity;
+    uniform vec3 uAmbientColor;
+    uniform float uAmbientIntensity;
+    uniform vec3 uGlowColor;
+    uniform float uMaxOverBrighting;
+    uniform vec3 uColorMul;
+    uniform float uAlphaTest;
+    varying vec2 vUv;
+    varying vec4 vColor;
+    varying vec3 vWorldNormal;
+    void main() {
+      vec4 baseSample = texture2D(uBaseMap, vUv) * vec4(uColorMul, 1.0);
+      vec4 glowSample = texture2D(uGlowMap, vUv);
+      vec4 shaded = baseSample * ${useVertexColors ? "vColor" : "vec4(1.0)"};
+      vec3 n = normalize(vWorldNormal);
+      vec3 l = normalize(uSunDirection);
+      float ndotl = max(dot(n, l), 0.0);
+      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * ndotl);
+      vec3 color = shaded.rgb * lighting * 2.0;
+      color += glowSample.rgb * uGlowColor;
+      color = min(color, vec3(uMaxOverBrighting));
+      float alpha = baseSample.a;
+      if (alpha <= uAlphaTest) discard;
+      gl_FragColor = vec4(color * alpha, alpha);
+    }
+  `;
 }
