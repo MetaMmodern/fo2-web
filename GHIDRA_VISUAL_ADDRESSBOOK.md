@@ -17,6 +17,92 @@ Binary:
 
 ---
 
+## App Bootstrap / Resource Loading
+
+Source of truth notes:
+- `ghidra_findings/APP_BOOTSTRAP_RESOURCE_LOADING_FINDINGS_2026-04-03.md:1`
+
+### Core anchors
+
+- `entry` @ `0x00602638` — CRT startup only; initializes the MSVC runtime and then calls `WinMain`.
+- `WinMain` @ `0x00520ed0` — Primary game startup entry. Parses command-line switches (`setup`, `-setup`, `-binarydb`, `-bedit`), checks DirectX, loads the archive lists `filesystem` then `patch`, loads the binary DB, bootstraps the script host, creates save/profile helpers, and then hands off to `LaunchWindow`.
+- `CheckDirectXVersion` @ `0x00520aa0` — Reads the DirectX registry version string and compares it against the expected startup minimum `4.09.00.0904`.
+- `LaunchWindow` @ `0x00520cf0` — Creates the setup/main window, checks the parsed command-line helper buffer for `-join` / `-host`, optionally shows intro videos, then calls `App_InitializeCoreSystems` once the window/setup phase has succeeded.
+- `App_InitializeCoreSystems` @ `0x005210e0` — Second-stage core bootstrap after the main window exists. Acquires `GameSettings`, allocates the `0x430` car-id lookup table, fills it from LiteDb, initializes controller input, registers network Lua bindings, starts networking, acquires the font registry, and loads `data/global/Fonts/fonts.bed`.
+- `LoadBfsArchiveList` @ `0x00520e10` — Parses one plain-text archive list file whose path is passed in `ESI`. `WinMain` calls it twice with `filesystem` and then `patch`; the loader reads lines up to `'\n'` into a `0x104` buffer and passes each line directly to `BfsManager_AddArchivePath`.
+- `BfsManager_AddArchivePath` @ `0x0054c2a0` — Ensures the process-global `BfsManager` exists and appends one BFS archive path read from an archive list file; when called with `NULL`, destroys and clears the global BFS manager.
+- `InitBfsManagerAfterAlloc` @ `0x00559760` — `BfsManager` constructor-like initializer. Allocates the aligned streaming/read buffer and three reusable `MWFileObject` slots.
+- `BfsManager_RegisterArchiveFile` @ `0x00559920` — Allocates and appends one opened BFS archive descriptor into the manager’s internal archive array.
+- `OpenBFS` @ `0x00560b80` — Opens one `.bfs` archive, validates the `bfs1` header/id, validates the hash-table size, loads the directory/hash blob, and rebases internal offsets.
+- `LoadBinaryDatabase` @ `0x005595f0` — Loads `data/Database/FlatOut2.db`, validates the binary DB header/version, allocates the LiteDb blob, and installs the runtime LiteDb root pointer.
+- `DoesFileExistWrapper_AndDoesSomeMoreStateStuff` @ `0x0054c610` — Uses the BFS manager for file existence checks when one is mounted and the caller prefers archive lookup; otherwise falls back to normalized raw-file lookup via `__stat` and extra search paths.
+- `FileLookup_BuildSearchPathCandidate` @ `0x0054c180` — Builds one loose-file fallback candidate by prepending one registered search-path prefix to the normalized relative filename buffer.
+- `FileLookup_ShutdownArchiveAndSearchPaths` @ `0x0054c310` — Shutdown helper for startup-owned content lookup state; frees the global `BfsManager` and any registered loose-file search-path prefixes.
+- `App_AcquireScriptHost` @ `0x00521510` — Allocates or refcounts the global `ScriptHost`; alloc size `0x0c`, installs `ScriptHost_allocatedvftable_0067fe4`.
+- `ScriptHost_InitializeRootLuaState` @ `0x00524d70` — Root script-host/Lua bootstrap. Recreates the Lua state, installs helper globals/registries, injects the built-in queue/sandbox support code, and prepares the startup script environment. Reused later outside `WinMain` when the root script state is rebuilt.
+- `CommandLineOptions_ParseBuffer` @ `0x00551090` — Parses the raw command-line string into a `0x2008` key/value option table with support for bare flags and quoted values.
+- `ScriptHost_ExposeCommandLineTable` @ `0x00550f90` — Exports the parsed command-line option table into Lua as global/table `CommandLine`.
+- `CommandLineOptions_FindIndex` @ `0x00551220` — Case-insensitive lookup helper over the parsed command-line option table; `LaunchWindow` uses it for `-join` / `-host`.
+- `ScriptHost_RegisterNetworkBindings` @ `0x004e2130` — Registers network/voice/session Lua functions and classes into the root script host state.
+- `App_AcquireGameSettings` @ `0x005215c0` — Allocates or refcounts the global `GameSettings`; alloc size `0x4120`.
+- `GameSettings_GameSettings` @ `0x00458a20` — `GameSettings` constructor; calls `GameSettings_LoadResetTimingThresholds(this)` and `GameSettings_BuildLevelRuleLists(this)` as part of first-stage settings bring-up.
+- `GameSettings_LoadResetTimingThresholds` @ `0x00458d00` — Builds a temporary Lua/script state and loads reset-timing thresholds into globals such as `g_fResetTimeAir`, `g_fResetTimeJam`, `g_fResetTimeOutOfTrack`, and `g_fResetTimeIllegal1`.
+- `GameSettings_BuildLevelRuleLists` @ `0x00459dd0` — Walks `Settings.Levels` from Lua and builds per-ruleset level index lists inside `GameSettings`.
+- `App_AcquireControllerHost` @ `0x005214c0` — Allocates or refcounts the controller/input host object before `ControllerHost_InitializeDevices` runs input-device bootstrap; alloc size `0x154`.
+- `ControllerHost_InitializeDevices` @ `0x0054ff10` — Startup input-host bring-up: creates the keyboard device, creates the DirectInput manager, wraps up to two game controllers, and selects the default active controller.
+- `GameSettings_LoadGlobalRules` @ `0x00451b70` — Loads the global-rules/settings file if present, otherwise applies GUI defaults, then maps LiteDb `Settings.GlobalRules` into the runtime settings block.
+- `Lua_PushSettings` @ `0x004522b0` — Exposes the Lua `Settings` table, category subtables, and `LoadSettings`/`SaveSettings` helpers during startup.
+- `Startup_LoadLanguageTable` @ `0x00452d80` — Loads `data/language/languages.dat`, rebases its offset table in memory, and registers the language table for Lua/UI startup.
+- `SaveDevice_SaveDevice` @ `0x0051c520` — Constructor for the global `SaveDevice`; creates the `Savegame` directory and allocates a small internal helper block.
+- `TrackSegmentProgressManager_Acquire` @ `0x00521570` — Allocates/refcounts the global `0x464` byte track-segment/race-progress manager at `g_pTrackSegmentProgressManager_006b21c0`; paired with constructor `FUN_004022f0` and shutdown helper `FUN_00402400`.
+- `TrackSegmentProgressManager_FindNearestSegment` @ `0x004016f0` — Finds the nearest track segment for a point/query, falling back to recursive node search.
+- `TrackSegmentProgressManager_FindNearestSegmentInNode` @ `0x00401780` — Recursive segment-tree search used to choose the best track segment candidate.
+- `TrackSegmentProgressManager_AdvanceSegmentByDistance` @ `0x00405690` — Walks forward/backward across linked segments using a distance budget and returns the resulting segment.
+- `TrackSegmentProgressManager_RebuildActivePlayerList` @ `0x00402490` — Rebuilds the active-player segment list each frame and updates per-segment occupancy/counts.
+- `App_AcquireFontRegistry` @ `0x00521620` — Allocates or refcounts the font registry object; alloc size `0x144`, constructor `FUN_00451660`.
+- `GameSettings_BuildCarLookupTable` @ `0x00456810` — Walks LiteDb `Data.Cars` / `Data.Upgrades` / `FlatOut2`, derives numeric car ids from `DataPath`, fills the `FlatOut2.Cars` lookup table, and then clears garage-related state.
+- `g_pCarIdLookupTable_008e842c` @ `0x008e842c` — Process-global `0x430` byte car-id lookup table allocated by `App_InitializeCoreSystems`, filled by `GameSettings_BuildCarLookupTable`, and consumed by garage/car-loading code.
+- `ScriptHost_LoadFontsBed` @ `0x004517c0` — Loads `data/global/Fonts/fonts.bed` via the script host and runs `AddAllFonts()` to register the declared fonts.
+- `FreeALotOfMemory` @ `0x005211c0` — Main shutdown/teardown pass for the singletons acquired by `App_InitializeCoreSystems`.
+
+### Key strings / config / content anchors
+
+- `filesystem` @ `0x00677e2c` — First BFS archive list loaded by `WinMain`.
+- `patch` @ `0x00677e24` — Second BFS archive list loaded by `WinMain`.
+- `-binarydb` @ `0x00677df8`
+- `-bedit` @ `0x00677df0`
+- `setup` @ `0x00677e1c`
+- `-setup` @ `0x00677e14`
+- `4.09.00.0904` @ `0x00677e04` — DirectX version string passed to the startup version check.
+- `data/Database/FlatOut2.db` @ `0x00671c68`
+- `data/language/languages.dat` @ `0x0066ab68`
+- `data/global/Fonts/fonts.bed` @ `0x0066beac`
+- `data/menu/copyright.tga` @ `0x00677dc6`
+- `data/menu/copyright_us.tga` @ `0x00677dde`
+
+### Practical implications
+
+- The executable uses a two-stage startup:
+  - `WinMain` handles platform/runtime checks, archive-list loading, binary DB loading, and script-host creation.
+  - `App_InitializeCoreSystems` acquires gameplay-facing global systems only after the window/setup phase succeeds.
+- `LaunchWindow` is also the branch point for direct host/join command-line flows, so intro playback is not unconditional.
+- Resource discovery is layered:
+  - text archive lists (`filesystem`, `patch`)
+  - process-global `BfsManager`
+  - per-archive BFS descriptors
+  - file access through the BFS/file abstraction
+- `WinMain` also owns a normalized command-line table that is exported to Lua and reused later by `LaunchWindow`; host/join detection does not rescan the raw command line.
+- If startup does not leave the BFS manager mounted, generic file lookup can fall back to raw filesystem access instead of archive-backed lookup.
+- After LiteDb is loaded, startup also derives runtime lookup tables from DB content before proceeding, so bootstrap is doing real data shaping, not only object construction.
+- Startup also seeds player reset timing thresholds and brings up the global track-segment/race-progress manager before normal race/menu runtime uses them.
+- Startup-localized content is loaded very early: `languages.dat` is prepared before the window handoff, and `GameSettings` already classifies level entries by ruleset before menu/race runtime proceeds.
+- `patch` is not just a generic script label; it is one of the two startup archive lists, and the same label is also passed into the script-host bootstrap path in `WinMain`.
+- In the local repo inventory, `filesystembk` and `patchbk` are renamed backup copies created during unpacking; the binary still expects the original startup filenames `filesystem` and `patch`.
+- Fonts are not hardcoded D3D resources. The game loads `data/global/Fonts/fonts.bed` into the root script environment and registers fonts from script data.
+- The binary DB is a real compiled resource (`FlatOut2.db`) with a validated header/version and a dedicated LiteDb runtime blob, not a loose text database.
+
+---
+
 ## Driving / Collision / Vehicle Physics
 
 Source of truth notes:
@@ -119,6 +205,171 @@ Source of truth notes:
 - Per-car driving cameras are authored content, not one universal hardcoded offset.
 - Stunt, goal, intro, start, and ragdoll cameras are separate behaviors and should not be collapsed into a single chase rig.
 - Normal driving camera behavior should not pitch with raw body acceleration by inheriting the car body's full quaternion; stunt tilt belongs to the stunt tracker, not the normal car tracker.
+
+---
+
+## Race / Session State Machine
+
+Source of truth notes:
+- `ghidra_findings/RACE_SESSION_STATE_MACHINE_FINDINGS_2026-04-03.md:1`
+
+### Core anchors
+
+- `SessionClass_CreateSession` @ `0x004f0020` — Lua-facing create-session wrapper; calls the real session vtable slot `2` and returns a boolean result.
+- `SessionClass_DeleteSession` @ `0x004f1720` — Lua-facing delete-session wrapper; calls the real session vtable slot `3`.
+- `SessionClass_JoinSession` @ `0x004f1760` — Lua-facing join-session wrapper; parses the script-side session identifier block and forwards it into the lower-level session join helper `FUN_004ee950`.
+- `SessionClass_Update` @ `0x004f1800` — Lua-facing session update wrapper; calls the real session vtable slot `6` and returns a boolean.
+- `SessionClass_StartRace` @ `0x004f18b0` — Lua-facing start-race wrapper; calls the real session vtable slot `7`.
+- `SessionClass_GetRaceStarted` @ `0x004f18f0` — Reads the race-start bit directly from `SessionClass + 0x216c` (bit `0x8`).
+- `SessionClass_GetProgress` @ `0x004f1c80` — Maps the underlying session progress enum to Lua globals `IDLE`, `CREATING`, `DELETING`, `JOINING`, `FAILED`, `STARTING`, `SUCCESS`, and `NET_ERROR`.
+- `SessionClass_IsHost` @ `0x004f1da0` — Reads host bit `0x1` from `SessionClass + 0x216c`.
+- `SessionClass_RefreshPoints` @ `0x004f1f50` — Lua-facing wrapper over session vtable slot `14`.
+- `SessionClass_GetInfo` @ `0x004f20c0` — Returns a userdata wrapper around the session/session-list descriptor object from `FUN_0050dc70()`.
+- `SessionClass_Disconnect` @ `0x004f2450` — Lua-facing disconnect wrapper.
+- `SessionClass_HasSessionChanged` @ `0x004f24c0` — Reads and clears session-changed bit `0x80` from `SessionClass + 0x216c`.
+- `SessionClass_HasClassCarChanged` @ `0x004f2520` — Reads and clears class/car-changed bit `0x1` from `SessionClass + 0x216d`.
+- `SessionClass_NextRaceUpdated` @ `0x004f2580` — Reads next-race-updated bit `0x20` from `SessionClass + 0x216c`.
+- `SessionClass_JoinSessionFromCommandLine` @ `0x004f4270` — Lua-facing command-line join wrapper; calls session vtable slot `4`.
+- `ClearRaceForReal` @ `0x0045e3c0` — Clears the live `GameSettings` race block before the next race/session load.
+- `LoadRaceInfo` @ `0x0045e620` — Loads the live `GameSettings` race descriptor from script-global `Levels[levelID]`, with override support for rules and derby type.
+- `CupManager_Init` @ `0x00462a30` — Allocates/refcounts the process-global `CupManager` (`0x5b8` bytes).
+- `CupManager_CupManager` @ `0x00456ff0` — Installs the cup manager vtable, clears the cup state, and exposes `CupManager` to Lua.
+- `ClearCupForReal` @ `0x00457130` — Clears all runtime cup race entries and resets the cup points table.
+- `CupManager_PrepareFromScriptForReal` @ `0x00457250` — Materializes script-global `Races[]` plus referenced `Levels[]` into the runtime cup race list.
+- `SessionClass_RequestJoinSessionFromCommandLine` @ `0x004ee950` — Sets progress to `JOINING`, clears race-start state, builds the command-line join payloads, and queues the network join request.
+- `SessionClass_BuildJoinAddressListFromCommandLine` @ `0x005024e0` — Collects `-public_addr`/`-private_addr` or local adapter addresses into the join-address payload.
+- `SessionClass_BuildJoinPasswordPayloadFromCommandLine` @ `0x00502740` — Parses `-password` and `-join` into the serialized command-line join payload.
+- `Network_GetPrimaryAdapterMacAddress` @ `0x00502940` — Returns the preferred adapter MAC-like identifier used by the join path.
+- `Network_QueueSessionJoinRequest` @ `0x004e4950` — Stores and queues a session join request under the protected network worker queue.
+- `SavePlayerProfile` @ `0x00465870` — Lua-facing save request; pushes `GameSettings.m_nSaveFlowState_0x434` into `SAVEFLOW_SAVEPLAYERPROFILE`.
+- `SavePlayerDataForReal` @ `0x004637e0` — Writes the large player/profile block through `SaveDevice` and updates `GameSettings.m_nSaveStatus_0x44c`.
+
+### Practical implications
+
+- Session create/join/start/delete are real state-machine transitions, not one boolean "online/offline" switch.
+- The session object exposes stable flag bits for host state, race started, next-race-updated, session changed, and class/car changed.
+- `CupManager` owns the scripted race-series/runtime schedule, while `GameSettings` owns the currently loaded race descriptor.
+- Command-line join is a real network/session branch that serializes endpoint/password/local-address identity and queues a join request.
+- Profile persistence is mediated by the `GameSettings` save-flow state machine rather than written directly from UI/session Lua calls.
+
+---
+
+## Input / Keyboard / Controller Bootstrap
+
+Source of truth notes:
+- `ghidra_findings/INPUT_SYSTEM_FINDINGS_2026-04-03.md:1`
+
+### Core anchors
+
+- `FUN_0054ff10` @ `0x0054ff10` — Input/controller host bootstrap. Allocates the `Keyboard` controller first, then allocates the larger input-device manager at `0x5098` bytes, and conditionally creates up to two `GameController` instances from the discovered non-keyboard devices.
+- `InputDeviceManager_Initialize` @ `0x0055b240` — Input-device bootstrap: calls the DirectInput loader, initializes five device slots, clears runtime device state, probes non-keyboard controllers, and precomputes a 0x168-entry sine table used by later input processing.
+- `LoadDInputLibrary` @ `0x00561270` — Loads `dinput8.dll`, resolves `DirectInput8Create`, and creates the process-global DirectInput8 interface in `App_008da71c`.
+- `DirectInput_ResetEnumeratedDevices` @ `0x005611a0` — Clears the global two-device DirectInput enumeration results, type flags, cached product-name strings, and manager-owned capability/state blocks used by the later controller-open path.
+- `InputDeviceManager_EnumerateAttachedControllers` @ `0x005612c0` — Enumerates attached `DI8DEVCLASS_GAMECTRL` devices, stores up to two `IDirectInputDevice8` handles and cached capability data, and mirrors the discovered device-type flags into the manager at `+0x2448..+0x245d`.
+- `DirectInput_EnumAttachedControllerCallback` @ `0x005613b0` — EnumDevices callback; captures product names, GUID fields, simple type flags, and creates one `IDirectInputDevice8` interface for each of the first two attached controllers.
+- `InputDeviceManager_ConfigureAttachedControllers` @ `0x00561510` — Applies `SetDataFormat`, `SetProperty`, and `SetCooperativeLevel(hwnd, 5)` to each enumerated controller device before the deeper polling/open logic.
+- `InputDeviceManager_CreatePeriodicEffectSlot` @ `0x00562160` — Creates one periodic DirectInput effect with a `0x10`-byte `DIPERIODIC` payload plus a `0x14`-byte `DIENVELOPE`; used for `GUID_Square`, `GUID_Sine`, `GUID_Triangle`, `GUID_SawtoothUp`, and `GUID_SawtoothDown`.
+- `InputDeviceManager_UpdatePeriodicEffectSlot` @ `0x00562310` — Updates an existing periodic DirectInput effect with the same `DIPERIODIC` + `DIENVELOPE` payload shapes.
+- `InputDeviceManager_OpenEnumeratedControllers` @ `0x0055b3e0` — Opens/binds up to two enumerated non-keyboard controllers into the manager slots at `+0x4674` and `+0x4678`.
+- `InputDeviceManager_PollEnumeratedControllerState` @ `0x00561610` — Polls one attached DirectInput device, acquires it as needed, snapshots the previous `0x110`-byte state block, refreshes the current state with `GetDeviceState`, and toggles force-feedback actuators with `SendForceFeedbackCommand(0x10/0x20)` based on per-controller flags near `+0x2680/+0x2682`.
+- `InputDeviceManager_PollControllers` @ `0x0055b490` — Per-frame low-level controller poll/update; refreshes the live controller state snapshots used by the higher-level `GameController` binding logic.
+- `InputDeviceManager_ClearDeviceSlot` @ `0x00561950` — Zeros one 0x50-byte low-level device-slot block; called five times for the slot regions at `+0x48a8..+0x49e8`.
+- `InputDeviceManager_IsEffectSlotPlaying` @ `0x00561a40` — Queries whether one controller force-feedback/effect slot is currently active/playing.
+- `InputDeviceManager_StartEffectSlot` @ `0x00561980` — Starts one created controller effect slot and marks it active.
+- `InputDeviceManager_StopEffectSlot` @ `0x00561a00` — Stops/releases one controller effect slot and clears the slot pointer/active flag.
+- `InputDeviceManager_CreateEffectSlot` @ `0x00561b80` — Creates a condition effect (`GUID_Damper` / `GUID_Spring`) using one or more `0x18`-byte `DICONDITION` blocks.
+- `InputDeviceManager_UpdateEffectSlot` @ `0x00561d50` — Updates an already-created condition effect using the same `DICONDITION` block layout.
+- `InputDeviceManager_ReleaseDeviceSlotInterfaces` @ `0x00561b40` — Releases one `2 x 8` block of COM-style interfaces stored inside a low-level device-slot block.
+- `InputDeviceManager_ShutdownDirectInput` @ `0x00561800` — Releases the two enumerated controller devices, releases the process-global `IDirectInput8`, and frees `dinput8.dll`.
+- `InputDeviceManager_Shutdown` @ `0x0055b2b0` — High-level low-level-input teardown; releases all five low-level slot blocks and then tears down the DirectInput loader/device state.
+- `InputDeviceManager_RequestEffectSlot0` @ `0x0055b890` — Higher-level request/update wrapper for effect slot 0.
+- `InputDeviceManager_RequestEffectSlot1Directional` @ `0x0055bd20` — Higher-level request/update wrapper for effect slot 1 that uses `GUID_Damper`; reused by the deferred effect replay path.
+- `InputDeviceManager_RequestEffectSlot1TimedStrength` @ `0x0055bf10` — Timed-accumulator request/update wrapper for effect slot 1.
+- `InputDeviceManager_RequestEffectSlot1` @ `0x0055c130` — Direct-strength request/update wrapper for effect slot 1.
+- `InputDeviceManager_RequestEffectSlot2` @ `0x0055c310` — Direct-strength request/update wrapper for effect slot 2.
+- `InputDeviceManager_RequestEffectSlot2Signed` @ `0x0055c4f0` — Signed-strength request/update wrapper for effect slot 2.
+- `InputDeviceManager_RequestEffectSlot3Typed` @ `0x0055c7e0` — Typed request/update wrapper for effect slot 3; maps effect type ids 0..4 to `GUID_Sine`, `GUID_Square`, `GUID_Triangle`, `GUID_SawtoothUp`, and `GUID_SawtoothDown`.
+- `FUN_0055b4e0` @ `0x0055b4e0` — Force-feedback maintenance/replay dispatcher; stops conflicting slots, replays deferred requests from cached manager fields, and clears the per-controller deferred-effect flags at `+0x4a3c..+0x4a44`.
+- `GameController_GameController` @ `0x0055d090` — GameController constructor; stores the owning manager/index, classifies the controller type from manager flags, and marks Microsoft SideWinder Force hardware specially at `+0x8e8`.
+- `GameController_ApplyControlSettings` @ `0x0055d310` — Applies the CFG-backed controller settings to a GameController; confirms `+0x134 = sensitivity`, `+0x138 = deadzone`, and `+0x13c = saturation`.
+- `GameController_BuildSensitivityCurve` @ `0x00561780` — Builds the 1023-entry controller response curve table used after sensitivity changes.
+- `GameController_ApplyDeadzoneProperty` @ `0x005618e0` — Applies the controller deadzone property to the active DirectInput device; caller passes `ControllerDeadzone * 10`.
+- `GameController_UpdateConnectedState` @ `0x0055d3b0` — High-level per-frame state refresh for connected controllers; drives later analog/force-feedback update methods.
+- `GameController_ClearForceFeedbackState` @ `0x0055d460` — Clears the controller-local force-feedback bookkeeping block at `+0x8d4..+0x8e4`.
+- `GameController_UpdateAnalogActionLatches` @ `0x0055d480` — Refreshes the paired analog latch arrays at `+0x8c0` and `+0x8d4` for bindings whose mode is `1`.
+- `GameController_AutoMapDeviceObjects` @ `0x0055e190` — Auto-maps device objects to the 13 gameplay actions and confirms the combined-axis blocks used by `Steer` and `Accelerate/Brake`.
+- `InputController_BeginBindingCapture` @ `0x0055ad10` — Stores the selected action index into `+0x784` to begin a binding-capture session.
+- `Keyboard_CaptureBindingForSelectedAction` @ `0x0055ad20` — Keyboard-side binding capture; writes a mode-0 keyboard binding for the selected action and then clears the capture state.
+- `InputController_SetSensitivity` @ `0x0055ade0` / `InputController_GetSensitivity` @ `0x0055adf0` — Accessors for the controller sensitivity field at `+0x134`.
+- `InputController_SetDeadzone` @ `0x0055adc0` / `InputController_GetDeadzone` @ `0x0055add0` — Accessors for the controller deadzone field at `+0x138`.
+- `InputController_SetSaturation` @ `0x0055ada0` / `InputController_GetSaturation` @ `0x0055adb0` — Accessors for the controller saturation field at `+0x13c`.
+- `GameController_CancelBindingCapture` @ `0x0055e6f0` — Cancels the active binding-capture session by resetting the selected-action field at `+0x784` to `-1`.
+- `GameController_CaptureBindingForSelectedAction` @ `0x0055e700` — Captures a new keyboard or DirectInput binding for the currently selected action.
+- `Keyboard_Keyboard` @ `0x0055a710` — Keyboard controller constructor; installs the keyboard vtable and default controller metadata after the shared field init routine.
+- `Keyboard_InstallHook` @ `0x0055a7d0` — Installs a thread-local `WH_KEYBOARD` hook, clears the keyboard state tables, captures the current keyboard layout, and marks the keyboard device as active.
+- `Keyboard_HookProc` @ `0x0055aad0` — `WH_KEYBOARD` callback; updates key-down state, press counters, and forwards translated text input into the virtual keyboard queue when text input is enabled.
+- `Keyboard_IsHookInstalled` @ `0x0055ae10` — Returns whether the keyboard controller is currently active via field `+0x130`.
+- `GetKeyboardKeyState` @ `0x0055a9c0` — Action-to-key lookup helper: reads the mapped virtual-key code from `Keyboard+0x648` and returns the current high-bit pressed state from `g_keyboardKeyDownState`.
+- `GetKeyboardKeyState2` @ `0x0055a9f0` — Action-to-key press-count lookup helper: returns the per-key counter from `g_keyboardKeyPressCount`.
+- `GameController_GetActionPressCount` @ `0x0055d600` — Per-action trigger/press-count helper; keyboard mode reads `g_keyboardKeyPressCount`, latched analog mode reads `+0x8d4`, and DirectInput mode detects snapshot edges.
+- `GameController_IsActionPressed` @ `0x0055d530` — Digital action state helper; combines keyboard VK state, a latched per-action state byte, or DirectInput state bytes depending on the binding mode at `+0x64c`.
+- `GameController_ReadBindingValue` @ `0x0055ea50` — Raw binding-value helper; mode `0` reads keyboard state, mode `1` computes a signed digital axis from two stored shorts, and mode `2` reads a signed byte from the active DirectInput state buffer.
+- `GameController_ReadAccelerateBrakeSecondaryScaledBinding` @ `0x0055d7e0` — Reads the secondary half of the `Accelerate/Brake` combined-axis block at `+0x6e8..+0x702`.
+- `GameController_ReadAccelerateBrakePrimaryScaledBinding` @ `0x0055d880` — Reads the primary half of the `Accelerate/Brake` combined-axis block at `+0x6e8..+0x702`.
+- `GameController_ReadSteerCombinedScaledBindings` @ `0x0055d920` — Combines one or two scaled steering bindings under mode flags at `+0x70c` and `+0x71c`; uses the controller saturation/response factor at `+0x13c`.
+- `GameController_GetActionPressCountIncludingAlias` @ `0x0055d6e0` — Returns the OR-combined action press count for the requested action plus any linked alias action stored in the per-action alias tables at `+0x78c`.
+- `GameController_IsActionPressedIncludingAlias` @ `0x0055d760` — Returns the OR-combined pressed state for the requested action plus any linked alias action stored in the per-action alias tables at `+0x78c`.
+- `GameController_ReadCombinedAxisPreviewValue` @ `0x0055daf0` — UI/helper path that reads one of the combined-axis preview values for `Steer` / `Accelerate` / `Brake` and reports whether the chosen half is currently using scaled mode `1`.
+- `GameController_SetForceFeedbackGain` @ `0x0055dc10` — Applies a clamped `0..100` force-feedback gain to the active DirectInput device via property id `7` (`DIPROP_FFGAIN`).
+- `GameController_SetAutoCenterEnabled` @ `0x0055dc40` — Updates the active DirectInput device auto-center property and caches the enable flag in the manager bytes near `+0x2682`.
+- `GameController_RequestSpringForceFeedback` @ `0x0055dc70` — High-level wrapper around `InputDeviceManager_RequestEffectSlot0`; gated by `+0x8bc`.
+- `GameController_StopSpringForceFeedback` @ `0x0055dca0` — High-level stop/release wrapper for the spring effect path.
+- `GameController_RequestPeriodicForceFeedbackByAngle` @ `0x0055dcd0` — Uses the manager sine table at `+0x4a50` to scale a periodic request before dispatch.
+- `GameController_RequestDamperForceFeedback` @ `0x0055dd20` — High-level wrapper around `InputDeviceManager_RequestEffectSlot1Directional`.
+- `GameController_DeferAndStopActiveForceFeedback` @ `0x0055dd50` — Stops active effects, sets deferred replay flags at `+0x4a3c..+0x4a44`, and marks the replay latch at `+0x2220`.
+- `GameController_RequestTimedPulseForceFeedback` @ `0x0055dd70` — High-level wrapper around `InputDeviceManager_RequestEffectSlot1TimedStrength`.
+- `GameController_RequestTypedForceFeedback` @ `0x0055dda0` — High-level typed force-feedback dispatcher over the slot 1/2/3 request helpers.
+- `GameController_ReplayDeferredForceFeedback` @ `0x0055dfb0` — Re-enters the manager replay/maintenance dispatcher after a deferred stop.
+- `GameController_StopTypedForceFeedback` @ `0x0055dfd0` — Stops the typed periodic effect path when the active slot is playing.
+- `GameController_ReplayDeferredForceFeedbackSlot2` @ `0x0055e020` — Requests replay of deferred slot-2 effects through the manager replay path.
+- `GameController_ReplayDeferredForceFeedbackAll` @ `0x0055e060` — Replays the slot 3, slot 1, and slot 2 deferred force-feedback requests in order.
+- `GameController_StopTypedForceFeedbackSlot0` @ `0x0055e120` — Stops the slot-0 typed force-feedback path when active.
+- `GameController_GetControllerTypeId` @ `0x0055e160` — Returns the cached controller-type byte from the manager product/type block at `+0x2220`.
+- `GameController_IsMicrosoftSideWinderForce` @ `0x0055e180` — Returns the constructor-detected SideWinder Force flag at `+0x8e8`.
+- `GameController_BeginBindingCapture` @ `0x0055e6a0` — Polls the current DirectInput state, snapshots the `0x110`-byte state buffer into `+0x7a8`, stores the selected action into `+0x784`, and clears the analog-capture latch at `+0x8b8`.
+- `VirtualKeyboard_ProcessKeyQueueForReal` @ `0x0052be00` — Consumes the pending text-input ring buffer and applies Backspace/Enter/Escape/arrow-key behavior before dispatching characters into the active virtual keyboard widget.
+- `VirtualKeyboard_DeletingDestructor` @ `0x0052b8a0` — Destructor wrapper that calls the real virtual-keyboard destructor and conditionally frees the object.
+- `VirtualKeyboard_Destruct` @ `0x0052b8c0` — Tears down the virtual-keyboard state, resets global controller-related pointers, clears widget-owned string buffers, and hands off to the base UI destructor.
+- `VirtualKeyboard_OnChildAttached` @ `0x0052b950` — Tracks a child widget of type `6` in the cached pointer at `+0x550`.
+- `VirtualKeyboard_OnChildDetached` @ `0x0052b970` — Clears the cached child-widget pointer at `+0x550` when that child is removed.
+- `VirtualKeyboard_CanProcessInput` @ `0x0052bda0` — Gate used before processing queued key input; may call `FUN_0052c080` when `+0x518 == 0`.
+- `VirtualKeyboard_AlwaysAcceptsCommand` @ `0x0052bdc0` — Trivial virtual returning `1`.
+- `VirtualKeyboard_HandleWidgetCommand` @ `0x0052bdd0` — Passes a widget command through the `0x53c380` / `0x52c890` / `0x53c460` chain.
+
+### Key globals / strings
+
+- `g_keyboardKeyDownState` @ `0x008d7e60` — 256-byte per-VK down/high-bit table maintained by `Keyboard_HookProc`.
+- `g_keyboardKeyPressCount` @ `0x008d7d60` — 256-byte per-VK press-count table incremented on key-down transitions.
+- `g_keyboardLayoutHandle` @ `0x008d7c44` — Cached result of `GetKeyboardLayout(0)` captured when the hook is installed.
+- `KeyboardController::Unable to hook keyboard` @ `0x0067b8f4`
+- `dinput8.dll` — loaded by `LoadDInputLibrary`
+- `DirectInput8Create` — resolved by `LoadDInputLibrary`
+
+### Practical implications
+
+- Keyboard input is not polled from a window-message pump. The game installs a thread-local Windows keyboard hook and keeps its own 256-byte state tables.
+- Text input for menus/UI is layered on top of the same hook path, not a separate IME-only path. `Keyboard_HookProc` translates keys with `ToUnicode` and `ToAscii` and pushes them into a controller-owned ring buffer consumed by `VirtualKeyboard_ProcessKeyQueueForReal`.
+- The shared action-binding layer already abstracts over keyboard and DirectInput sources. Porting should preserve that binding-mode split instead of hardcoding keyboard-only action reads.
+- The controller bootstrap path is split cleanly enough to continue: `FUN_0054ff10` creates high-level controller objects, while `InputDeviceManager_Initialize` owns DirectInput bring-up and low-level device discovery/state tables.
+- The DirectInput bring-up is now confirmed as a staged path:
+  - reset enumeration globals
+  - enumerate/create up to two attached controller devices
+  - configure each device with data format/property/cooperative-level
+  - only then enter the deeper polling/open path
+- The low-level input manager also owns a four-slot controller force-feedback/effect layer. Input is not only keyboard state plus button polling.
+- A minimal source-side landing for this recovered bootstrap exists in:
+  - `reference/FlatOut-2-decomp-main/source/decomp2/decomp2/InputSystem.h`
+  - `reference/FlatOut-2-decomp-main/source/decomp2/decomp2/InputSystem.cpp`
 
 ---
 
@@ -449,3 +700,90 @@ These keys are present in `.rdata` and appear in the large environment setup fun
   - the two filter `%s` names (the ones that should become `default_add`/`default_sub` for Arena day).
 - Resolve the exact renderer-state meaning behind `this+0x44` mode values (`0`, `1`, `2`) at the D3D/state-template level, if we ever need byte-for-byte state fidelity rather than pass-family fidelity.
 - Map the exact content role of RT `0` vs RT `1` immediately after `post_combine2` and optional `post_copy`, so the WebGL port can mirror the original ping-pong without inference.
+
+---
+
+## Renderer / Lighting / Image Composition
+
+Source of truth notes:
+- `ghidra_findings/RENDERER_LIGHTING_FINDINGS_2026-04-03.md:1`
+
+### Core anchors
+
+- `Render` @ `0x0045f3f0` — Main per-frame render dispatcher. Handles frame begin/end work, routes to `RenderMenu` or `RenderRace`, and runs screen present/overlay helpers around the active session renderer.
+- `RenderRace` @ `0x00479200` — Main race visual render path. Computes per-view FOV-like scale values, configures screen state, renders local-player race views, and finishes through HUD/output helpers.
+- `RaceScene_RenderViewsAndPostProcess` @ `0x004c9dc0` — Main race-scene visual pass driver for all active views. Updates per-view camera/frustum/FOV data, applies environment parameters, renders sky, executes ordered scene pass families, and finishes through the screen post-process/output path.
+- `MenuScene_InitializeEnvironmentAndCamera` @ `0x004ab9f0` — Menu-scene visual bootstrap. Allocates the shared `BVisual_Environment`, camera, and large render helpers, stores the environment into `App_008da71c.pEnvironment_0x3c`, and loads initial visual/menu content.
+- `Screen_Screen` @ `0x005a5530` — Constructor for the main screen/renderer wrapper; installs vtable `0x0067d560`, initializes renderer-owned lists/state, and clears the post-process group pointer at `this+0x488`.
+- `CreatePostProcessShaders` @ `0x005ad780` — Lazy owner for the post-process shader group; allocates `0x210` bytes and calls `PostProcessShader_PostProcessShader`.
+- `Environment_Environment` @ `0x00575840` — Constructor for the shared `BVisual_Environment`; initializes `0x1eb0` bytes of atmosphere, flare, bloom, filter, and sky-related state with default values consumed later by race rendering.
+- `Screen_SetTextureSamplingProfile` @ `0x005aa7a0` — Applies one of several texture-sampling profiles to the D3D device. Used by race rendering, sky rendering, and fullscreen post-process passes to switch sampler/address/filter modes.
+- `Screen_GetTextureSamplingProfile` @ `0x005aa730` — Returns one cached screen-managed sampler/filter profile value by id.
+- `Screen_InitializeD3DRenderState` @ `0x005a6320` — Initializes/restores core D3D device state after create/reset and reapplies screen-managed sampler profiles 5/6/7.
+- `Screen_CreateD3DDevice` @ `0x005a6a50` — Creates the main D3D device for the screen wrapper and immediately calls `Screen_InitializeD3DRenderState` on success.
+- `CreateD3DWindow` @ `0x005a59d0` — Creates the render window and D3D device, initializes the default world/view/projection globals, and drives several hot `Screen` helpers. Strong call-shape inferences: slot `12` applies a per-view viewport rectangle, slot `15` clears scene buffers, slot `37` seeds fullscreen post/tone constants, and slot `40` stores the initial screen scalar (`1.1f`).
+- `Screen_BeginScene` @ `0x005aac20` — Per-frame screen begin-scene helper; calls the D3D device begin-scene path, resets frame-local renderer globals, stores the caller-provided frame/time value, and marks projection/view state dirty.
+- `Screen_CaptureViewportState` @ `0x005aad40` — Captures viewport-like screen state from the D3D device into globals used by later scene/fullscreen helpers.
+- `Screen_UpdateProjectionMatrix` @ `0x005a7130` — Rebuilds and uploads the global projection matrix from active frustum/view parameters, then caches depth coefficients used elsewhere in the renderer.
+- `Screen_CaptureProjectionMatrixOncePerFrame` @ `0x005ab480` — Once-per-frame projection-matrix capture helper used during race rendering; reads the current device projection into `g_ProjectionMatrix_008e5f40`.
+- `Screen_CompileShader` @ `0x005ac250` — Screen-level shader compile/cache entry point. Loads shader source through BFS or loose-file fallback, calls `D3DXCreateEffect`, reuses cached `(family, filename)` shader pairs, and instantiates `Default`, `Dynamic`, `CustomColor`, `Skinned`, and `Water` shader subclasses.
+- `Shader_Shader` @ `0x005acbd0` — Base shader constructor. Captures effect handles for `Tex0..Tex3`, cubemap, `dFac`, and `vDiff`, derives capability flags, and creates the matching input declaration/stride pair from the effect's declared input stream.
+- `Screen_SetShadowVertexShaderConstants` @ `0x005aba00` — Uploads one four-float shadow constant vector to vertex shader constant register `22`.
+- `Shader_ApplyShadowConstants` @ `0x005ace80` — Rebuilds and reapplies the same shadow constant vector for one shader/material path, updating both the device register and the effect-side constant.
+- `WaterShader_WaterShader` @ `0x005b1740` — Water-material shader specialization. Checks `data/global/water/water.bed`; if it is missing, seeds the default global water tuning block.
+- `Environment_ApplyVisualParametersToScreen` @ `0x005920b0` — Pushes atmosphere/environment visual settings into the screen renderer: sun/ambient/specular colours and intensities, overbright cap, global add/sub colour-filter terms, luminance filter intensities, and per-view bloom parameters.
+- `Environment_RenderSky` @ `0x00592470` — Sky render path; updates linked flare/sky objects, applies sky-dome offset-related values, switches screen sampling profiles, and issues the sky draw through screen vtable slot `+44`.
+- `Screen_ExecutePostProcessChain` @ `0x005aa390` — Full-frame post-process execution: optional colour-filter LUT stage, bloom extraction/downsample, subtractive combine, optional copy, radial-blur loop, final `post_mask` composite, and optional debug/show output.
+
+### Practical implications
+
+- The visual frame path is now coherent at a subsystem level:
+  - `Render` -> `RenderRace`
+  - `RaceScene_RenderViewsAndPostProcess`
+  - race view/screen setup
+  - environment parameter application
+  - sky draw
+  - fullscreen post-process chain
+- Screen state management is centralized through the `Screen` wrapper and its vtable, not spread as raw D3D calls everywhere.
+- The `Screen` vtable now has a partially confirmed slot map:
+  - slot `7` = `Screen_DestroyWindow`
+  - slot `9` = `Screen_GetAspectRatio`
+  - slot `10` = `Screen_SetAspectRatio`
+  - slot `12` = viewport-rectangle apply helper
+  - slot `15` = scene-buffer clear helper
+  - slot `16` = `Screen_BeginScene`
+  - slot `17` = `Screen_EndScene`
+  - slot `19` = `Screen_CaptureProjectionMatrixOncePerFrame`
+  - slot `20` = `Screen_CaptureViewportState`
+  - slot `25` = `Screen_GetTextureSizeFromQuality`
+  - slot `26` = `Screen_SetTextureSamplingProfile`
+  - slot `37` = post/tone constant setup helper
+  - slot `40` = screen scalar setup helper
+  - slot `44` = `Screen_UpdateProjectionMatrix`
+  - slot `65` = texture-load helper for `radialblur.tga`
+  - slot `72` = render-target/resource creation helper used by the post-process working surfaces
+  - slot `75` = format-selection helper feeding the post-process resource creation path
+  - slot `84` = `Screen_ExecutePostProcessChain`
+- The sampler-policy layer under `Screen_SetTextureSamplingProfile` is now concrete D3D behavior rather than a loose “profile” guess:
+  - state `5` = `D3DSAMP_MAGFILTER`
+  - state `6` = `D3DSAMP_MINFILTER`
+  - state `7` = `D3DSAMP_MIPFILTER`
+  - state `10` = `D3DSAMP_MAXANISOTROPY`
+  - filter value `1` = point
+  - filter value `2` = linear
+  - filter value `3` = anisotropic
+- The environment object is the bridge between “lighting/atmosphere data” and actual renderer knobs:
+  - sun direction and colour
+  - ambient/specular terms
+  - bloom thresholds/scales/colour
+  - global add/sub remap inputs
+- That environment object is now anchored to a real owner path:
+  - constructed by `Environment_Environment`
+  - allocated/stored by `MenuScene_InitializeEnvironmentAndCamera`
+  - consumed later by `RaceScene_RenderViewsAndPostProcess`
+- Post-process is only one layer of the subsystem. The broader renderer path now also includes projection ownership, sampler-profile switching, and sky rendering.
+- The shader layer is no longer just postprocess:
+  - the renderer owns a shader compile/cache path
+  - the base shader constructor derives input-layout state from the effect signature
+  - the water path can run from `water.bed` content or from hardcoded defaults
+  - shadow rendering uses a dedicated constant upload path through register `22`
