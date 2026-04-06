@@ -61,6 +61,29 @@ Current web-side correction:
 - that corrected position is then pushed into the environment state,
   environment controller, flare position, and live HUD sun debug controls
 
+## Dynamic Sun Occlusion Note
+
+Confirmed from shader/source review:
+
+- `pro_car_body.sha` does not perform its own geometry-aware "under a roof"
+  visibility test
+- dynamic body lighting there is built from SH ambient, diffuse lookup,
+  reflection/specular, and fresnel
+- separate shadow/sunmap infrastructure exists in the original renderer:
+  `pro_rendertarget_shadow.sha`, `pro_shadow_dynamic.sha`, shadow constant
+  upload, and sunmap shader families
+- that means "car darkens under overhead cover" is most likely coming from the
+  separate shadow/sunmap path, not from the car-body shader alone
+
+Current web-side approximation:
+
+- raycast from the car toward the corrected sun position using the existing
+  track floor sampler
+- when static track geometry blocks that path, reduce direct sun/specular on
+  vehicle shader families while keeping ambient intact
+- this is a practical stopgap for missing dynamic shadow/sunmap consumption,
+  not a claim of exact native parity yet
+
 ## Terrain Port Note
 
 The remaining arena ground artifact is still in active investigation.

@@ -54,6 +54,26 @@ export function prepareMaterials(root, getTexture, environmentState = null) {
   });
 }
 
+export function setVehicleSunVisibility(root, visibility) {
+  const clampedVisibility = THREE.MathUtils.clamp(visibility, 0, 1);
+
+  root?.traverse?.((obj) => {
+    if (!obj.isMesh) {
+      return;
+    }
+
+    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+
+    materials.forEach((material) => {
+      if (!material?.uniforms?.uSunVisibility) {
+        return;
+      }
+
+      material.uniforms.uSunVisibility.value = clampedVisibility;
+    });
+  });
+}
+
 function createMaterialForName(
   name,
   getTexture,
@@ -213,6 +233,7 @@ function createDynamicVehicleMaterial({
         value: environmentState?.sunColor ?? DEFAULT_SUN_COLOR.clone(),
       },
       uSunIntensity: { value: environmentState?.sunIntensity ?? 1.25 },
+      uSunVisibility: { value: 1.0 },
       uAmbientColor: {
         value: environmentState?.ambientColor ?? DEFAULT_AMBIENT_COLOR.clone(),
       },
@@ -263,6 +284,7 @@ function createCarBodyMaterial({
         value: environmentState?.sunColor ?? DEFAULT_SUN_COLOR.clone(),
       },
       uSunIntensity: { value: environmentState?.sunIntensity ?? 1.25 },
+      uSunVisibility: { value: 1.0 },
       uAmbientColor: {
         value: environmentState?.ambientColor ?? DEFAULT_AMBIENT_COLOR.clone(),
       },
@@ -345,6 +367,7 @@ function createCarLightMaterial({
         value: environmentState?.sunColor ?? DEFAULT_SUN_COLOR.clone(),
       },
       uSunIntensity: { value: environmentState?.sunIntensity ?? 1.25 },
+      uSunVisibility: { value: 1.0 },
       uAmbientColor: {
         value: environmentState?.ambientColor ?? DEFAULT_AMBIENT_COLOR.clone(),
       },
@@ -429,6 +452,7 @@ function buildDynamicVehicleFragmentShader(
     uniform vec3 uSunDirection;
     uniform vec3 uSunColor;
     uniform float uSunIntensity;
+    uniform float uSunVisibility;
     uniform vec3 uAmbientColor;
     uniform float uAmbientIntensity;
     uniform vec3 uSpecularColor;
@@ -449,14 +473,14 @@ function buildDynamicVehicleFragmentShader(
       vec3 l = normalize(uSunDirection);
       vec3 v = normalize(vViewDirection);
       float ndotl = max(dot(n, l), 0.0);
-      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * ndotl);
+      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * uSunVisibility * ndotl);
       shaded.rgb *= lighting * 2.0;
       ${
         withSpecular
           ? `
       vec3 h = normalize(v + l);
       float spec = pow(max(dot(n, h), 0.0), uSpecularPower) * step(0.0, ndotl);
-      shaded.rgb += uSpecularColor * (uSpecularIntensity * spec);`
+      shaded.rgb += uSpecularColor * (uSpecularIntensity * uSunVisibility * spec);`
           : ""
       }
       shaded.rgb = min(shaded.rgb, vec3(uMaxOverBrighting));
@@ -472,6 +496,7 @@ function buildCarBodyFragmentShader(useVertexColors, preserveTextureAlpha) {
     uniform vec3 uSunDirection;
     uniform vec3 uSunColor;
     uniform float uSunIntensity;
+    uniform float uSunVisibility;
     uniform vec3 uAmbientColor;
     uniform float uAmbientIntensity;
     uniform vec3 uSpecularColor;
@@ -500,7 +525,7 @@ function buildCarBodyFragmentShader(useVertexColors, preserveTextureAlpha) {
       vec3 l = normalize(uSunDirection);
       vec3 v = normalize(vViewDirection);
       float ndotl = max(dot(n, l), 0.0);
-      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * ndotl);
+      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * uSunVisibility * ndotl);
       vec3 litBase = clamp(shaded.rgb * lighting * 2.0, 0.0, 1.0);
       vec3 h = normalize(v + l);
       float spec = pow(max(dot(n, h), 0.0), 16.0) * step(0.0, ndotl);
@@ -512,7 +537,7 @@ function buildCarBodyFragmentShader(useVertexColors, preserveTextureAlpha) {
         clamp(vReflectDirection.y * 0.5 + 0.5, 0.0, 1.0)
       );
       vec3 reflected = skyReflect;
-      vec3 specular = uSpecularColor * (uSpecularIntensity * spec * glossMask);
+      vec3 specular = uSpecularColor * (uSpecularIntensity * uSunVisibility * spec * glossMask);
       float reflectionMix = clamp(glossMask * fresnel * 0.18, 0.0, 1.0);
       vec3 color = mix(litBase + specular, reflected, reflectionMix);
       color = mix(color, color * 0.82, damageBlend * 0.18);
@@ -563,6 +588,7 @@ function buildCarLightFragmentShader(useVertexColors, preserveTextureAlpha) {
     uniform vec3 uSunDirection;
     uniform vec3 uSunColor;
     uniform float uSunIntensity;
+    uniform float uSunVisibility;
     uniform vec3 uAmbientColor;
     uniform float uAmbientIntensity;
     uniform vec3 uGlowColor;
@@ -579,7 +605,7 @@ function buildCarLightFragmentShader(useVertexColors, preserveTextureAlpha) {
       vec3 n = normalize(vWorldNormal);
       vec3 l = normalize(uSunDirection);
       float ndotl = max(dot(n, l), 0.0);
-      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * ndotl);
+      vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * uSunVisibility * ndotl);
       vec3 color = shaded.rgb * lighting * 2.0;
       color += glowSample.rgb * uGlowColor;
       color = min(color, vec3(uMaxOverBrighting));

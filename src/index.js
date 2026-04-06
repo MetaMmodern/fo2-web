@@ -19,7 +19,11 @@ import {
   updateHudTelemetry,
 } from "./game/hud";
 import { createDrivingInput } from "./game/input";
-import { createTextureRegistry, prepareMaterials } from "./game/materials";
+import {
+  createTextureRegistry,
+  prepareMaterials,
+  setVehicleSunVisibility,
+} from "./game/materials";
 import { createDrivingSimulation } from "./game/physics";
 import { createColorFilterPass } from "./game/postprocessing";
 import {
@@ -80,6 +84,10 @@ const sceneState = {
   environmentController: null,
 };
 let transitionChain = Promise.resolve();
+const sunOcclusionOrigin = new THREE.Vector3();
+const sunOcclusionDirection = new THREE.Vector3();
+const sunWorldPosition = new THREE.Vector3();
+let smoothedVehicleSunVisibility = 1;
 
 if (typeof window !== "undefined") {
   window.__flatoutDebug = {
@@ -118,6 +126,7 @@ function animate() {
   sceneState.drivingSimulation?.update(deltaSeconds);
   sceneState.chaseCamera?.update(deltaSeconds);
   sceneState.environmentController?.update(camera);
+  updateVehicleSunOcclusion(deltaSeconds);
   updateHudTelemetry(hud, {
     speedKph: sceneState.drivingSimulation?.speedKph?.() ?? 0,
   });
@@ -130,6 +139,45 @@ function animate() {
     scene: sceneState.environmentController?.getOverlayScene?.(),
     camera: sceneState.environmentController?.getOverlayCamera?.(),
   });
+}
+
+function updateVehicleSunOcclusion(deltaSeconds) {
+  if (
+    !sceneState.carRoot ||
+    !sceneState.floorSampler ||
+    !sceneState.environmentState?.sunPosition
+  ) {
+    return;
+  }
+
+  sceneState.carRoot.updateWorldMatrix(true, false);
+  sceneState.carRoot.getWorldPosition(sunOcclusionOrigin);
+  sunOcclusionOrigin.y += 1.0;
+
+  sunWorldPosition.copy(sceneState.environmentState.sunPosition);
+  sunOcclusionDirection.copy(sunWorldPosition).sub(sunOcclusionOrigin);
+  const sunDistance = sunOcclusionDirection.length();
+
+  if (sunDistance <= 1e-4) {
+    return;
+  }
+
+  sunOcclusionDirection.divideScalar(sunDistance);
+
+  const hit = sceneState.floorSampler.raycast(sunOcclusionOrigin, sunOcclusionDirection, {
+    rayDistance: sunDistance,
+    minUpDot: -1,
+    maxUpDot: 1,
+  });
+  const targetVisibility = hit ? 0.18 : 1.0;
+  const followRate = targetVisibility < smoothedVehicleSunVisibility ? 10 : 4;
+  const blend = 1 - Math.exp(-followRate * deltaSeconds);
+  smoothedVehicleSunVisibility = THREE.MathUtils.lerp(
+    smoothedVehicleSunVisibility,
+    targetVisibility,
+    blend,
+  );
+  setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);
 }
 
 function applySelection(nextPartialSelection) {
@@ -204,6 +252,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     sceneState.floorSampler = loadedTrack.floorSampler;
     sceneState.startPoints = loadedTrack.startPoints;
     syncEnvironmentSunToTrack(sceneState.environmentState, sceneState.trackRoot);
+    smoothedVehicleSunVisibility = 1;
   }
 
   if (reloadCar) {
@@ -241,6 +290,8 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
 
     sceneState.carRoot = carRoot;
     sceneState.tireRoot = tireRoot;
+    smoothedVehicleSunVisibility = 1;
+    setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);
 
     if (sceneState.trackRoot) {
       placeVehicleOnTrack(
@@ -278,6 +329,8 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       input: drivingInput,
       trackFloorSampler: sceneState.floorSampler,
     });
+    smoothedVehicleSunVisibility = 1;
+    setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);
   }
 }
 
