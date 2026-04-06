@@ -17,6 +17,50 @@ User-reported and not yet resolved:
   mesh UVs; that can directly cause "wrong image on glass" and uneven/dull car
   body response
 
+## Vehicle Body Lighting Note
+
+Confirmed from `pro_car_body.sha`:
+
+- car body input format is `PosNormColorTex1`
+- vertex color is not used as a final RGB tint on the body
+- vertex color is forwarded into the secondary interpolator as the dirt/damage
+  blend input, while the final body RGB is built from base texture, SH ambient,
+  diffuse lookup, reflection, fresnel, and specular
+- therefore a web-side `baseColor * vertexColor` body path is structurally
+  wrong and can directly cause dull / unevenly dark body color
+
+Current web-side correction:
+
+- car body no longer multiplies its final RGB by mesh vertex color
+- current vertex color handling is reduced to a weak damage-darkening proxy
+  until the original secondary dirt/damage texture path is reconstructed more
+  faithfully
+
+## Sun Positioning Note
+
+Confirmed runtime mismatch:
+
+- extracted weather `SunPosition` values are authored in native track space
+- start points are explicitly converted into scene space with
+  `(x, y, z) -> (x, y, -z)` before use
+- the imported track is then shifted again by `alignTrackAtOrigin()`, which
+  subtracts the track bounds center on X/Z and the bounds minimum on Y
+- the web environment path had been using weather `SunPosition` directly,
+  without applying the same source-to-scene conversion and track alignment
+
+Consequence:
+
+- the sun marker / directional light can look incorrect relative to the
+  imported track and start grid even when the extracted weather values
+  themselves are correct
+
+Current web-side correction:
+
+- after track load and alignment, sun position is remapped to scene space as
+  `(x, y, -z) + trackRoot.position`
+- that corrected position is then pushed into the environment state,
+  environment controller, flare position, and live HUD sun debug controls
+
 ## Terrain Port Note
 
 The remaining arena ground artifact is still in active investigation.

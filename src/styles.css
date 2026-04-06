@@ -24,12 +24,14 @@ canvas {
   top: 16px;
   left: 16px;
   width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
   padding: 12px 14px;
   background: rgba(17, 17, 17, 0.78);
   color: #f3f3f3;
   border-radius: 10px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
   z-index: 10;
+  overflow-y: auto;
 }
 
 .hud-header {

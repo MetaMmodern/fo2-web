@@ -13,7 +13,11 @@ import {
 } from "./game/catalog";
 import { loadTrackEnvironment } from "./game/environment";
 import { createTrackEnvironmentState } from "./game/environmentState";
-import { createHud, syncHudSelection, updateHudTelemetry } from "./game/hud";
+import {
+  createHud,
+  syncHudSelection,
+  updateHudTelemetry,
+} from "./game/hud";
 import { createDrivingInput } from "./game/input";
 import { createTextureRegistry, prepareMaterials } from "./game/materials";
 import { createDrivingSimulation } from "./game/physics";
@@ -199,6 +203,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     sceneState.trackRoot = loadedTrack.trackRoot;
     sceneState.floorSampler = loadedTrack.floorSampler;
     sceneState.startPoints = loadedTrack.startPoints;
+    syncEnvironmentSunToTrack(sceneState.environmentState, sceneState.trackRoot);
   }
 
   if (reloadCar) {
@@ -274,6 +279,27 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       trackFloorSampler: sceneState.floorSampler,
     });
   }
+}
+
+function syncEnvironmentSunToTrack(environmentState, trackRoot) {
+  if (!environmentState?.sourceSunPosition || !trackRoot) {
+    return;
+  }
+
+  const sourceSun = environmentState.sourceSunPosition;
+  const alignedSceneSun = new THREE.Vector3(
+    sourceSun.x,
+    sourceSun.y,
+    -sourceSun.z,
+  ).add(trackRoot.position);
+
+  environmentState.sunPosition.copy(alignedSceneSun);
+  environmentState.sunDirection.copy(alignedSceneSun).normalize();
+  sceneState.environmentController?.setSunPosition(
+    alignedSceneSun.x,
+    alignedSceneSun.y,
+    alignedSceneSun.z,
+  );
 }
 
 function disposeHierarchy(root) {

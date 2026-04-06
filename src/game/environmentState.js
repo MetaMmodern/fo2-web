@@ -11,8 +11,9 @@ export function createTrackEnvironmentState(track, renderer = null) {
   const lightMap = track?.lightmap
     ? loadTrackLightMap(track.lightmap, maxAnisotropy)
     : null;
-  const sunPosition = weatherProfile?.sunPosition?.clone?.() ??
+  const sourceSunPosition = weatherProfile?.sunPosition?.clone?.() ??
     DEFAULT_SUN_POSITION.clone();
+  const sunPosition = sourceSunPosition.clone();
   const sunDirection = sunPosition.clone().normalize();
   const sunColor = vector4ToColor(weatherProfile?.sunColor, DEFAULT_SUN_COLOR);
   const ambientColor = vector4ToColor(
@@ -35,6 +36,7 @@ export function createTrackEnvironmentState(track, renderer = null) {
 
   return {
     weatherProfile,
+    sourceSunPosition,
     sunPosition,
     sunDirection,
     sunColor,

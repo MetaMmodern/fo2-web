@@ -259,6 +259,20 @@ function createEnvironmentController(state) {
     getValues() {
       return { ...state.values };
     },
+    setSunPosition(x, y, z) {
+      if (
+        !Number.isFinite(x) ||
+        !Number.isFinite(y) ||
+        !Number.isFinite(z)
+      ) {
+        return;
+      }
+
+      state.sunPosition.set(x, y, z);
+      state.sunDirection.copy(state.sunPosition).normalize();
+      state.flarePosition.copy(state.sunPosition);
+      state.sunLight?.position.copy(state.sunPosition);
+    },
     update(camera) {
       state.flareOverlay?.update(camera, state.flarePosition);
     },
