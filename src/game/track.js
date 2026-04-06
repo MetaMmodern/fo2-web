@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 const textureNameAliases = {
   colormap: "col",
 };
+const whiteTexture = createSolidColorTexture();
 const DOWN = new THREE.Vector3(0, -1, 0);
 const FORWARD = new THREE.Vector3();
 const raycastOrigin = new THREE.Vector3();
@@ -445,26 +446,28 @@ function createTrackMaterial(
   }
 
   if (materialInfo?.shaderId === 1) {
+    const usesSurrogateLightMap =
+      materialInfo.useColormap && Boolean(environmentState?.trackLightMap);
     return createTerrainMaterial({
       name: sourceMaterial.name,
-      colorMap:
-        (materialInfo.useColormap && environmentState?.trackLightMap) ||
-        diffuseTexture,
-      detailMap: detailTexture,
+      baseMap: detailTexture || diffuseTexture,
+      lightMap: usesSurrogateLightMap ? environmentState.trackLightMap : null,
       useVertexColors: usesVertexColors,
       brightnessScale: 1.0,
+      useSurrogateLightMap: usesSurrogateLightMap,
     });
   }
 
   if (materialInfo?.shaderId === 2) {
+    const usesSurrogateLightMap =
+      materialInfo.useColormap && Boolean(environmentState?.trackLightMap);
     return createTerrainSpecularMaterial({
       name: sourceMaterial.name,
-      colorMap:
-        (materialInfo.useColormap && environmentState?.trackLightMap) ||
-        diffuseTexture,
-      detailMap: detailTexture,
+      baseMap: detailTexture || diffuseTexture,
+      lightMap: usesSurrogateLightMap ? environmentState.trackLightMap : null,
       useVertexColors: usesVertexColors,
       environmentState,
+      useSurrogateLightMap: usesSurrogateLightMap,
     });
   }
 
@@ -502,17 +505,11 @@ function createTrackMaterial(
   });
 }
 
-function createStaticTrackMaterial({
-  name,
-  map,
-  useVertexColors,
-  brightnessScale,
-}) {
+function createStaticTrackMaterial({ name, map, useVertexColors }) {
   const material = createTrackShaderMaterial({
     name,
     uniforms: {
       uMap: { value: map },
-      uBrightnessScale: { value: brightnessScale },
     },
     useVertexColors,
     vertexShader: buildStaticTrackVertexShader(useVertexColors),
@@ -524,40 +521,41 @@ function createStaticTrackMaterial({
 
 function createTerrainMaterial({
   name,
-  colorMap,
-  detailMap,
+  baseMap,
+  lightMap,
   useVertexColors,
   brightnessScale,
+  useSurrogateLightMap = false,
 }) {
   const material = createTrackShaderMaterial({
     name,
     uniforms: {
-      uColorMap: { value: colorMap },
-      uDetailMap: { value: detailMap },
-      uHasDetailMap: { value: detailMap ? 1 : 0 },
+      uBaseMap: { value: baseMap },
+      uLightMap: { value: lightMap || whiteTexture },
       uBrightnessScale: { value: brightnessScale },
+      uUseSurrogateLightMap: { value: useSurrogateLightMap ? 1 : 0 },
     },
     useVertexColors,
     vertexShader: buildTerrainVertexShader(useVertexColors),
     fragmentShader: buildTerrainFragmentShader(useVertexColors, false),
   });
-  material.userData.textureRefs = [colorMap, detailMap].filter(Boolean);
+  material.userData.textureRefs = [baseMap, lightMap].filter(Boolean);
   return material;
 }
 
 function createTerrainSpecularMaterial({
   name,
-  colorMap,
-  detailMap,
+  baseMap,
+  lightMap,
   useVertexColors,
   environmentState,
+  useSurrogateLightMap = false,
 }) {
   const material = createTrackShaderMaterial({
     name,
     uniforms: {
-      uColorMap: { value: colorMap },
-      uDetailMap: { value: detailMap },
-      uHasDetailMap: { value: detailMap ? 1 : 0 },
+      uBaseMap: { value: baseMap },
+      uLightMap: { value: lightMap || whiteTexture },
       uSunDirection: {
         value:
           environmentState?.sunDirection ?? new THREE.Vector3(0.3, 0.8, -0.5),
@@ -572,12 +570,13 @@ function createTerrainSpecularMaterial({
         value: environmentState?.maxOverBrighting ?? 1.79,
       },
       uBrightnessScale: { value: 1.0 },
+      uUseSurrogateLightMap: { value: useSurrogateLightMap ? 1 : 0 },
     },
     useVertexColors,
     vertexShader: buildTerrainVertexShader(useVertexColors, true),
     fragmentShader: buildTerrainFragmentShader(useVertexColors, true),
   });
-  material.userData.textureRefs = [colorMap, detailMap].filter(Boolean);
+  material.userData.textureRefs = [baseMap, lightMap].filter(Boolean);
   return material;
 }
 
@@ -669,14 +668,13 @@ function buildStaticTrackVertexShader(useVertexColors) {
 function buildStaticTrackFragmentShader(useVertexColors) {
   return `
     uniform sampler2D uMap;
-    uniform float uBrightnessScale;
     uniform float uAlphaTest;
     varying vec2 vUv;
     varying vec4 vColor;
     void main() {
       vec4 texel = texture2D(uMap, vUv);
       vec4 shaded = texel * ${useVertexColors ? "vColor" : "vec4(1.0)"};
-      shaded.rgb = clamp(shaded.rgb * uBrightnessScale, 0.0, 1.0);
+      shaded.rgb = clamp(shaded.rgb * 2.0, 0.0, 1.0);
       if (shaded.a <= uAlphaTest) discard;
       gl_FragColor = shaded;
     }
@@ -706,24 +704,40 @@ function buildTerrainVertexShader(useVertexColors, withSpecular = false) {
 
 function buildTerrainFragmentShader(useVertexColors, withSpecular) {
   return `
-    uniform sampler2D uColorMap;
-    uniform sampler2D uDetailMap;
-    uniform int uHasDetailMap;
+    uniform sampler2D uBaseMap;
+    uniform sampler2D uLightMap;
     uniform vec3 uSunDirection;
     uniform vec3 uSpecularColor;
     uniform float uSpecularIntensity;
     uniform float uMaxOverBrighting;
     uniform float uBrightnessScale;
+    uniform int uUseSurrogateLightMap;
     uniform float uAlphaTest;
     varying vec2 vUv;
     varying vec2 vUv2;
     varying vec4 vColor;
     varying vec3 vWorldNormal;
     varying vec3 vWorldPosition;
+
+    vec3 linearToSrgbFast(vec3 color) {
+      return pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
+    }
+
+    vec3 srgbToLinearFast(vec3 color) {
+      return pow(max(color, vec3(0.0)), vec3(2.2));
+    }
+
     void main() {
-      vec4 colorSample = texture2D(uColorMap, vUv2);
-      vec4 detailSample = uHasDetailMap == 1 ? texture2D(uDetailMap, vUv) : vec4(1.0);
-      vec4 shaded = colorSample * detailSample;
+      vec4 baseSample = texture2D(uBaseMap, vUv2);
+      vec4 lightSample = texture2D(uLightMap, vUv);
+      vec3 legacyTextureMul = srgbToLinearFast(
+        linearToSrgbFast(baseSample.rgb) * linearToSrgbFast(lightSample.rgb)
+      );
+      vec3 combinedRgb = uUseSurrogateLightMap == 1
+        ? baseSample.rgb * lightSample.rgb
+        : legacyTextureMul;
+      vec4 shaded = vec4(combinedRgb, 1.0);
+      float specMask = baseSample.a * (uUseSurrogateLightMap == 1 ? 1.0 : lightSample.a);
       shaded *= ${useVertexColors ? "vColor" : "vec4(1.0)"};
       shaded.rgb *= max(uBrightnessScale, 1.0);
       ${
@@ -735,14 +749,28 @@ function buildTerrainFragmentShader(useVertexColors, withSpecular) {
       vec3 h = normalize(v + l);
       float ndotl = max(dot(n, l), 0.0);
       float spec = pow(max(dot(n, h), 0.0), 16.0) * step(0.0, ndotl);
-      shaded.rgb += uSpecularColor * (uSpecularIntensity * spec);
+      shaded.rgb += uSpecularColor * (uSpecularIntensity * spec * specMask);
       shaded.rgb = min(shaded.rgb, vec3(uMaxOverBrighting));`
           : ""
       }
-      if (shaded.a <= uAlphaTest) discard;
+      shaded.a = 1.0;
       gl_FragColor = shaded;
     }
   `;
+}
+
+function createSolidColorTexture() {
+  const texture = new THREE.DataTexture(
+    new Uint8Array([255, 255, 255, 255]),
+    1,
+    1,
+    THREE.RGBAFormat,
+  );
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function buildDynamicTrackVertexShader(useVertexColors, withSpecular) {

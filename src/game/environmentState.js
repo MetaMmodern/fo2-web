@@ -84,7 +84,7 @@ function loadTrackLightMap(lightMapUrl, maxAnisotropy) {
   texture.flipY = false;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.colorSpace = THREE.NoColorSpace;
   texture.anisotropy = maxAnisotropy;
   return texture;
 }

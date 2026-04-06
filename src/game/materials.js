@@ -304,10 +304,10 @@ function createCarWindowMaterial({
         value:
           environmentState?.specularColor ?? DEFAULT_SPECULAR_COLOR.clone(),
       },
-      uColorMul: { value: new THREE.Color(1, 1, 1) },
+      uWindowTint: { value: new THREE.Color(0x5f6f7f) },
       uFresnelBias: { value: 0.25 },
       uFresnelScale: { value: 0.5 },
-      uWindowBrightness: { value: 0.5 },
+      uWindowBrightness: { value: 0.72 },
     },
     transparent: true,
     side: THREE.DoubleSide,
@@ -504,7 +504,7 @@ function buildCarWindowFragmentShader() {
     uniform sampler2D uBaseMap;
     uniform sampler2D uReflectMap;
     uniform vec3 uSpecularColor;
-    uniform vec3 uColorMul;
+    uniform vec3 uWindowTint;
     uniform float uFresnelBias;
     uniform float uFresnelScale;
     uniform float uWindowBrightness;
@@ -514,14 +514,15 @@ function buildCarWindowFragmentShader() {
     varying vec3 vViewDirection;
     varying vec3 vReflectDirection;
     void main() {
-      vec4 baseSample = texture2D(uBaseMap, vUv) * vec4(uColorMul, 1.0);
+      vec4 baseSample = texture2D(uBaseMap, vUv);
       vec4 reflectSample = texture2D(uReflectMap, vUv);
       vec3 n = normalize(vWorldNormal);
       vec3 v = normalize(vViewDirection);
       float fresnel = uFresnelBias + uFresnelScale * pow(1.0 - abs(dot(v, n)), 5.0);
       vec3 reflected = reflectSample.rgb * uSpecularColor;
-      vec3 color = reflected * fresnel;
-      float alpha = clamp((1.0 - fresnel) * uWindowBrightness + baseSample.a * 0.2, 0.0, 1.0);
+      vec3 baseTint = mix(uWindowTint, baseSample.rgb * uWindowTint, 0.15);
+      vec3 color = mix(baseTint, reflected, clamp(fresnel, 0.0, 1.0));
+      float alpha = clamp(uWindowBrightness + fresnel * 0.18, 0.0, 0.92);
       if (alpha <= uAlphaTest) discard;
       gl_FragColor = vec4(color, alpha);
     }

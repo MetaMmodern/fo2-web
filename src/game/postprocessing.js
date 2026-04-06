@@ -6,7 +6,7 @@ const FO2_BLOOM_INTENSITY_MAX = 4.0;
 const FO2_BLOOM_INTENSITY_DIV4 = 0.25;
 const FO2_POST_BUFFER_SIZE = 256;
 const FO2_INTERMEDIATE_COUNT = 7;
-const FO2_COMBINE_SUBTRACT = -0.5;
+const FO2_COMBINE_ADD = 1.0;
 
 export function createColorFilterPass(renderer, assetUrls) {
   const initialSize = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -240,7 +240,7 @@ export function createColorFilterPass(renderer, assetUrls) {
       tBase: { value: postTargets[0].texture },
       tBloom: { value: postTargets[1].texture },
       baseScale: { value: bloomState.combineBaseScale },
-      bloomScale: { value: FO2_COMBINE_SUBTRACT },
+      bloomScale: { value: FO2_COMBINE_ADD },
     },
     vertexShader: FULLSCREEN_VERTEX_SHADER,
     fragmentShader: `
@@ -306,7 +306,7 @@ export function createColorFilterPass(renderer, assetUrls) {
       varying vec2 vUv;
 
       vec3 screenToLinear(in vec3 color) {
-        return sRGBTransferEOTF(vec4(clamp(color, 0.0, 1.0), 1.0)).rgb;
+        return sRGBTransferEOTF(vec4(max(color, vec3(0.0)), 1.0)).rgb;
       }
 
       void main() {
@@ -316,7 +316,7 @@ export function createColorFilterPass(renderer, assetUrls) {
         vec3 bloomContribution = bloomSample.rgb * finalBloomStrength;
         bloomContribution += maskedSample.rgb * maskedBloomStrength;
         vec3 finalScreen = clamp(filteredSample.rgb + bloomContribution, 0.0, max(1.0, maxOverBrighting));
-        gl_FragColor = vec4(screenToLinear(clamp(finalScreen, 0.0, 1.0)), filteredSample.a);
+        gl_FragColor = vec4(screenToLinear(finalScreen), filteredSample.a);
         #include <colorspace_fragment>
       }
     `,
