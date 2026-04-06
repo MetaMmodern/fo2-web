@@ -452,6 +452,7 @@ function createTrackMaterial(
       name: sourceMaterial.name,
       baseMap: detailTexture || diffuseTexture,
       lightMap: usesSurrogateLightMap ? environmentState.trackLightMap : null,
+      lightMapGainRef: environmentState?.trackLightMapGainRef,
       useVertexColors: usesVertexColors,
       brightnessScale: 1.0,
       useSurrogateLightMap: usesSurrogateLightMap,
@@ -465,6 +466,7 @@ function createTrackMaterial(
       name: sourceMaterial.name,
       baseMap: detailTexture || diffuseTexture,
       lightMap: usesSurrogateLightMap ? environmentState.trackLightMap : null,
+      lightMapGainRef: environmentState?.trackLightMapGainRef,
       useVertexColors: usesVertexColors,
       environmentState,
       useSurrogateLightMap: usesSurrogateLightMap,
@@ -523,6 +525,7 @@ function createTerrainMaterial({
   name,
   baseMap,
   lightMap,
+  lightMapGainRef,
   useVertexColors,
   brightnessScale,
   useSurrogateLightMap = false,
@@ -532,6 +535,7 @@ function createTerrainMaterial({
     uniforms: {
       uBaseMap: { value: baseMap },
       uLightMap: { value: lightMap || whiteTexture },
+      uLightMapGain: lightMapGainRef ?? { value: 1 },
       uBrightnessScale: { value: brightnessScale },
       uUseSurrogateLightMap: { value: useSurrogateLightMap ? 1 : 0 },
     },
@@ -547,6 +551,7 @@ function createTerrainSpecularMaterial({
   name,
   baseMap,
   lightMap,
+  lightMapGainRef,
   useVertexColors,
   environmentState,
   useSurrogateLightMap = false,
@@ -556,6 +561,7 @@ function createTerrainSpecularMaterial({
     uniforms: {
       uBaseMap: { value: baseMap },
       uLightMap: { value: lightMap || whiteTexture },
+      uLightMapGain: lightMapGainRef ?? { value: 1 },
       uSunDirection: {
         value:
           environmentState?.sunDirection ?? new THREE.Vector3(0.3, 0.8, -0.5),
@@ -711,6 +717,7 @@ function buildTerrainFragmentShader(useVertexColors, withSpecular) {
     uniform float uSpecularIntensity;
     uniform float uMaxOverBrighting;
     uniform float uBrightnessScale;
+    uniform float uLightMapGain;
     uniform int uUseSurrogateLightMap;
     uniform float uAlphaTest;
     varying vec2 vUv;
@@ -734,7 +741,7 @@ function buildTerrainFragmentShader(useVertexColors, withSpecular) {
         linearToSrgbFast(baseSample.rgb) * linearToSrgbFast(lightSample.rgb)
       );
       vec3 combinedRgb = uUseSurrogateLightMap == 1
-        ? baseSample.rgb * lightSample.rgb
+        ? baseSample.rgb * lightSample.rgb * uLightMapGain
         : legacyTextureMul;
       vec4 shaded = vec4(combinedRgb, 1.0);
       float specMask = baseSample.a * (uUseSurrogateLightMap == 1 ? 1.0 : lightSample.a);

@@ -3,29 +3,48 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const LOCAL_FORWARD = new THREE.Vector3(0, 0, -1);
+const LOCAL_RIGHT = new THREE.Vector3(1, 0, 0);
 const TMP_EULER = new THREE.Euler(0, 0, 0, "YXZ");
-const DEFAULT_CAR_TRACKER_CONFIG = {
-  springCoef: 1,
-  springDamp: 0.82,
-  rollFactor: 0.28,
-  verticalFactor: 0.7,
-  verticalVelocityScalar: 0.045,
-  verticalVelocityMin: 8,
-  verticalVelocityMax: 36,
-  rotateFactor: 0.32,
+const TMP_VECTOR_A = new THREE.Vector3();
+const TMP_VECTOR_B = new THREE.Vector3();
+const TMP_VECTOR_C = new THREE.Vector3();
+const TMP_VECTOR_D = new THREE.Vector3();
+const TMP_VECTOR_E = new THREE.Vector3();
+const TMP_VECTOR_F = new THREE.Vector3();
+const TMP_QUATERNION = new THREE.Quaternion();
+const AUTHENTIC_CAR_TRACKER_CONFIG = {
+  verticalVelocityScalar: 0.01,
+  verticalVelocityMin: -0.5,
+  verticalVelocityMax: 0.5,
+  springCoef: 0.001,
+  springDamp: 0.05,
+  rotateFactor: 2,
 };
-const DEFAULT_FIXED_HEAD_CONFIG = {
-  locationScale: new THREE.Vector3(1, 1, 1),
-  directionScaleX: 0.12,
-  directionScaleZ: 1,
+const AUTHENTIC_DAMAGE_SHAKE_CONFIG = {
+  minInput: 12,
+  maxInput: 40,
+  scaleInput: 0.009,
+  springCoef: 0.25,
+  springDamp: 0.1,
+  rollFactor: 0.3,
+  verticalFactor: 1.8,
+};
+const AUTHENTIC_FIXED_HEAD_CONFIG = {
+  locationScale: new THREE.Vector3(0.025, 0.005, 0),
+  directionScaleX: 0.0025,
+  directionScaleZ: 0.0025,
   directionOffsetX: 0,
   directionOffsetZ: 0,
+  springCoef: 0.25,
+  springDamp: 0.1,
+  yawFactor: 0.3,
+  verticalFactor: 1.8,
 };
-const DEFAULT_DAMAGE_SHAKE_CONFIG = {
-  minInput: 0.08,
-  maxInput: 1.1,
-  scaleInput: 0.12,
-};
+const PLAYER_CAR_HEADING_STIFFNESS = 0.6;
+const CAMERA_POWER_BASE = 0.9;
+const CHASE_TILT_BLEND = 0.3;
+const CAMERA_COLLISION_BUFFER = 1;
+const MIN_CAMERA_COLLISION_DISTANCE = 0.05;
 const MIN_CAMERA_TARGET_DISTANCE = 0.5;
 
 export function createSceneApp(container = document.body) {
@@ -79,17 +98,10 @@ export async function loadVehicleCameraConfig(cameraConfigUrl) {
 export function createChaseCamera(camera, controls, object, options = {}) {
   const desiredPosition = new THREE.Vector3();
   const desiredLookTarget = new THREE.Vector3();
-  const smoothedLookTarget = new THREE.Vector3();
-  const smoothedPosition = new THREE.Vector3();
   const desiredUp = new THREE.Vector3(0, 1, 0);
-  const smoothedUp = new THREE.Vector3(0, 1, 0);
   const orbitForward = new THREE.Vector3();
   const orbitRight = new THREE.Vector3();
   const orbitOffset = new THREE.Vector3();
-  const positionVelocity = new THREE.Vector3();
-  const targetVelocity = new THREE.Vector3();
-  const shakeOffset = new THREE.Vector3();
-  const shakeTargetOffset = new THREE.Vector3();
   const renderPosition = new THREE.Vector3();
   const renderTarget = new THREE.Vector3();
   const presets =
@@ -105,9 +117,8 @@ export function createChaseCamera(camera, controls, object, options = {}) {
   presetIndex = THREE.MathUtils.clamp(presetIndex, 0, presets.length - 1);
   let orbitMode = Boolean(initialState?.orbitMode);
   let orbitKeyboardStep = 20;
-  let shakeTime = 0;
-  let smoothedHeading = getTrackerHeading(getDynamics?.() ?? null, object);
   const stableLookDirection = new THREE.Vector3(0, 0, -1);
+  const runtimeState = createRecoveredCameraRuntimeState();
   const orbitKeys = new Set();
   const onOrbitWheel = (event) => {
     if (!orbitMode) {
@@ -136,27 +147,32 @@ export function createChaseCamera(camera, controls, object, options = {}) {
     camera.fov = initialState.fov;
   }
   camera.updateProjectionMatrix();
-  const initialDebugSettings = resolveCameraDebugSettings(debugControls);
-  resolveDesiredCameraPose(
+  resetRecoveredCameraState(
+    runtimeState,
+    presets[presetIndex],
+    getDynamics?.() ?? null,
+    object,
+  );
+  applyRecoveredCameraPose(
     object,
     presets[presetIndex],
     getDynamics?.() ?? null,
     trackFloorSampler,
-    smoothedHeading,
-    initialDebugSettings,
+    runtimeState,
+    resolveCameraDebugSettings(debugControls),
+    1 / 60,
     desiredPosition,
     desiredLookTarget,
     desiredUp,
+    renderPosition,
+    renderTarget,
   );
-  smoothedPosition.copy(desiredPosition);
-  smoothedLookTarget.copy(desiredLookTarget);
-  smoothedUp.copy(desiredUp);
-  stabilizeCameraAim(smoothedPosition, smoothedLookTarget, stableLookDirection);
-  camera.position.copy(smoothedPosition);
-  controls.target.copy(smoothedLookTarget);
+  stabilizeCameraAim(renderPosition, renderTarget, stableLookDirection);
+  camera.position.copy(renderPosition);
+  controls.target.copy(renderTarget);
   controls.enabled = orbitMode;
-  camera.up.copy(smoothedUp);
-  camera.lookAt(smoothedLookTarget);
+  camera.up.copy(desiredUp);
+  camera.lookAt(renderTarget);
 
   function toggleOrbitMode() {
     orbitMode = !orbitMode;
@@ -166,27 +182,31 @@ export function createChaseCamera(camera, controls, object, options = {}) {
   function cyclePreset() {
     presetIndex = (presetIndex + 1) % presets.length;
     applyPresetToCamera(camera, presets[presetIndex]);
-    const cycleDebugSettings = resolveCameraDebugSettings(debugControls);
-    resolveDesiredCameraPose(
+    resetRecoveredCameraState(
+      runtimeState,
+      presets[presetIndex],
+      getDynamics?.() ?? null,
+      object,
+    );
+    applyRecoveredCameraPose(
       object,
       presets[presetIndex],
       getDynamics?.() ?? null,
       trackFloorSampler,
-      smoothedHeading,
-      cycleDebugSettings,
+      runtimeState,
+      resolveCameraDebugSettings(debugControls),
+      1 / 60,
       desiredPosition,
       desiredLookTarget,
       desiredUp,
+      renderPosition,
+      renderTarget,
     );
-    smoothedPosition.copy(desiredPosition);
-    smoothedLookTarget.copy(desiredLookTarget);
-    smoothedUp.copy(desiredUp);
-    positionVelocity.set(0, 0, 0);
-    targetVelocity.set(0, 0, 0);
-    camera.position.copy(smoothedPosition);
-    controls.target.copy(smoothedLookTarget);
-    camera.up.copy(smoothedUp);
-    camera.lookAt(smoothedLookTarget);
+    stabilizeCameraAim(renderPosition, renderTarget, stableLookDirection);
+    camera.position.copy(renderPosition);
+    controls.target.copy(renderTarget);
+    camera.up.copy(desiredUp);
+    camera.lookAt(renderTarget);
   }
 
   const onKeyDown = (event) => {
@@ -244,81 +264,24 @@ export function createChaseCamera(camera, controls, object, options = {}) {
       const dynamics = getDynamics?.() ?? null;
       const preset = presets[presetIndex];
       const debugSettings = resolveCameraDebugSettings(debugControls);
-      const targetHeading = getTrackerHeading(dynamics, object);
-      smoothedHeading =
-        preset.trackerType === 2
-          ? targetHeading
-          : debugSettings.enableDynamics
-            ? smoothAngleToward(
-                smoothedHeading,
-                targetHeading,
-                preset.lookResponse * debugSettings.headingResponseScale,
-                deltaSeconds,
-              )
-            : targetHeading;
-      resolveDesiredCameraPose(
+      applyRecoveredCameraPose(
         object,
         preset,
         dynamics,
         trackFloorSampler,
-        smoothedHeading,
+        runtimeState,
         debugSettings,
+        deltaSeconds,
         desiredPosition,
         desiredLookTarget,
         desiredUp,
-      );
-
-      advanceCameraSpring(
-        smoothedPosition,
-        positionVelocity,
-        desiredPosition,
-        debugSettings.enableDynamics
-          ? preset.positionResponse * debugSettings.positionResponseScale
-          : 1000,
-        preset.positionDamping,
-        deltaSeconds,
-      );
-      advanceCameraSpring(
-        smoothedLookTarget,
-        targetVelocity,
-        desiredLookTarget,
-        preset.trackerType === 2
-          ? 1000
-          : debugSettings.enableDynamics
-            ? preset.lookResponse * debugSettings.lookResponseScale
-            : 1000,
-        preset.lookDamping,
-        deltaSeconds,
-      );
-
-      const upAlpha = 1 - Math.exp(-preset.upResponse * deltaSeconds);
-      smoothedUp.lerp(desiredUp, upAlpha).normalize();
-      applyDamageShake(
-        dynamics,
-        preset,
-        deltaSeconds,
-        debugSettings,
-        smoothedPosition,
-        smoothedLookTarget,
-        smoothedUp,
-        shakeOffset,
-        shakeTargetOffset,
         renderPosition,
         renderTarget,
-        orbitForward,
-        orbitRight,
-        orbitOffset,
-        () => {
-          shakeTime += deltaSeconds;
-          return shakeTime;
-        },
       );
-
       stabilizeCameraAim(renderPosition, renderTarget, stableLookDirection);
-
       camera.position.copy(renderPosition);
       controls.target.copy(renderTarget);
-      camera.up.copy(smoothedUp);
+      camera.up.copy(desiredUp);
       camera.lookAt(renderTarget);
     },
     getPresetIndex() {
@@ -433,27 +396,15 @@ function parseVehicleCameraConfig(cameraIniText) {
       positionType: cameraConfig.positionType ?? 2,
       positionOffset: convertCameraOffsetToScene(cameraConfig.positionOffset),
       targetOffset: resolveCameraTargetOffset(cameraConfig),
+      trackerStiffness: cameraConfig.trackerData?.stiffness ?? null,
       fov: cameraConfig.fov ?? 100,
-      nearClipping: 0.05,
+      nearClipping: cameraConfig.nearClipping ?? 0.5,
       farClipping: cameraConfig.farClipping ?? 1000,
       minGround: cameraConfig.trackerData?.minGround ?? 1,
       clampGround: cameraConfig.trackerData?.clampGround ?? 0.3,
-      positionResponse: resolveCameraResponse(
-        cameraConfig.trackerData?.stiffness?.x,
-        cameraConfig.trackerType,
-        cameraConfig.targetOffset ? 9 : 13,
-      ),
-      lookResponse: resolveCameraResponse(
-        cameraConfig.trackerData?.stiffness?.y,
-        cameraConfig.trackerType,
-        cameraConfig.targetOffset ? 10 : 15,
-      ),
-      upResponse: cameraConfig.trackerType === 1 ? 14 : 8,
-      positionDamping: cameraConfig.trackerType === 1 ? 0.9 : 0.82,
-      lookDamping: cameraConfig.trackerType === 1 ? 0.88 : 0.8,
-      carTrackerConfig: { ...DEFAULT_CAR_TRACKER_CONFIG },
-      fixedHeadConfig: cloneFixedHeadConfig(DEFAULT_FIXED_HEAD_CONFIG),
-      damageShakeConfig: { ...DEFAULT_DAMAGE_SHAKE_CONFIG },
+      carTrackerConfig: { ...AUTHENTIC_CAR_TRACKER_CONFIG },
+      fixedHeadConfig: cloneFixedHeadConfig(AUTHENTIC_FIXED_HEAD_CONFIG),
+      damageShakeConfig: { ...AUTHENTIC_DAMAGE_SHAKE_CONFIG },
     }))
     .filter(Boolean);
 
@@ -528,18 +479,9 @@ function parseTrackerData(text) {
   };
 }
 
-function resolveCameraResponse(value, trackerType, fallback) {
-  if (!Number.isFinite(value) || value <= 0) {
-    return fallback;
-  }
-
-  const scale = trackerType === 1 ? 48 : 28;
-  return Math.max(value * scale, 1);
-}
-
 function applyPresetToCamera(camera, preset) {
   camera.fov = preset.fov ?? 100;
-  camera.near = preset.nearClipping ?? 0.05;
+  camera.near = resolveSceneNearClipping(preset);
   camera.far = preset.farClipping ?? camera.far;
   camera.updateProjectionMatrix();
 }
@@ -550,17 +492,15 @@ function cloneCameraPreset(preset) {
     trackerType: preset.trackerType,
     positionType: preset.positionType,
     positionOffset: preset.positionOffset.clone(),
-    targetOffset: preset.targetOffset.clone(),
+    targetOffset: preset.targetOffset?.clone() ?? null,
+    trackerStiffness: preset.trackerStiffness
+      ? { ...preset.trackerStiffness }
+      : null,
     fov: preset.fov,
     nearClipping: preset.nearClipping,
     farClipping: preset.farClipping,
     minGround: preset.minGround,
     clampGround: preset.clampGround,
-    positionResponse: preset.positionResponse,
-    lookResponse: preset.lookResponse,
-    upResponse: preset.upResponse,
-    positionDamping: preset.positionDamping,
-    lookDamping: preset.lookDamping,
     carTrackerConfig: { ...preset.carTrackerConfig },
     fixedHeadConfig: cloneFixedHeadConfig(preset.fixedHeadConfig),
     damageShakeConfig: { ...preset.damageShakeConfig },
@@ -574,19 +514,19 @@ function createFallbackCameraPreset() {
     positionType: 2,
     positionOffset: new THREE.Vector3(0, 1.47, -4.05),
     targetOffset: new THREE.Vector3(0, 0.49, -0.011),
+    trackerStiffness: {
+      x: 0.25,
+      y: 0.115,
+      z: 0,
+    },
     fov: 100,
     nearClipping: 0.5,
     farClipping: 1000,
     minGround: 1,
     clampGround: 0.3,
-    positionResponse: 9,
-    lookResponse: 10,
-    upResponse: 8,
-    positionDamping: 0.82,
-    lookDamping: 0.8,
-    carTrackerConfig: { ...DEFAULT_CAR_TRACKER_CONFIG },
-    fixedHeadConfig: cloneFixedHeadConfig(DEFAULT_FIXED_HEAD_CONFIG),
-    damageShakeConfig: { ...DEFAULT_DAMAGE_SHAKE_CONFIG },
+    carTrackerConfig: { ...AUTHENTIC_CAR_TRACKER_CONFIG },
+    fixedHeadConfig: cloneFixedHeadConfig(AUTHENTIC_FIXED_HEAD_CONFIG),
+    damageShakeConfig: { ...AUTHENTIC_DAMAGE_SHAKE_CONFIG },
   };
 }
 
@@ -594,25 +534,30 @@ function convertCameraOffsetToScene(offset) {
   return new THREE.Vector3(offset.x, offset.y, -offset.z);
 }
 
+function resolveSceneNearClipping(preset) {
+  const authoredNear = preset?.nearClipping ?? 0.5;
+  const scaledNear = authoredNear * 0.1;
+
+  if (preset?.trackerType === 1) {
+    return THREE.MathUtils.clamp(scaledNear, 0.015, 0.04);
+  }
+
+  return THREE.MathUtils.clamp(scaledNear, 0.03, 0.08);
+}
+
 function resolveCameraTargetOffset(cameraConfig) {
   if (cameraConfig.targetOffset) {
     return convertCameraOffsetToScene(cameraConfig.targetOffset);
   }
 
+  if (cameraConfig.trackerType === 1) {
+    return null;
+  }
+
   const positionOffset = convertCameraOffsetToScene(
     cameraConfig.positionOffset,
   );
-  const targetOffset = positionOffset.clone();
-
-  if (cameraConfig.positionType === 3 || cameraConfig.positionType === 4) {
-    targetOffset.x *= 0.2;
-    targetOffset.y = Math.max(positionOffset.y * 0.95, 0.55);
-    targetOffset.z -= 8;
-    return targetOffset;
-  }
-
-  targetOffset.set(0, Math.max(positionOffset.y * 0.7, 0.6), -2.5);
-  return targetOffset;
+  return new THREE.Vector3(0, Math.max(positionOffset.y * 0.7, 0.6), 0);
 }
 
 function resolveCameraLabel(cameraConfig) {
@@ -634,243 +579,432 @@ function cloneFixedHeadConfig(config) {
     directionScaleZ: config.directionScaleZ,
     directionOffsetX: config.directionOffsetX,
     directionOffsetZ: config.directionOffsetZ,
+    springCoef: config.springCoef,
+    springDamp: config.springDamp,
+    yawFactor: config.yawFactor,
+    verticalFactor: config.verticalFactor,
   };
 }
 
-function resolveDesiredCameraPose(
+function createRecoveredCameraRuntimeState() {
+  return {
+    heading: 0,
+    chaseHeight: 0,
+    chaseHeightVelocity: 0,
+    collisionLift: 0,
+    collisionLiftVelocity: 0,
+    collisionDistance: 0,
+    fixedHeadSpring: 0,
+    fixedHeadSpringVelocity: 0,
+    damageShake: 0,
+    damageShakeVelocity: 0,
+    previousDamageTrigger: 0,
+  };
+}
+
+function resetRecoveredCameraState(runtimeState, preset, dynamics, object) {
+  runtimeState.heading = getTrackerHeading(dynamics, object);
+  runtimeState.chaseHeight = 0;
+  runtimeState.chaseHeightVelocity = 0;
+  runtimeState.collisionLift = 0;
+  runtimeState.collisionLiftVelocity = 0;
+  runtimeState.collisionDistance =
+    preset.targetOffset?.distanceTo(preset.positionOffset) ??
+    Math.max(preset.positionOffset.length(), 0.001);
+  runtimeState.fixedHeadSpring = 0;
+  runtimeState.fixedHeadSpringVelocity = 0;
+  runtimeState.damageShake = 0;
+  runtimeState.damageShakeVelocity = 0;
+  runtimeState.previousDamageTrigger = 0;
+}
+
+function applyRecoveredCameraPose(
   object,
   preset,
   dynamics,
   trackFloorSampler,
-  headingAngle,
+  runtimeState,
   debugSettings,
+  deltaSeconds,
   desiredPosition,
   desiredLookTarget,
   desiredUp,
+  renderPosition,
+  renderTarget,
 ) {
   object.updateWorldMatrix(true, false);
 
   if (preset.trackerType === 1) {
-    resolveFixedHeadPose(
+    resolveRecoveredFixedHeadPose(
       object,
       preset,
       dynamics,
+      runtimeState,
+      debugSettings,
+      deltaSeconds,
       desiredPosition,
       desiredLookTarget,
       desiredUp,
     );
-    return;
+  } else {
+    resolveRecoveredChasePose(
+      object,
+      preset,
+      dynamics,
+      trackFloorSampler,
+      runtimeState,
+      debugSettings,
+      deltaSeconds,
+      desiredPosition,
+      desiredLookTarget,
+      desiredUp,
+    );
   }
 
-  resolveCarTrackerPose(
-    object,
+  applyRecoveredDamageShake(
     preset,
     dynamics,
-    trackFloorSampler,
-    headingAngle,
+    runtimeState,
     debugSettings,
+    deltaSeconds,
     desiredPosition,
     desiredLookTarget,
     desiredUp,
+    renderPosition,
+    renderTarget,
   );
 }
 
-function resolveCarTrackerPose(
+function resolveRecoveredChasePose(
   object,
   preset,
   dynamics,
   trackFloorSampler,
-  headingAngle,
+  runtimeState,
   debugSettings,
+  deltaSeconds,
   desiredPosition,
   desiredLookTarget,
   desiredUp,
 ) {
   const trackerConfig = preset.carTrackerConfig;
-  const yawRotation = new THREE.Quaternion().setFromAxisAngle(
-    WORLD_UP,
-    headingAngle,
+  const headingTarget = getTrackerHeading(dynamics, object);
+  const headingResponse =
+    PLAYER_CAR_HEADING_STIFFNESS *
+    sanitizeCameraDebugNumber(debugSettings.headingResponseScale, 1);
+  runtimeState.heading = smoothAngleTowardPower(
+    runtimeState.heading,
+    headingTarget,
+    headingResponse,
+    deltaSeconds,
   );
-  const forward = new THREE.Vector3()
-    .copy(LOCAL_FORWARD)
-    .applyQuaternion(yawRotation);
-  const right = new THREE.Vector3().crossVectors(forward, WORLD_UP).normalize();
-  const baseTarget = new THREE.Vector3()
-    .copy(preset.targetOffset)
-    .applyQuaternion(yawRotation)
-    .add(object.position);
 
-  desiredPosition
-    .copy(preset.positionOffset)
-    .applyQuaternion(yawRotation)
-    .add(object.position);
-  desiredLookTarget.copy(baseTarget);
+  const targetOffset = preset.targetOffset ?? TMP_VECTOR_A.set(0, 0.6, 0);
+  const positionOffset = TMP_VECTOR_D.copy(preset.positionOffset);
+  TMP_VECTOR_A.copy(LOCAL_FORWARD).applyQuaternion(object.quaternion).normalize();
+  TMP_VECTOR_B.copy(WORLD_UP).applyQuaternion(object.quaternion).normalize();
+  TMP_VECTOR_C.set(
+    -Math.sin(runtimeState.heading),
+    0,
+    -Math.cos(runtimeState.heading),
+  );
+  TMP_VECTOR_C.lerp(TMP_VECTOR_A, CHASE_TILT_BLEND).normalize();
+  TMP_VECTOR_E.crossVectors(TMP_VECTOR_C, TMP_VECTOR_B);
+  if (TMP_VECTOR_E.lengthSq() < 1e-6) {
+    TMP_VECTOR_E.crossVectors(TMP_VECTOR_C, WORLD_UP);
+  }
+  TMP_VECTOR_E.normalize();
+  TMP_VECTOR_F.crossVectors(TMP_VECTOR_E, TMP_VECTOR_C).normalize();
 
-  if (preset.trackerType !== 2 && dynamics && debugSettings.enableDynamics) {
-    const verticalGate = inverseLerpClamped(
-      trackerConfig.verticalVelocityMin,
-      trackerConfig.verticalVelocityMax,
-      dynamics.horizontalSpeed ?? 0,
-    );
-    const verticalLift =
-      THREE.MathUtils.clamp(
-        (dynamics.verticalVelocity ?? 0) * trackerConfig.verticalVelocityScalar,
-        -trackerConfig.verticalFactor * debugSettings.verticalFactorScale,
-        trackerConfig.verticalFactor * debugSettings.verticalFactorScale,
-      ) * verticalGate;
-    const rotateOffset = THREE.MathUtils.clamp(
-      ((dynamics.lateralSpeed ?? 0) * 0.06 + (dynamics.yawRate ?? 0) * 0.05) *
+  desiredLookTarget.copy(object.position);
+  desiredLookTarget.addScaledVector(TMP_VECTOR_E, targetOffset.x);
+  desiredLookTarget.addScaledVector(TMP_VECTOR_F, targetOffset.y);
+  desiredLookTarget.addScaledVector(TMP_VECTOR_C, -targetOffset.z);
+
+  const heightTarget = debugSettings.enableDynamics
+    ? THREE.MathUtils.clamp(
+        (dynamics?.verticalVelocity ?? 0) *
+          trackerConfig.verticalVelocityScalar *
+          sanitizeCameraDebugNumber(debugSettings.verticalFactorScale, 1),
+        trackerConfig.verticalVelocityMin,
+        trackerConfig.verticalVelocityMax,
+      )
+    : 0;
+  advanceRecoveredSpring(
+    runtimeState,
+    "chaseHeight",
+    "chaseHeightVelocity",
+    heightTarget,
+    trackerConfig.springCoef *
+      sanitizeCameraDebugNumber(debugSettings.positionResponseScale, 1),
+    trackerConfig.springDamp,
+    deltaSeconds,
+  );
+  desiredLookTarget.y += runtimeState.chaseHeight;
+
+  desiredPosition.copy(positionOffset).sub(targetOffset);
+  desiredPosition.set(
+    TMP_VECTOR_E.x * desiredPosition.x +
+      TMP_VECTOR_F.x * desiredPosition.y +
+      TMP_VECTOR_C.x * -desiredPosition.z,
+    TMP_VECTOR_E.y * desiredPosition.x +
+      TMP_VECTOR_F.y * desiredPosition.y +
+      TMP_VECTOR_C.y * -desiredPosition.z,
+    TMP_VECTOR_E.z * desiredPosition.x +
+      TMP_VECTOR_F.z * desiredPosition.y +
+      TMP_VECTOR_C.z * -desiredPosition.z,
+  );
+
+  if (debugSettings.enableDynamics) {
+    desiredPosition.applyAxisAngle(
+      TMP_VECTOR_E,
+      runtimeState.chaseHeight *
         trackerConfig.rotateFactor *
-        debugSettings.rotateFactorScale,
-      -0.75,
-      0.75,
+        sanitizeCameraDebugNumber(debugSettings.rotateFactorScale, 1),
     );
-
-    desiredPosition.addScaledVector(WORLD_UP, verticalLift);
-    desiredPosition.addScaledVector(right, rotateOffset * 0.12);
   }
 
-  applyGroundClamp(trackFloorSampler, desiredPosition, preset);
+  applyRecoveredChaseCollision(
+    trackFloorSampler,
+    runtimeState,
+    preset,
+    debugSettings,
+    deltaSeconds,
+    desiredLookTarget,
+    desiredPosition,
+  );
 
+  desiredPosition.add(desiredLookTarget);
   desiredUp.copy(WORLD_UP);
 }
 
-function resolveFixedHeadPose(
+function resolveRecoveredFixedHeadPose(
   object,
   preset,
   dynamics,
+  runtimeState,
+  debugSettings,
+  deltaSeconds,
   desiredPosition,
   desiredLookTarget,
   desiredUp,
 ) {
   const fixedHeadConfig = preset.fixedHeadConfig;
-  const objectUp = new THREE.Vector3(0, 1, 0)
-    .applyQuaternion(object.quaternion)
-    .normalize();
-  const localPosition = preset.positionOffset
-    .clone()
-    .multiply(fixedHeadConfig.locationScale);
-  const forward = new THREE.Vector3()
-    .copy(LOCAL_FORWARD)
-    .applyQuaternion(object.quaternion);
-  const right = new THREE.Vector3().crossVectors(forward, objectUp).normalize();
+  TMP_VECTOR_A.copy(LOCAL_FORWARD).applyQuaternion(object.quaternion).normalize();
+  TMP_VECTOR_B.copy(WORLD_UP).applyQuaternion(object.quaternion).normalize();
+  TMP_VECTOR_C.crossVectors(TMP_VECTOR_A, TMP_VECTOR_B).normalize();
 
+  const dynamicLateral = debugSettings.enableDynamics
+    ? (dynamics?.lateralSpeed ?? 0) *
+      fixedHeadConfig.locationScale.x *
+      sanitizeCameraDebugNumber(debugSettings.positionResponseScale, 1)
+    : 0;
+  const dynamicVertical = debugSettings.enableDynamics
+    ? (dynamics?.verticalVelocity ?? 0) *
+      fixedHeadConfig.locationScale.y *
+      sanitizeCameraDebugNumber(debugSettings.verticalFactorScale, 1)
+    : 0;
+  const dynamicForward = debugSettings.enableDynamics
+    ? (dynamics?.forwardSpeed ?? 0) *
+      fixedHeadConfig.locationScale.z *
+      sanitizeCameraDebugNumber(debugSettings.positionResponseScale, 1)
+    : 0;
+
+  const fixedHeadTarget =
+    debugSettings.enableDynamics &&
+    Number.isFinite(dynamics?.lateralSpeed)
+      ? dynamics.lateralSpeed * fixedHeadConfig.directionScaleX
+      : 0;
+  advanceRecoveredSpring(
+    runtimeState,
+    "fixedHeadSpring",
+    "fixedHeadSpringVelocity",
+    fixedHeadTarget,
+    fixedHeadConfig.springCoef *
+      sanitizeCameraDebugNumber(debugSettings.headingResponseScale, 1),
+    fixedHeadConfig.springDamp,
+    deltaSeconds,
+  );
+
+  TMP_VECTOR_F.set(dynamicLateral, dynamicVertical, dynamicForward);
+  TMP_VECTOR_D.copy(preset.positionOffset).add(TMP_VECTOR_F);
   desiredPosition
-    .copy(localPosition)
+    .copy(TMP_VECTOR_D)
     .applyQuaternion(object.quaternion)
     .add(object.position);
+
+  desiredPosition.addScaledVector(
+    TMP_VECTOR_B,
+    runtimeState.fixedHeadSpring * fixedHeadConfig.verticalFactor,
+  );
+
+  TMP_VECTOR_E.copy(TMP_VECTOR_A).applyAxisAngle(
+    TMP_VECTOR_B,
+    runtimeState.fixedHeadSpring *
+      fixedHeadConfig.yawFactor *
+      sanitizeCameraDebugNumber(debugSettings.rotateFactorScale, 1),
+  );
+
   desiredLookTarget.copy(desiredPosition);
   desiredLookTarget.addScaledVector(
-    right,
+    TMP_VECTOR_C,
     fixedHeadConfig.directionOffsetX +
-      fixedHeadConfig.directionScaleX * (dynamics?.lateralSpeed ?? 0) * 0.08,
+      (debugSettings.enableDynamics ? dynamics?.lateralSpeed ?? 0 : 0) *
+        fixedHeadConfig.directionScaleX,
   );
   desiredLookTarget.addScaledVector(
-    forward,
-    8 * fixedHeadConfig.directionScaleZ +
+    TMP_VECTOR_E,
+    8 +
       fixedHeadConfig.directionOffsetZ +
-      Math.max(dynamics?.forwardSpeed ?? 0, 0) * 0.04,
+      Math.max(debugSettings.enableDynamics ? dynamics?.forwardSpeed ?? 0 : 0, 0) *
+        fixedHeadConfig.directionScaleZ,
   );
-  desiredLookTarget.addScaledVector(WORLD_UP, 0.18);
-  desiredUp.copy(objectUp).normalize();
+  desiredUp.copy(TMP_VECTOR_B);
 }
 
-function applyGroundClamp(trackFloorSampler, desiredPosition, preset) {
-  if (!trackFloorSampler?.sample) {
+function applyRecoveredChaseCollision(
+  trackFloorSampler,
+  runtimeState,
+  preset,
+  debugSettings,
+  deltaSeconds,
+  targetPoint,
+  cameraOffset,
+) {
+  if (!trackFloorSampler?.sample || !trackFloorSampler?.raycast) {
     return;
   }
 
-  const hit = trackFloorSampler.sample(desiredPosition, {
-    rayHeight: 25,
-    rayDistance: 100,
-    minUpDot: 0.12,
+  const desiredDistance = TMP_VECTOR_D.copy(cameraOffset).length();
+  if (desiredDistance < 1e-4) {
+    return;
+  }
+
+  runtimeState.collisionDistance = THREE.MathUtils.lerp(
+    runtimeState.collisionDistance,
+    desiredDistance,
+    1 - Math.pow(0.9, normalizeFrameScale(deltaSeconds)),
+  );
+
+  const desiredCameraPosition = TMP_VECTOR_A.copy(targetPoint).add(cameraOffset);
+  let collisionLiftTarget = 0;
+
+  const groundHit = trackFloorSampler.sample(desiredCameraPosition, {
+    rayHeight: 2,
+    rayDistance: 8,
+    minUpDot: -1,
   });
-
-  if (!hit) {
-    return;
+  if (groundHit) {
+    const minCameraY = groundHit.point.y + (preset.minGround ?? 1);
+    if (desiredCameraPosition.y < minCameraY) {
+      collisionLiftTarget = minCameraY - desiredCameraPosition.y;
+    }
   }
+  advanceRecoveredSpring(
+    runtimeState,
+    "collisionLift",
+    "collisionLiftVelocity",
+    collisionLiftTarget,
+    preset.carTrackerConfig.springCoef *
+      sanitizeCameraDebugNumber(debugSettings.lookResponseScale, 1),
+    preset.carTrackerConfig.springDamp,
+    deltaSeconds,
+  );
 
-  const minCameraY = hit.point.y + (preset.minGround ?? 1);
-  if (desiredPosition.y < minCameraY) {
-    desiredPosition.y = THREE.MathUtils.lerp(
-      desiredPosition.y,
-      minCameraY,
-      THREE.MathUtils.clamp(preset.clampGround ?? 0.3, 0, 1),
+  TMP_VECTOR_B.copy(cameraOffset);
+  TMP_VECTOR_B.y += runtimeState.collisionLift;
+  const collisionHit = trackFloorSampler.raycast(
+    targetPoint,
+    TMP_VECTOR_B.normalize(),
+    {
+      rayDistance: desiredDistance + CAMERA_COLLISION_BUFFER,
+      minUpDot: -1,
+      maxUpDot: 1,
+    },
+  );
+  if (collisionHit) {
+    runtimeState.collisionDistance = Math.min(
+      runtimeState.collisionDistance,
+      Math.max(
+        collisionHit.distance - CAMERA_COLLISION_BUFFER,
+        MIN_CAMERA_COLLISION_DISTANCE,
+      ),
     );
   }
+
+  cameraOffset
+    .setLength(
+      Math.min(runtimeState.collisionDistance, desiredDistance),
+    )
+    .addScaledVector(
+      WORLD_UP,
+      runtimeState.collisionLift * (preset.clampGround ?? 0.3),
+    );
 }
 
-function advanceCameraSpring(
-  current,
-  velocity,
-  target,
-  response,
-  damping,
-  deltaSeconds,
-) {
-  const alpha = 1 - Math.exp(-Math.max(response, 0.01) * deltaSeconds);
-  current.lerp(target, alpha);
-  velocity
-    .copy(target)
-    .sub(current)
-    .multiplyScalar(alpha / Math.max(deltaSeconds, 1e-4));
-  velocity.multiplyScalar(Math.max(0, Math.min(damping, 0.98)));
-}
-
-function applyDamageShake(
-  dynamics,
+function applyRecoveredDamageShake(
   preset,
-  deltaSeconds,
+  dynamics,
+  runtimeState,
   debugSettings,
-  smoothedPosition,
-  smoothedLookTarget,
-  smoothedUp,
-  shakeOffset,
-  shakeTargetOffset,
+  deltaSeconds,
+  desiredPosition,
+  desiredLookTarget,
+  desiredUp,
   renderPosition,
   renderTarget,
-  forward,
-  right,
-  offset,
-  advanceTime,
 ) {
-  renderPosition.copy(smoothedPosition);
-  renderTarget.copy(smoothedLookTarget);
+  renderPosition.copy(desiredPosition);
+  renderTarget.copy(desiredLookTarget);
 
-  if (!dynamics) {
+  if (!debugSettings.enableDynamics || debugSettings.shakeScale <= 0) {
+    runtimeState.previousDamageTrigger = 0;
     return;
   }
 
   const shakeConfig = preset.damageShakeConfig;
-  if (!debugSettings.enableDynamics || debugSettings.shakeScale <= 0) {
-    return;
-  }
-  const normalizedShake = inverseLerpClamped(
+  const trigger = inverseLerpClamped(
     shakeConfig.minInput,
     shakeConfig.maxInput,
-    dynamics.cameraShake ?? 0,
+    Math.max(dynamics?.cameraShake ?? 0, 0) * shakeConfig.maxInput,
+  );
+  const triggerRise = Math.max(
+    trigger - runtimeState.previousDamageTrigger,
+    0,
+  );
+  runtimeState.previousDamageTrigger = trigger;
+  runtimeState.damageShakeVelocity +=
+    triggerRise *
+    shakeConfig.scaleInput *
+    sanitizeCameraDebugNumber(debugSettings.shakeScale, 1);
+  advanceRecoveredSpring(
+    runtimeState,
+    "damageShake",
+    "damageShakeVelocity",
+    0,
+    shakeConfig.springCoef,
+    shakeConfig.springDamp,
+    deltaSeconds,
   );
 
-  if (normalizedShake <= 0) {
+  if (Math.abs(runtimeState.damageShake) < 1e-5) {
     return;
   }
 
-  const time = advanceTime() * THREE.MathUtils.lerp(18, 32, normalizedShake);
-  const amplitude =
-    shakeConfig.scaleInput * normalizedShake * debugSettings.shakeScale;
-  forward.subVectors(smoothedLookTarget, smoothedPosition).normalize();
-  right.crossVectors(forward, smoothedUp).normalize();
-  offset.crossVectors(right, forward).normalize();
-
-  shakeOffset
-    .copy(right)
-    .multiplyScalar(Math.sin(time * 1.9) * amplitude)
-    .addScaledVector(smoothedUp, Math.cos(time * 2.7) * amplitude * 0.65)
-    .addScaledVector(offset, Math.sin(time * 3.4) * amplitude * 0.4);
-  shakeTargetOffset.copy(shakeOffset).multiplyScalar(0.24);
-
-  renderPosition.add(shakeOffset);
-  renderTarget.add(shakeTargetOffset);
+  TMP_VECTOR_A.subVectors(desiredLookTarget, desiredPosition);
+  TMP_VECTOR_A.applyAxisAngle(
+    desiredUp,
+    runtimeState.damageShake *
+      shakeConfig.rollFactor *
+      sanitizeCameraDebugNumber(debugSettings.shakeScale, 1),
+  );
+  renderPosition.addScaledVector(
+    desiredUp,
+    runtimeState.damageShake *
+      shakeConfig.verticalFactor *
+      sanitizeCameraDebugNumber(debugSettings.shakeScale, 1),
+  );
+  renderTarget.copy(renderPosition).add(TMP_VECTOR_A);
 }
 
 function inverseLerpClamped(min, max, value) {
@@ -891,7 +1025,13 @@ function getTrackerHeading(dynamics, object) {
     return dynamics.heading;
   }
 
-  return extractYaw(object.quaternion);
+  TMP_VECTOR_A.copy(LOCAL_FORWARD).applyQuaternion(object.quaternion);
+  TMP_VECTOR_A.y = 0;
+  if (TMP_VECTOR_A.lengthSq() < 1e-6) {
+    return extractYaw(object.quaternion);
+  }
+  TMP_VECTOR_A.normalize();
+  return Math.atan2(-TMP_VECTOR_A.x, -TMP_VECTOR_A.z);
 }
 
 function resolveCameraDebugSettings(debugControls) {
@@ -926,7 +1066,7 @@ function sanitizeCameraDebugNumber(value, fallback) {
 }
 
 function stabilizeCameraAim(position, target, stableLookDirection) {
-  const delta = new THREE.Vector3().subVectors(target, position);
+  const delta = TMP_VECTOR_A.subVectors(target, position);
 
   if (
     delta.lengthSq() <
@@ -941,10 +1081,37 @@ function stabilizeCameraAim(position, target, stableLookDirection) {
   stableLookDirection.copy(delta).normalize();
 }
 
-function smoothAngleToward(current, target, response, deltaSeconds) {
+function smoothAngleTowardPower(current, target, response, deltaSeconds) {
   const delta = normalizeAngle(target - current);
-  const alpha = 1 - Math.exp(-Math.max(response, 0.01) * deltaSeconds);
+  const frameDecay = Math.pow(
+    CAMERA_POWER_BASE,
+    normalizeFrameScale(deltaSeconds),
+  );
+  const alpha = 1 - Math.pow(frameDecay, Math.max(response, 0.01));
   return normalizeAngle(current + delta * alpha);
+}
+
+function advanceRecoveredSpring(
+  runtimeState,
+  positionKey,
+  velocityKey,
+  target,
+  springCoef,
+  springDamp,
+  deltaSeconds,
+) {
+  const frameScale = normalizeFrameScale(deltaSeconds);
+  const current = runtimeState[positionKey];
+  const velocity = runtimeState[velocityKey];
+  const nextVelocity =
+    velocity -
+    (velocity * springDamp + (current - target) * springCoef) * frameScale;
+  runtimeState[velocityKey] = nextVelocity;
+  runtimeState[positionKey] = current + nextVelocity * frameScale;
+}
+
+function normalizeFrameScale(deltaSeconds) {
+  return THREE.MathUtils.clamp(deltaSeconds * 60, 0, 4);
 }
 
 function normalizeAngle(angle) {

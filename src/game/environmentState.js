@@ -8,8 +8,9 @@ const DEFAULT_SPECULAR_COLOR = new THREE.Color(0xfff3db);
 export function createTrackEnvironmentState(track, renderer = null) {
   const weatherProfile = track?.environment?.weatherProfile ?? null;
   const maxAnisotropy = renderer?.capabilities?.getMaxAnisotropy?.() ?? 1;
+  const trackLightMapGainRef = { value: 1 };
   const lightMap = track?.lightmap
-    ? loadTrackLightMap(track.lightmap, maxAnisotropy)
+    ? loadTrackLightMap(track.lightmap, maxAnisotropy, trackLightMapGainRef)
     : null;
   const sourceSunPosition = weatherProfile?.sunPosition?.clone?.() ??
     DEFAULT_SUN_POSITION.clone();
@@ -74,21 +75,67 @@ export function createTrackEnvironmentState(track, renderer = null) {
     skyDomeFile: weatherProfile?.skyDomeFile ?? null,
     backgroundColor,
     trackLightMap: lightMap,
+    trackLightMapGainRef,
     dispose() {
       lightMap?.dispose?.();
     },
   };
 }
 
-function loadTrackLightMap(lightMapUrl, maxAnisotropy) {
+function loadTrackLightMap(lightMapUrl, maxAnisotropy, gainRef) {
   const textureLoader = new THREE.TextureLoader();
-  const texture = textureLoader.load(lightMapUrl);
+  const texture = textureLoader.load(lightMapUrl, (loadedTexture) => {
+    const image = loadedTexture?.image;
+    const averageLuminance = estimateAverageImageLuminance(image);
+
+    if (!Number.isFinite(averageLuminance) || averageLuminance <= 1e-4) {
+      gainRef.value = 1;
+      return;
+    }
+
+    // We are using the atlas as a surrogate modulation source, not the
+    // original terrain colormap. Normalizing its average luminance prevents
+    // one track's atlas from globally blowing out or crushing the terrain
+    // relative to another.
+    gainRef.value = THREE.MathUtils.clamp(0.5 / averageLuminance, 0.6, 1.8);
+  });
   texture.flipY = false;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.colorSpace = THREE.NoColorSpace;
   texture.anisotropy = maxAnisotropy;
   return texture;
+}
+
+function estimateAverageImageLuminance(image) {
+  if (!image?.width || !image?.height || typeof document === "undefined") {
+    return null;
+  }
+
+  const sampleWidth = Math.min(64, image.width);
+  const sampleHeight = Math.min(64, image.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = sampleWidth;
+  canvas.height = sampleHeight;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+
+  if (!context) {
+    return null;
+  }
+
+  context.drawImage(image, 0, 0, sampleWidth, sampleHeight);
+  const { data } = context.getImageData(0, 0, sampleWidth, sampleHeight);
+  let luminanceSum = 0;
+  const pixelCount = data.length / 4;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const r = data[index] / 255;
+    const g = data[index + 1] / 255;
+    const b = data[index + 2] / 255;
+    luminanceSum += r * 0.299 + g * 0.587 + b * 0.114;
+  }
+
+  return pixelCount > 0 ? luminanceSum / pixelCount : null;
 }
 
 function vector4ToColor(vector, fallback) {

@@ -176,9 +176,12 @@ Source of truth notes:
 - `CameraManager_LoadCameraIniProfiles` @ `0x004d6c90` — Loads `data/camera.ini`, `data/trackintro_camera.ini`, and `data/start_camera.ini`.
 - `CameraManager_UpdateTrackers` @ `0x004d6e70` — Iterates installed camera tracker objects and advances them each frame.
 - `CameraManager_RegisterCarTrackerConfig` @ `0x004d70f0` — Registers `Data.Camera.CarCameraTracker` and `Data.Camera.CameraDamageShake`.
+- `CameraTracker_ApplyViewTransform` @ `0x004d71d0` — Shared tracker-to-camera handoff; consumes explicit camera + target points and rebuilds the final world-up look-at basis for the live `BCORE_Camera2`.
 - `CarCameraTracker_Update` @ `0x004d7910` — Normal driving tracker update; smooths heading/yaw and vertical response from `Data.Camera.CarCameraTracker`, then applies separate roll/shake work. Do not model this as direct full chassis quaternion inheritance.
+- `CarCameraTracker_ResetPitchAndHeightState` @ `0x004d7890` — Clears the chase tracker’s internal pitch/height spring state.
 - `CameraManager_RegisterFixedHeadConfig` @ `0x004cffb0` — Registers `Data.Camera.FixedHead`.
 - `FixedHeadCameraTracker_Update` @ `0x004d7520` — Fixed-head / hood-like tracker update path.
+- `CarCameraTracker_UpdateGroundCollisionOffset` @ `0x004d8080` — Driving-camera collision helper; queries ground clearance at the desired camera position and shortens the target-to-camera offset against the environment with a collision buffer.
 - `CameraDamageShake_Update` @ `0x004d8320` — Separate damage-shake layer called after the driving tracker update.
 - `CameraManager_RegisterStuntTrackerConfig` @ `0x004db660` — Registers `Data.Camera.StuntCameraTracker`.
 - `CameraManager_RegisterGoalCameraConfig` @ `0x004d9100` — Registers `Data.Camera.GoalCameraBasketball`, `GoalCameraTargets`, and `GoalCameraLocations`.
@@ -205,6 +208,8 @@ Source of truth notes:
 - Per-car driving cameras are authored content, not one universal hardcoded offset.
 - Stunt, goal, intro, start, and ragdoll cameras are separate behaviors and should not be collapsed into a single chase rig.
 - Normal driving camera behavior should not pitch with raw body acceleration by inheriting the car body's full quaternion; stunt tilt belongs to the stunt tracker, not the normal car tracker.
+- The normal chase path is built from a target point plus a target-to-camera offset. The collision helper shortens that offset against the environment instead of replacing the camera with a generic spring-follow orbit.
+- Fixed-head / hood / cockpit views bypass the normal world-up chase handoff and write a transformed local basis directly, so they should not be ported as small-offset variants of the chase camera.
 
 ---
 

@@ -2,16 +2,13 @@ import * as THREE from "three";
 
 const DEBUG_HORIZON = false;
 const ENVIRONMENT_SCALE = 0.02;
+const HORIZON_RADIUS_SCALE = 0.05;
+const HORIZON_BASE_SCALE = 0.02;
+const HORIZON_HEIGHT_SCALE = 0.036;
+const SKY_PLANE_SIZE_FACTOR = 3.2;
+const SKY_PLANE_HEIGHT_OVERLAP = 0.08;
 const SKY_TEXTURE_ROTATION = -Math.PI * 0.35;
-const HORIZON_ROTATION = Math.PI * 0.18;
 const FLARE_OVERLAY_DEPTH = 0.5;
-const DEFAULT_ENVIRONMENT_VALUES = {
-  skyPlaneSize: 3300,
-  skyPlaneAltitude: 188,
-  horizonRadius: 599,
-  horizonBase: -40,
-  horizonHeight: 217,
-};
 
 export async function loadTrackEnvironment(scene, assetUrls) {
   const weatherProfile = assetUrls.weatherProfile ?? null;
@@ -56,27 +53,37 @@ export async function loadTrackEnvironment(scene, assetUrls) {
   configureHorizonTexture(horizonTexture);
 
   const environmentValues = {
-    skyPlaneSize: DEFAULT_ENVIRONMENT_VALUES.skyPlaneSize,
-    skyPlaneAltitude: DEFAULT_ENVIRONMENT_VALUES.skyPlaneAltitude,
+    skyDomeRadius: atmosphere.skyDomeRadius * ENVIRONMENT_SCALE,
+    skyDomeOffset: (weatherProfile?.skyDomeOffset ?? 0) * ENVIRONMENT_SCALE,
     horizonRadius:
       weatherProfile?.horizonRadius != null
-        ? weatherProfile.horizonRadius * 0.05
-        : DEFAULT_ENVIRONMENT_VALUES.horizonRadius,
+        ? weatherProfile.horizonRadius * HORIZON_RADIUS_SCALE
+        : atmosphere.horizonRadius * HORIZON_RADIUS_SCALE,
     horizonBase:
       weatherProfile?.horizonBase != null
-        ? weatherProfile.horizonBase * 0.02
-        : DEFAULT_ENVIRONMENT_VALUES.horizonBase,
+        ? weatherProfile.horizonBase * HORIZON_BASE_SCALE
+        : atmosphere.horizonBase * HORIZON_BASE_SCALE,
     horizonHeight:
       weatherProfile?.horizonHeight != null
-        ? weatherProfile.horizonHeight * 0.036
-        : DEFAULT_ENVIRONMENT_VALUES.horizonHeight,
+        ? weatherProfile.horizonHeight * HORIZON_HEIGHT_SCALE
+        : atmosphere.horizonHeight * HORIZON_HEIGHT_SCALE,
+    horizonOffset:
+      weatherProfile?.horizonOffset != null
+        ? weatherProfile.horizonOffset
+        : 0,
+    cloudAltitude: atmosphere.cloudAltitude * ENVIRONMENT_SCALE,
   };
+  environmentValues.skyPlaneSize = Math.max(
+    environmentValues.horizonRadius * SKY_PLANE_SIZE_FACTOR,
+    environmentValues.skyDomeRadius * 1.8,
+  );
+  environmentValues.skyPlaneAltitude =
+    environmentValues.horizonBase +
+    environmentValues.horizonHeight * (1 + SKY_PLANE_HEIGHT_OVERLAP) +
+    environmentValues.skyDomeOffset;
 
   const atmosphereDome = createGradientSkyDome({
-    radius: Math.max(
-      environmentValues.horizonRadius * 1.35,
-      atmosphere.skyDomeRadius * ENVIRONMENT_SCALE,
-    ),
+    radius: environmentValues.skyDomeRadius,
     gradient: atmosphere.skyGradient,
   });
   scene.add(atmosphereDome);
@@ -86,9 +93,10 @@ export async function loadTrackEnvironment(scene, assetUrls) {
       ? createCloudLayer({
           radius: Math.max(
             environmentValues.horizonRadius * 1.15,
-            atmosphere.skyDomeRadius * ENVIRONMENT_SCALE * 0.92,
+            environmentValues.skyDomeRadius * 0.92,
           ),
-          altitude: atmosphere.cloudAltitude * ENVIRONMENT_SCALE,
+          altitude:
+            environmentValues.skyDomeOffset + environmentValues.cloudAltitude,
           bottomTexture: cloudBottomTexture,
           topTexture: cloudTopTexture,
           tiling: atmosphere.cloudTiling,
@@ -119,7 +127,9 @@ export async function loadTrackEnvironment(scene, assetUrls) {
     height: environmentValues.horizonHeight,
     texture: horizonTexture,
   });
-  horizonLayer.rotation.y = HORIZON_ROTATION;
+  horizonLayer.rotation.y = THREE.MathUtils.degToRad(
+    environmentValues.horizonOffset,
+  );
   scene.add(horizonLayer);
 
   const sunLightColor =
@@ -211,6 +221,31 @@ export async function loadTrackEnvironment(scene, assetUrls) {
 export const loadArenaEnvironment = loadTrackEnvironment;
 
 function createEnvironmentController(state) {
+  function anchorBackdropToCamera(camera) {
+    if (!camera) {
+      return;
+    }
+
+    const { x, z } = camera.position;
+
+    if (state.atmosphereDome) {
+      state.atmosphereDome.position.set(x, 0, z);
+    }
+
+    if (state.cloudLayer) {
+      state.cloudLayer.position.set(x, 0, z);
+    }
+
+    if (state.skyPlane) {
+      state.skyPlane.position.x = x;
+      state.skyPlane.position.z = z;
+    }
+
+    if (state.horizonLayer) {
+      state.horizonLayer.position.set(x, 0, z);
+    }
+  }
+
   function rebuildHorizon() {
     const nextLayer = createHorizonLayer({
       radius: state.values.horizonRadius,
@@ -218,7 +253,12 @@ function createEnvironmentController(state) {
       height: state.values.horizonHeight,
       texture: state.horizonTexture,
     });
-    nextLayer.rotation.y = HORIZON_ROTATION;
+    nextLayer.rotation.y = THREE.MathUtils.degToRad(
+      state.values.horizonOffset ?? 0,
+    );
+    if (state.horizonLayer) {
+      nextLayer.position.copy(state.horizonLayer.position);
+    }
     state.scene.remove(state.horizonLayer);
     disposeHierarchy(state.horizonLayer);
     state.horizonLayer = nextLayer;
@@ -249,7 +289,8 @@ function createEnvironmentController(state) {
     if (
       key === "horizonRadius" ||
       key === "horizonBase" ||
-      key === "horizonHeight"
+      key === "horizonHeight" ||
+      key === "horizonOffset"
     ) {
       rebuildHorizon();
     }
@@ -274,6 +315,7 @@ function createEnvironmentController(state) {
       state.sunLight?.position.copy(state.sunPosition);
     },
     update(camera) {
+      anchorBackdropToCamera(camera);
       state.flareOverlay?.update(camera, state.flarePosition);
     },
     getOverlayScene() {

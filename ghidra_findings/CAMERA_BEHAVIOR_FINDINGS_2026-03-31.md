@@ -205,6 +205,24 @@ Confirmed implication:
 
 - Track intro and event cameras are area-based/authored cinematic cameras, not derived from the active chase camera.
 
+## Porting corrections from the direct tracker pass
+
+Confirmed from the `2026-04-07` tracker decompile pass:
+
+- The normal chase camera should be ported as:
+  - authored target anchor
+  - authored target-to-camera offset
+  - smoothed flat heading
+  - springed vertical offset
+  - collision-shortened target-to-camera distance
+  - separate damage-shake spring
+- The normal chase collision helper is not a simple "clamp camera Y above ground"
+  rule. It queries clearance at the desired camera position and shortens the
+  target-to-camera distance against environment collision with a buffer.
+- Fixed-head / hood / cockpit views should not reuse the chase look-at path.
+  `FixedHeadCameraTracker_Update` writes a transformed local basis directly and
+  keeps its own spring state.
+
 ## What this means for the port
 
 Confirmed / strongly supported:

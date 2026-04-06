@@ -108,6 +108,100 @@ Current correction:
 - per-material specular now multiplies the environment term instead of being
   replaced by it
 
+## Cross-Track Terrain Brightness Note
+
+Observed mismatch:
+
+- some tracks read globally too bright on terrain-like ground surfaces
+  (example: garage)
+- others read globally too dark on the same terrain families
+  (example: forest `c`)
+
+Best-supported cause in the current web port:
+
+- terrain materials with `nUseColormap = 1` are still using `lightmap1_w2.png`
+  as a surrogate modulation source because the original resolved colormap path
+  is not faithfully recovered in the extracted web asset set
+- those per-track atlases are not authored to have a consistent average
+  exposure when treated as a direct terrain modulation input
+- so one global surrogate multiply rule can look acceptable on one track and
+  badly biased on another
+
+Current correction:
+
+- estimate average luminance of the loaded surrogate terrain lightmap per track
+- derive a bounded normalization gain from that average
+- apply that gain only on the surrogate-lightmap terrain branch, not on the
+  original non-surrogate multiply path
+
+This is a cross-track stabilization for the current surrogate path, not a claim
+that the missing original colormap semantics are fully solved yet.
+
+## Sky / Horizon Parameter Note
+
+Confirmed original authored/runtime parameters:
+
+- weather profiles provide:
+  - `SkyDomeFile`
+  - `SkyDomeOffset`
+  - `HorizonRadius`
+  - `HorizonHeight`
+  - `HorizonBase`
+  - `HorizonOffset`
+- track atmosphere files provide:
+  - `SkyDome_Radius`
+  - `CloudLayer_Altitude`
+  - `CloudLayer_Size`
+  - `CloudLayer_Tiling`
+  - `CloudLayer_Curvature`
+  - `CloudLayer_Volume`
+  - `Horizon_Radius`
+  - `Horizon_Base`
+  - `Horizon_Height`
+
+Recovered subsystem notes also confirm:
+
+- sky rendering is environment-owned
+- `Environment_DrawSkyDomeMesh` is the native sky-dome path
+- `Environment_DrawHorizonBand` is the native horizon path
+- `SkyDomeOffset` is a real bound weather field in the native environment object
+
+Web-side correction:
+
+- remove the old fixed/hardcoded sky and horizon scene sizes
+- use authored sky-dome radius, cloud altitude/size, horizon radius/base/height,
+  and horizon offset directly
+- keep one explicit inference only for the web-only "sky top plane":
+  its size is now derived from authored sky-dome radius instead of a hardcoded
+  constant, but that plane itself is still a web approximation rather than a
+  confirmed native primitive
+
+Important follow-up correction:
+
+- those authored atmosphere/weather values are still in the original native
+  world scale, not in the imported Three.js scene scale
+- a temporary direct-use pass caused the sky/horizon to collapse toward track
+  height and the horizon/background to disappear
+- the current web path therefore keeps source-backed ownership of the values
+  but converts them into scene scale before rendering
+- `SkyDomeOffset` is treated as an offset on sky/cloud placement, not as "put
+  the sky plane at this exact world Y"
+
+Further correction after visual seam regression:
+
+- decomp evidence still confirms a sky draw path and a separate horizon-band
+  pass, but that function naming alone does not prove the visible top-sky
+  primitive is literally a sphere in the authored race scene
+- user-side visual debugging of the original game confirms the visible top sky
+  behaves like a plane above the track plus a circular horizon band around it
+- the previous web-side switch to dome-textured sky therefore overfit the
+  decomp naming and was reverted
+- current web path uses a camera-relative sky plane for the visible top sky,
+  keeps the circular horizon band as a separate pass, and retains a plain
+  gradient dome only as a fallback backdrop so no empty strip leaks through
+- horizon, clouds, sky plane, and fallback dome are all anchored to the active
+  camera in X/Z to avoid backdrop drift relative to the race camera
+
 ## Terrain Port Note
 
 The remaining arena ground artifact is still in active investigation.
