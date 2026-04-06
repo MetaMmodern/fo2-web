@@ -237,7 +237,11 @@ function createDynamicVehicleMaterial({
     alphaTest,
     side,
     vertexShader: buildVehicleVertexShader(useVertexColors),
-    fragmentShader: buildDynamicVehicleFragmentShader(useVertexColors, true),
+    fragmentShader: buildDynamicVehicleFragmentShader(
+      useVertexColors,
+      true,
+      transparent || alphaTest > 0,
+    ),
   });
   material.userData.textureRefs = map ? [map] : [];
   return material;
@@ -283,7 +287,7 @@ function createCarBodyMaterial({
     },
     useVertexColors,
     vertexShader: buildVehicleVertexShader(useVertexColors),
-    fragmentShader: buildCarBodyFragmentShader(useVertexColors),
+    fragmentShader: buildCarBodyFragmentShader(useVertexColors, false),
   });
   material.userData.textureRefs = [baseMap, reflectMap].filter(Boolean);
   return material;
@@ -357,7 +361,10 @@ function createCarLightMaterial({
     alphaTest,
     side: THREE.DoubleSide,
     vertexShader: buildVehicleVertexShader(useVertexColors),
-    fragmentShader: buildCarLightFragmentShader(useVertexColors),
+    fragmentShader: buildCarLightFragmentShader(
+      useVertexColors,
+      transparent || alphaTest > 0,
+    ),
   });
   material.depthWrite = !transparent;
   material.userData.textureRefs = [baseMap, glowMap].filter(Boolean);
@@ -413,7 +420,11 @@ function buildVehicleVertexShader(useVertexColors) {
   `;
 }
 
-function buildDynamicVehicleFragmentShader(useVertexColors, withSpecular) {
+function buildDynamicVehicleFragmentShader(
+  useVertexColors,
+  withSpecular,
+  preserveTextureAlpha,
+) {
   return `
     uniform sampler2D uMap;
     uniform vec3 uSunDirection;
@@ -434,6 +445,7 @@ function buildDynamicVehicleFragmentShader(useVertexColors, withSpecular) {
     void main() {
       vec4 texel = texture2D(uMap, vUv) * vec4(uColorMul, 1.0);
       vec4 shaded = texel * ${useVertexColors ? "vColor" : "vec4(1.0)"};
+      float coverage = shaded.a;
       vec3 n = normalize(vWorldNormal);
       vec3 l = normalize(uSunDirection);
       vec3 v = normalize(vViewDirection);
@@ -449,13 +461,13 @@ function buildDynamicVehicleFragmentShader(useVertexColors, withSpecular) {
           : ""
       }
       shaded.rgb = min(shaded.rgb, vec3(uMaxOverBrighting));
-      if (shaded.a <= uAlphaTest) discard;
-      gl_FragColor = shaded;
+      if (uAlphaTest > 0.0 && coverage <= uAlphaTest) discard;
+      gl_FragColor = vec4(shaded.rgb, ${preserveTextureAlpha ? "coverage" : "1.0"});
     }
   `;
 }
 
-function buildCarBodyFragmentShader(useVertexColors) {
+function buildCarBodyFragmentShader(useVertexColors, preserveTextureAlpha) {
   return `
     uniform sampler2D uBaseMap;
     uniform sampler2D uReflectMap;
@@ -476,16 +488,23 @@ function buildCarBodyFragmentShader(useVertexColors) {
     varying vec3 vWorldNormal;
     varying vec3 vViewDirection;
     varying vec3 vReflectDirection;
+
+    vec2 reflectionUv(vec3 reflectDir) {
+      vec3 r = normalize(reflectDir);
+      return clamp(r.xy * 0.5 + 0.5, 0.0, 1.0);
+    }
+
     void main() {
       vec4 baseSample = texture2D(uBaseMap, vUv) * vec4(uColorMul, 1.0);
-      vec4 reflectSample = texture2D(uReflectMap, vUv);
+      vec4 reflectSample = texture2D(uReflectMap, reflectionUv(vReflectDirection));
       vec4 shaded = baseSample * ${useVertexColors ? "vColor" : "vec4(1.0)"};
+      float coverage = baseSample.a;
       vec3 n = normalize(vWorldNormal);
       vec3 l = normalize(uSunDirection);
       vec3 v = normalize(vViewDirection);
       float ndotl = max(dot(n, l), 0.0);
       vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * ndotl);
-      vec3 litBase = shaded.rgb * lighting * 2.0;
+      vec3 litBase = clamp(shaded.rgb * lighting * 2.0, 0.0, 1.0);
       vec3 h = normalize(v + l);
       float spec = pow(max(dot(n, h), 0.0), 32.0) * step(0.0, ndotl);
       float fresnel = uFresnelBias + uFresnelScale * pow(1.0 - abs(dot(v, n)), 5.0);
@@ -493,8 +512,8 @@ function buildCarBodyFragmentShader(useVertexColors) {
       vec3 reflected = reflectSample.rgb * skyReflect;
       vec3 color = mix(litBase + uSpecularColor * (uSpecularIntensity * spec), reflected, clamp(baseSample.a * fresnel, 0.0, 1.0));
       color = min(color, vec3(uMaxOverBrighting));
-      if (baseSample.a <= uAlphaTest) discard;
-      gl_FragColor = vec4(color, baseSample.a);
+      if (uAlphaTest > 0.0 && coverage <= uAlphaTest) discard;
+      gl_FragColor = vec4(color, ${preserveTextureAlpha ? "coverage" : "1.0"});
     }
   `;
 }
@@ -513,9 +532,15 @@ function buildCarWindowFragmentShader() {
     varying vec3 vWorldNormal;
     varying vec3 vViewDirection;
     varying vec3 vReflectDirection;
+
+    vec2 reflectionUv(vec3 reflectDir) {
+      vec3 r = normalize(reflectDir);
+      return clamp(r.xy * 0.5 + 0.5, 0.0, 1.0);
+    }
+
     void main() {
       vec4 baseSample = texture2D(uBaseMap, vUv);
-      vec4 reflectSample = texture2D(uReflectMap, vUv);
+      vec4 reflectSample = texture2D(uReflectMap, reflectionUv(vReflectDirection));
       vec3 n = normalize(vWorldNormal);
       vec3 v = normalize(vViewDirection);
       float fresnel = uFresnelBias + uFresnelScale * pow(1.0 - abs(dot(v, n)), 5.0);
@@ -529,7 +554,7 @@ function buildCarWindowFragmentShader() {
   `;
 }
 
-function buildCarLightFragmentShader(useVertexColors) {
+function buildCarLightFragmentShader(useVertexColors, preserveTextureAlpha) {
   return `
     uniform sampler2D uBaseMap;
     uniform sampler2D uGlowMap;
@@ -557,8 +582,8 @@ function buildCarLightFragmentShader(useVertexColors) {
       color += glowSample.rgb * uGlowColor;
       color = min(color, vec3(uMaxOverBrighting));
       float alpha = baseSample.a;
-      if (alpha <= uAlphaTest) discard;
-      gl_FragColor = vec4(color * alpha, alpha);
+      if (uAlphaTest > 0.0 && alpha <= uAlphaTest) discard;
+      gl_FragColor = vec4(color * alpha, ${preserveTextureAlpha ? "alpha" : "1.0"});
     }
   `;
 }

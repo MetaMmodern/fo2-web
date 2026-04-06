@@ -11,6 +11,11 @@ User-reported and not yet resolved:
   simply "glass is too transparent"
 - this should be treated as a texture/source binding issue first, not an
   opacity-only issue
+- confirmed renderer mismatch: the original `pro_car_body.sha` and
+  `pro_car_window.sha` use a reflection-vector-driven lookup for the reflection
+  / specular texture path, while the web port had been sampling that texture by
+  mesh UVs; that can directly cause "wrong image on glass" and uneven/dull car
+  body response
 
 ## Terrain Port Note
 
