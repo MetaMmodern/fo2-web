@@ -175,6 +175,9 @@ export async function createDrivingSimulation({
     getCameraState() {
       return state.cameraState;
     },
+    getLightState() {
+      return deriveVehicleLightState(state);
+    },
     getConfig() {
       return {
         carId,
@@ -1312,6 +1315,20 @@ function resolveDrivingDebugOptions(debugOptions) {
     wheelVisuals: debugOptions?.wheelVisuals ?? true,
     cameraShake: debugOptions?.cameraShake ?? true,
     freezePosition: debugOptions?.freezePosition ?? false,
+  };
+}
+
+function deriveVehicleLightState(state) {
+  const brakeStrength = Math.max(
+    THREE.MathUtils.clamp(state.brakeAxis, 0, 1),
+    THREE.MathUtils.clamp(state.handbrakeAxis, 0, 1) * 0.7,
+  );
+  const reverseStrength =
+    state.gear < 0 || state.throttleAxis < -0.05 || state.reverseLatched ? 1 : 0;
+
+  return {
+    brakeStrength,
+    reverseStrength,
   };
 }
 

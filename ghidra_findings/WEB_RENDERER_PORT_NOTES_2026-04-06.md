@@ -84,6 +84,30 @@ Current web-side approximation:
 - this is a practical stopgap for missing dynamic shadow/sunmap consumption,
   not a claim of exact native parity yet
 
+## Tire / Rim Specular Note
+
+Confirmed from extracted asset logs:
+
+- shared wheel material `tire` is `nShaderId: 7 (car diffuse)` in
+  [tire_4_log.txt](/Users/metamodern/Documents/Github/Personal/flatout_oss/src/data/cars/shared/tire_4_log.txt)
+- shared wheel material `rim` is `nShaderId: 9 (car tire)` in that same file
+- therefore the rubber tire itself should not be treated like the special
+  reflective/specular rim shader path
+
+Web-side bug that caused over-shiny wheels:
+
+- `createDynamicVehicleMaterial()` was resolving `uSpecularIntensity` as
+  `environmentState.specularIntensity ?? specularStrength`
+- that means the scene-wide environment specular value overrode the intended
+  per-material tire/rim tuning instead of being scaled by it
+
+Current correction:
+
+- tire material uses the non-specular dynamic path
+- rim keeps a reduced specular path
+- per-material specular now multiplies the environment term instead of being
+  replaced by it
+
 ## Terrain Port Note
 
 The remaining arena ground artifact is still in active investigation.

@@ -74,6 +74,53 @@ export function setVehicleSunVisibility(root, visibility) {
   });
 }
 
+export function setVehicleLightState(
+  root,
+  lightState = {},
+  environmentState = null,
+  lightsConfig = null,
+) {
+  const resolvedLightState = lightState ?? {};
+  const brakeStrength = THREE.MathUtils.clamp(resolvedLightState.brakeStrength ?? 0, 0, 1);
+  const reverseStrength = THREE.MathUtils.clamp(resolvedLightState.reverseStrength ?? 0, 0, 1);
+  const nightFactor = resolveVehicleNightFactor(environmentState);
+  const frontGlow = THREE.MathUtils.lerp(0, 0.82, nightFactor);
+  const runningRearGlow = THREE.MathUtils.lerp(0, 0.14, nightFactor);
+  const brakeGlow = Math.max(runningRearGlow, THREE.MathUtils.lerp(0.1, 1.15, brakeStrength));
+  const reverseGlow = THREE.MathUtils.lerp(0, 1.25, reverseStrength);
+  const materialBindings = lightsConfig?.materials ?? null;
+
+  root?.traverse?.((obj) => {
+    if (!obj.isMesh) {
+      return;
+    }
+
+    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+
+    materials.forEach((material) => {
+      if (!material?.uniforms?.uGlowStrength) {
+        return;
+      }
+
+      const glowStrength = resolveVehicleMaterialGlowStrength(
+        material,
+        materialBindings,
+        frontGlow,
+        runningRearGlow,
+        brakeGlow,
+        reverseGlow,
+      );
+
+      if (glowStrength == null) {
+        material.uniforms.uGlowStrength.value = 0;
+        return;
+      }
+
+      material.uniforms.uGlowStrength.value = glowStrength;
+    });
+  });
+}
+
 function createMaterialForName(
   name,
   getTexture,
@@ -157,7 +204,8 @@ function createMaterialForName(
     return createCarLightMaterial({
       name: materialName,
       baseMap: getTexture("lights"),
-      glowMap: getTexture("lights"),
+      glowMap: getTexture("lightsGlow"),
+      litMap: getTexture("lightsGlowLit"),
       useVertexColors,
       environmentState,
       glowColor,
@@ -182,8 +230,9 @@ function createMaterialForName(
       map: getTexture("tire"),
       useVertexColors,
       environmentState,
-      specularStrength: 0.1,
-      specularPower: 24,
+      specularStrength: 0,
+      specularPower: 12,
+      enableSpecular: false,
     });
   }
 
@@ -195,8 +244,9 @@ function createMaterialForName(
       environmentState,
       transparent: true,
       alphaTest: 0.12,
-      specularStrength: 0.32,
-      specularPower: 28,
+      specularStrength: 0.16,
+      specularPower: 20,
+      enableSpecular: true,
     });
   }
 
@@ -220,6 +270,7 @@ function createDynamicVehicleMaterial({
   side = THREE.FrontSide,
   specularStrength = 0.14,
   specularPower = 16,
+  enableSpecular = specularStrength > 0,
 }) {
   const material = createVehicleShaderMaterial({
     name,
@@ -243,7 +294,7 @@ function createDynamicVehicleMaterial({
           environmentState?.specularColor ?? DEFAULT_SPECULAR_COLOR.clone(),
       },
       uSpecularIntensity: {
-        value: environmentState?.specularIntensity ?? specularStrength,
+        value: (environmentState?.specularIntensity ?? 1) * specularStrength,
       },
       uSpecularPower: { value: specularPower },
       uMaxOverBrighting: {
@@ -258,7 +309,7 @@ function createDynamicVehicleMaterial({
     vertexShader: buildVehicleVertexShader(useVertexColors),
     fragmentShader: buildDynamicVehicleFragmentShader(
       useVertexColors,
-      true,
+      enableSpecular,
       transparent || alphaTest > 0,
     ),
   });
@@ -348,6 +399,7 @@ function createCarLightMaterial({
   name,
   baseMap,
   glowMap,
+  litMap,
   useVertexColors,
   environmentState,
   glowColor,
@@ -359,6 +411,7 @@ function createCarLightMaterial({
     uniforms: {
       uBaseMap: { value: baseMap },
       uGlowMap: { value: glowMap },
+      uLitMap: { value: litMap ?? baseMap },
       uSunDirection: {
         value:
           environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
@@ -373,6 +426,7 @@ function createCarLightMaterial({
       },
       uAmbientIntensity: { value: environmentState?.ambientIntensity ?? 0.9 },
       uGlowColor: { value: glowColor.clone() },
+      uGlowStrength: { value: 0 },
       uMaxOverBrighting: {
         value: environmentState?.maxOverBrighting ?? 1.79,
       },
@@ -389,7 +443,14 @@ function createCarLightMaterial({
     ),
   });
   material.depthWrite = !transparent;
-  material.userData.textureRefs = [baseMap, glowMap].filter(Boolean);
+  material.userData.vehicleLightRole = name.startsWith("light_front")
+    ? "front"
+    : name.startsWith("light_brake")
+      ? "brake"
+      : name.startsWith("light_reverse")
+        ? "reverse"
+        : "other";
+  material.userData.textureRefs = [baseMap, glowMap, litMap].filter(Boolean);
   return material;
 }
 
@@ -585,6 +646,7 @@ function buildCarLightFragmentShader(useVertexColors, preserveTextureAlpha) {
   return `
     uniform sampler2D uBaseMap;
     uniform sampler2D uGlowMap;
+    uniform sampler2D uLitMap;
     uniform vec3 uSunDirection;
     uniform vec3 uSunColor;
     uniform float uSunIntensity;
@@ -592,6 +654,7 @@ function buildCarLightFragmentShader(useVertexColors, preserveTextureAlpha) {
     uniform vec3 uAmbientColor;
     uniform float uAmbientIntensity;
     uniform vec3 uGlowColor;
+    uniform float uGlowStrength;
     uniform float uMaxOverBrighting;
     uniform vec3 uColorMul;
     uniform float uAlphaTest;
@@ -601,17 +664,107 @@ function buildCarLightFragmentShader(useVertexColors, preserveTextureAlpha) {
     void main() {
       vec4 baseSample = texture2D(uBaseMap, vUv) * vec4(uColorMul, 1.0);
       vec4 glowSample = texture2D(uGlowMap, vUv);
+      vec4 litSample = texture2D(uLitMap, vUv) * vec4(uColorMul, 1.0);
       vec4 shaded = baseSample * ${useVertexColors ? "vColor" : "vec4(1.0)"};
       vec3 n = normalize(vWorldNormal);
       vec3 l = normalize(uSunDirection);
       float ndotl = max(dot(n, l), 0.0);
       vec3 lighting = uAmbientColor * uAmbientIntensity + uSunColor * (uSunIntensity * uSunVisibility * ndotl);
       vec3 color = shaded.rgb * lighting * 2.0;
-      color += glowSample.rgb * uGlowColor;
+      color += litSample.rgb * uGlowStrength;
+      color += glowSample.rgb * uGlowColor * (uGlowStrength * 0.55);
       color = min(color, vec3(uMaxOverBrighting));
       float alpha = baseSample.a;
       if (uAlphaTest > 0.0 && alpha <= uAlphaTest) discard;
       gl_FragColor = vec4(color * alpha, ${preserveTextureAlpha ? "alpha" : "1.0"});
     }
   `;
+}
+
+function resolveVehicleNightFactor(environmentState) {
+  const sunIntensity = environmentState?.sunIntensity ?? 1.25;
+  const ambientIntensity = environmentState?.ambientIntensity ?? 0.9;
+  const brightness = sunIntensity * 0.75 + ambientIntensity * 0.5;
+  return THREE.MathUtils.clamp(1 - brightness / 1.65, 0, 1);
+}
+
+function resolveVehicleMaterialGlowStrength(
+  material,
+  materialBindings,
+  frontGlow,
+  runningRearGlow,
+  brakeGlow,
+  reverseGlow,
+) {
+  const materialName = material?.name ?? "";
+  const configuredBinding = materialBindings?.get?.(materialName) ?? null;
+
+  if (configuredBinding) {
+    const toggles = configuredBinding.toggles ?? [];
+    const flareEntries = configuredBinding.flareEntries ?? [];
+    let glowStrength = 0;
+
+    if (toggles.includes("off")) {
+      if (materialName.startsWith("light_front")) {
+        glowStrength = Math.max(
+          glowStrength,
+          resolveConfiguredGlowStrength(flareEntries, "off", frontGlow),
+        );
+      } else if (materialName.startsWith("light_brake")) {
+        glowStrength = Math.max(
+          glowStrength,
+          resolveConfiguredGlowStrength(flareEntries, "off", runningRearGlow),
+        );
+      }
+    }
+    if (toggles.includes("brake")) {
+      glowStrength = Math.max(
+        glowStrength,
+        resolveConfiguredGlowStrength(flareEntries, "brake", brakeGlow),
+      );
+    }
+    if (toggles.includes("reverse")) {
+      glowStrength = Math.max(
+        glowStrength,
+        resolveConfiguredGlowStrength(flareEntries, "reverse", reverseGlow),
+      );
+    }
+
+    return glowStrength;
+  }
+
+  const role = material?.userData?.vehicleLightRole;
+
+  if (role === "front") {
+    return frontGlow;
+  }
+  if (role === "brake") {
+    return brakeGlow;
+  }
+  if (role === "reverse") {
+    return reverseGlow;
+  }
+
+  return null;
+}
+
+function resolveConfiguredGlowStrength(flareEntries, toggle, inputStrength) {
+  const matchingEntries = flareEntries.filter((entry) => entry?.toggle === toggle);
+
+  if (matchingEntries.length === 0) {
+    return inputStrength;
+  }
+
+  const minAlpha = matchingEntries.reduce(
+    (best, entry) => Math.max(best, entry?.minAlpha ?? 0),
+    0,
+  );
+  const maxAlpha = matchingEntries.reduce(
+    (best, entry) => Math.max(best, entry?.maxAlpha ?? minAlpha),
+    minAlpha,
+  );
+  const normalizedStrength = THREE.MathUtils.clamp(inputStrength, 0, 1);
+  const authoredAlpha = THREE.MathUtils.lerp(minAlpha, maxAlpha, normalizedStrength);
+
+  return authoredAlpha * 2;
 }

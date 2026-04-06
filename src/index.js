@@ -19,9 +19,11 @@ import {
   updateHudTelemetry,
 } from "./game/hud";
 import { createDrivingInput } from "./game/input";
+import { loadVehicleLightsConfig } from "./game/lightsConfig";
 import {
   createTextureRegistry,
   prepareMaterials,
+  setVehicleLightState,
   setVehicleSunVisibility,
 } from "./game/materials";
 import { createDrivingSimulation } from "./game/physics";
@@ -93,6 +95,7 @@ const sceneState = {
   tireRoot: null,
   chaseCamera: null,
   drivingSimulation: null,
+  lightsConfig: null,
   environmentState: null,
   environmentController: null,
 };
@@ -212,6 +215,7 @@ function animate() {
   sceneState.chaseCamera?.update(deltaSeconds);
   sceneState.environmentController?.update(camera);
   updateVehicleSunOcclusion(deltaSeconds);
+  updateVehicleLights();
   updateHudTelemetry(hud, {
     speedKph: sceneState.drivingSimulation?.speedKph?.() ?? 0,
   });
@@ -263,6 +267,19 @@ function updateVehicleSunOcclusion(deltaSeconds) {
     blend,
   );
   setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);
+}
+
+function updateVehicleLights() {
+  if (!sceneState.carRoot) {
+    return;
+  }
+
+  setVehicleLightState(
+    sceneState.carRoot,
+    sceneState.drivingSimulation?.getLightState?.() ?? null,
+    sceneState.environmentState,
+    sceneState.lightsConfig,
+  );
 }
 
 function applySelection(nextPartialSelection) {
@@ -345,6 +362,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     sceneState.chaseCamera?.dispose?.();
     sceneState.chaseCamera = null;
     sceneState.drivingSimulation = null;
+    sceneState.lightsConfig = null;
 
     if (sceneState.carRoot) {
       scene.remove(sceneState.carRoot);
@@ -359,7 +377,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       vehicleTextures,
       renderer.capabilities.getMaxAnisotropy(),
     );
-    const [{ carRoot, tireRoot }, cameraConfig] = await Promise.all([
+    const [{ carRoot, tireRoot }, cameraConfig, lightsConfig] = await Promise.all([
       loadVehicle(vehicleAssetUrls, scene, controls, (root) =>
         prepareMaterials(
           root,
@@ -371,12 +389,23 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
         console.warn("Falling back to default chase camera config:", error);
         return null;
       }),
+      loadVehicleLightsConfig(vehicleAssetUrls.lightsConfig).catch((error) => {
+        console.warn("Falling back to heuristic vehicle lights:", error);
+        return null;
+      }),
     ]);
 
     sceneState.carRoot = carRoot;
     sceneState.tireRoot = tireRoot;
+    sceneState.lightsConfig = lightsConfig;
     smoothedVehicleSunVisibility = 1;
     setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);
+    setVehicleLightState(
+      sceneState.carRoot,
+      null,
+      sceneState.environmentState,
+      sceneState.lightsConfig,
+    );
 
     if (sceneState.trackRoot) {
       placeVehicleOnTrack(
@@ -403,6 +432,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       trackFloorSampler: sceneState.floorSampler,
       initialState: previousCameraState,
     });
+    updateVehicleLights();
   } else if (reloadTrack && sceneState.trackRoot && sceneState.carRoot) {
     placeVehicleOnTrack(
       sceneState.trackRoot,
@@ -420,6 +450,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     });
     smoothedVehicleSunVisibility = 1;
     setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);
+    updateVehicleLights();
   }
 }
 
