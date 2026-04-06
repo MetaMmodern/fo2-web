@@ -18,13 +18,11 @@ import {
   syncHudSelection,
   updateHudTelemetry,
 } from "./game/hud";
-import { createDrivingInput } from "./game/input";
 import {
   createTextureRegistry,
   prepareMaterials,
   setVehicleSunVisibility,
 } from "./game/materials";
-import { createDrivingSimulation } from "./game/physics";
 import { createColorFilterPass } from "./game/postprocessing";
 import {
   createChaseCamera,
@@ -35,7 +33,6 @@ import { loadTrack, placeVehicleOnTrack } from "./game/track";
 import { loadVehicle } from "./game/vehicle";
 
 const { scene, camera, renderer, controls } = createSceneApp();
-const drivingInput = createDrivingInput();
 const initialTrack = getTrackById(defaultSelection.trackId);
 const cameraDebug = {
   enableDynamics: true,
@@ -79,7 +76,6 @@ const sceneState = {
   carRoot: null,
   tireRoot: null,
   chaseCamera: null,
-  drivingSimulation: null,
   environmentState: null,
   environmentController: null,
 };
@@ -123,12 +119,11 @@ animate();
 function animate() {
   requestAnimationFrame(animate);
   const deltaSeconds = Math.min(frameClock.getDelta(), 0.1);
-  sceneState.drivingSimulation?.update(deltaSeconds);
   sceneState.chaseCamera?.update(deltaSeconds);
   sceneState.environmentController?.update(camera);
   updateVehicleSunOcclusion(deltaSeconds);
   updateHudTelemetry(hud, {
-    speedKph: sceneState.drivingSimulation?.speedKph?.() ?? 0,
+    speedKph: 0,
   });
 
   if (!sceneState.chaseCamera) {
@@ -259,7 +254,6 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     const previousCameraState = sceneState.chaseCamera?.getState?.() ?? null;
     sceneState.chaseCamera?.dispose?.();
     sceneState.chaseCamera = null;
-    sceneState.drivingSimulation = null;
 
     if (sceneState.carRoot) {
       scene.remove(sceneState.carRoot);
@@ -302,17 +296,9 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       );
     }
 
-    sceneState.drivingSimulation = await createDrivingSimulation({
-      carRoot,
-      assetUrls: vehicleAssetUrls,
-      input: drivingInput,
-      trackFloorSampler: sceneState.floorSampler,
-    });
     sceneState.chaseCamera = createChaseCamera(camera, controls, carRoot, {
       ...(cameraConfig ?? {}),
       debugControls: cameraDebug,
-      getDynamics: () =>
-        sceneState.drivingSimulation?.getCameraState?.() ?? null,
       trackFloorSampler: sceneState.floorSampler,
       initialState: previousCameraState,
     });
@@ -323,12 +309,6 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       sceneState.startPoints,
       sceneState.floorSampler,
     );
-    sceneState.drivingSimulation = await createDrivingSimulation({
-      carRoot: sceneState.carRoot,
-      assetUrls: buildVehicleAssetUrls(car, skin),
-      input: drivingInput,
-      trackFloorSampler: sceneState.floorSampler,
-    });
     smoothedVehicleSunVisibility = 1;
     setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);
   }

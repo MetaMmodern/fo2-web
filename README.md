@@ -39,9 +39,8 @@
 - The original game uses multiple authored camera profiles plus runtime tracker tuning from `Data.Camera.*`.
 - Start from [GHIDRA_VISUAL_ADDRESSBOOK.md](/Users/metamodern/Documents/Github/Personal/flatout_oss/GHIDRA_VISUAL_ADDRESSBOOK.md) and [CAMERA_BEHAVIOR_FINDINGS_2026-03-31.md](/Users/metamodern/Documents/Github/Personal/flatout_oss/ghidra_findings/CAMERA_BEHAVIOR_FINDINGS_2026-03-31.md) before changing gameplay camera behavior.
 
-## Driving Prototype
+## Driving Status
 
-- The current Rapier driving code is only a temporary prototype.
-- It now proves the minimum slice: the car spawns on the track, sits roughly on its tires, and can move/reset.
-- The handling quality is not acceptable yet and should not be treated as a faithful FlatOut driving model.
-- Further work on driving should be guided by extracted executable logic or stronger reverse-engineering, not by continuing to stack ad hoc tuning onto the current prototype.
+- The current prototype driving physics and gravity path have been intentionally removed from the runtime.
+- The port currently keeps only the bare scene/bootstrap path: track load, car load, static spawn placement, and camera inspection.
+- Future driving work should start from recovered FlatOut 2 logic under `reference/flatout2-decomp-main/` and the reverse-engineering notes, not from the removed placeholder implementation.

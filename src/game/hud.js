@@ -35,6 +35,7 @@ export function createHud(
       <div class="hud-section">
         <div class="hud-title">Telemetry</div>
         <div class="hud-text" data-role="speed">Speed: 0 km/h</div>
+        <div class="hud-text">Driving physics and gravity are currently stripped from the port.</div>
       </div>
       <div class="hud-section">
         <div class="hud-title">Camera Debug</div>
@@ -70,10 +71,6 @@ export function createHud(
       </div>
       <div class="hud-section">
         <div class="hud-title">Controls</div>
-        <div class="hud-text">W/S or arrows: throttle and brake</div>
-        <div class="hud-text">A/D or arrows: steer</div>
-        <div class="hud-text">Space: handbrake</div>
-        <div class="hud-text">R: reset car</div>
         <div class="hud-text">C: cycle chase cameras</div>
         <div class="hud-text">\`: toggle orbit debug camera</div>
         <div class="hud-text">Orbit: I/J/K/L move, U/O vertical</div>
