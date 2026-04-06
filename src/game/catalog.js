@@ -3,6 +3,7 @@ import {
   defaultSelection,
   trackCatalog,
 } from "./generated/runtimeAssetCatalog";
+import { getDrivingDbConfigByCarId } from "./drivingConfigCatalog";
 
 const carsById = new Map(carCatalog.map((car) => [car.id, car]));
 const tracksById = new Map(trackCatalog.map((track) => [track.id, track]));
@@ -81,6 +82,7 @@ export function buildVehicleAssetUrls(car, skin) {
     cameraConfig: car.cameraConfig,
     bodyConfig: car.bodyConfig,
     tireConfig: car.tireConfig,
+    drivingDb: getDrivingDbConfigByCarId(car.id),
     textureOverrides,
   };
 }

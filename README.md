@@ -41,6 +41,8 @@
 
 ## Driving Status
 
-- The current prototype driving physics and gravity path have been intentionally removed from the runtime.
-- The port currently keeps only the bare scene/bootstrap path: track load, car load, static spawn placement, and camera inspection.
-- Future driving work should start from recovered FlatOut 2 logic under `reference/flatout2-decomp-main/` and the reverse-engineering notes, not from the removed placeholder implementation.
+- The current runtime now follows the recovered FlatOut 2 driving shape instead of the earlier placeholder path.
+- Steering, gearbox, body/tire config, and surface tire dynamics are loaded from the extracted handling data under `src/data/database/flatout2.db extracted/` plus the per-car `body.ini` and `tires.ini` files.
+- The browser runtime uses an adaptive micro-step count rather than the literal native `100 x 0.01` loop, because the full native count is too expensive when each step includes JS-side wheel-contact raycasts.
+- The web port still needs sweep-and-tune passes, but new driving work should continue from the recovered data path rather than reintroducing ad hoc prototype physics.
+- Known current follow-up: the launch band right above standstill is stable now, but still twitchier than the original game. Treat that as an open low-speed steering/yaw/torque staging issue rather than a camera issue.
