@@ -62,7 +62,9 @@ export function setVehicleSunVisibility(root, visibility) {
       return;
     }
 
-    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+    const materials = Array.isArray(obj.material)
+      ? obj.material
+      : [obj.material];
 
     materials.forEach((material) => {
       if (!material?.uniforms?.uSunVisibility) {
@@ -81,12 +83,23 @@ export function setVehicleLightState(
   lightsConfig = null,
 ) {
   const resolvedLightState = lightState ?? {};
-  const brakeStrength = THREE.MathUtils.clamp(resolvedLightState.brakeStrength ?? 0, 0, 1);
-  const reverseStrength = THREE.MathUtils.clamp(resolvedLightState.reverseStrength ?? 0, 0, 1);
+  const brakeStrength = THREE.MathUtils.clamp(
+    resolvedLightState.brakeStrength ?? 0,
+    0,
+    1,
+  );
+  const reverseStrength = THREE.MathUtils.clamp(
+    resolvedLightState.reverseStrength ?? 0,
+    0,
+    1,
+  );
   const nightFactor = resolveVehicleNightFactor(environmentState);
   const frontGlow = THREE.MathUtils.lerp(0, 0.82, nightFactor);
   const runningRearGlow = THREE.MathUtils.lerp(0, 0.14, nightFactor);
-  const brakeGlow = Math.max(runningRearGlow, THREE.MathUtils.lerp(0.1, 1.15, brakeStrength));
+  const brakeGlow = Math.max(
+    runningRearGlow,
+    THREE.MathUtils.lerp(0.1, 1.15, brakeStrength),
+  );
   const reverseGlow = THREE.MathUtils.lerp(0, 1.25, reverseStrength);
   const materialBindings = lightsConfig?.materials ?? null;
 
@@ -95,7 +108,9 @@ export function setVehicleLightState(
       return;
     }
 
-    const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+    const materials = Array.isArray(obj.material)
+      ? obj.material
+      : [obj.material];
 
     materials.forEach((material) => {
       if (!material?.uniforms?.uGlowStrength) {
@@ -277,8 +292,7 @@ function createDynamicVehicleMaterial({
     uniforms: {
       uMap: { value: map },
       uSunDirection: {
-        value:
-          environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
+        value: environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
       },
       uSunColor: {
         value: environmentState?.sunColor ?? DEFAULT_SUN_COLOR.clone(),
@@ -328,8 +342,7 @@ function createCarBodyMaterial({
     uniforms: {
       uBaseMap: { value: baseMap },
       uSunDirection: {
-        value:
-          environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
+        value: environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
       },
       uSunColor: {
         value: environmentState?.sunColor ?? DEFAULT_SUN_COLOR.clone(),
@@ -380,10 +393,9 @@ function createCarWindowMaterial({
         value:
           environmentState?.specularColor ?? DEFAULT_SPECULAR_COLOR.clone(),
       },
-      uWindowTint: { value: new THREE.Color(0x5f6f7f) },
       uFresnelBias: { value: 0.25 },
       uFresnelScale: { value: 0.5 },
-      uWindowBrightness: { value: 0.72 },
+      uWindowAlpha: { value: 0.25 },
     },
     transparent: true,
     side: THREE.DoubleSide,
@@ -413,8 +425,7 @@ function createCarLightMaterial({
       uGlowMap: { value: glowMap },
       uLitMap: { value: litMap ?? baseMap },
       uSunDirection: {
-        value:
-          environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
+        value: environmentState?.sunDirection ?? DEFAULT_SUN_DIRECTION.clone(),
       },
       uSunColor: {
         value: environmentState?.sunColor ?? DEFAULT_SUN_COLOR.clone(),
@@ -613,10 +624,9 @@ function buildCarWindowFragmentShader() {
   return `
     uniform sampler2D uBaseMap;
     uniform vec3 uSpecularColor;
-    uniform vec3 uWindowTint;
     uniform float uFresnelBias;
     uniform float uFresnelScale;
-    uniform float uWindowBrightness;
+    uniform float uWindowAlpha;
     uniform float uAlphaTest;
     varying vec2 vUv;
     varying vec3 vWorldNormal;
@@ -628,14 +638,14 @@ function buildCarWindowFragmentShader() {
       vec3 n = normalize(vWorldNormal);
       vec3 v = normalize(vViewDirection);
       float fresnel = uFresnelBias + uFresnelScale * pow(1.0 - abs(dot(v, n)), 5.0);
-      vec3 reflected = mix(
-        uWindowTint * 0.55,
+      float reflectMix = clamp(vReflectDirection.y * 0.5 + 0.5, 0.0, 1.0);
+      vec3 reflectionColor = mix(
+        uSpecularColor * 0.22,
         uSpecularColor,
-        clamp(vReflectDirection.y * 0.5 + 0.5, 0.0, 1.0)
+        reflectMix
       );
-      vec3 baseTint = mix(uWindowTint, baseSample.rgb * uWindowTint, 0.15);
-      vec3 color = mix(baseTint, reflected, clamp(fresnel * 0.55, 0.0, 1.0));
-      float alpha = clamp(uWindowBrightness + fresnel * 0.18, 0.0, 0.92);
+      vec3 color = reflectionColor * clamp(fresnel, 0.0, 1.0);
+      float alpha = clamp((1.0 - fresnel) * uWindowAlpha * baseSample.a, 0.0, 0.92);
       if (alpha <= uAlphaTest) discard;
       gl_FragColor = vec4(color, alpha);
     }
@@ -749,7 +759,9 @@ function resolveVehicleMaterialGlowStrength(
 }
 
 function resolveConfiguredGlowStrength(flareEntries, toggle, inputStrength) {
-  const matchingEntries = flareEntries.filter((entry) => entry?.toggle === toggle);
+  const matchingEntries = flareEntries.filter(
+    (entry) => entry?.toggle === toggle,
+  );
 
   if (matchingEntries.length === 0) {
     return inputStrength;
@@ -764,7 +776,11 @@ function resolveConfiguredGlowStrength(flareEntries, toggle, inputStrength) {
     minAlpha,
   );
   const normalizedStrength = THREE.MathUtils.clamp(inputStrength, 0, 1);
-  const authoredAlpha = THREE.MathUtils.lerp(minAlpha, maxAlpha, normalizedStrength);
+  const authoredAlpha = THREE.MathUtils.lerp(
+    minAlpha,
+    maxAlpha,
+    normalizedStrength,
+  );
 
   return authoredAlpha * 2;
 }

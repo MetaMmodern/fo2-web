@@ -15,3 +15,22 @@
 - Prefer concrete addresses, symbol names, string VAs, and config keys over vague summaries.
 - Mark clearly what is confirmed from disassembly/decompilation versus inferred from surrounding data.
 - When a runtime config path is recovered, record both the config key and the consuming function.
+
+## Source Of Truth
+
+- For gameplay, physics, camera, VFX, UI behavior, and rendering ports, use `reference/FlatOut-2-decomp-main/` and original shipped data in `src/data/` as the source of truth.
+- Prefer decompiled C/C++, original configs, original shaders, and original assets over replacement logic.
+- Do not invent behavior, constants, formulas, or tunings when porting original-game systems.
+- If the required original behavior or value cannot be confirmed from decompilation, shipped data, or documented findings already in-repo, stop and ask the user for further instructions.
+
+## Build And Runtime Safety
+
+- Do not run build commands, dev servers, or other runtime-mutating commands unless the user explicitly asks for them.
+- Do not run commands that can disrupt the live runtime environment.
+- Safe static inspection and parse-only checks are allowed unless the user says otherwise.
+
+## Porting Default
+
+- When the user says to port a system or behavior, inspect `reference/FlatOut-2-decomp-main/` and the original shipped asset/config/shader data first.
+- Port the original logic and data flow directly when they can be recovered.
+- If a required part of the original logic cannot be confirmed, stop, report exactly what is missing, and wait for further instructions.
