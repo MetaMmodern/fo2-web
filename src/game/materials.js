@@ -396,6 +396,7 @@ function createCarWindowMaterial({
       uFresnelBias: { value: 0.25 },
       uFresnelScale: { value: 0.5 },
       uWindowAlpha: { value: 0.25 },
+      uWindowMinAlpha: { value: 0.08 },
     },
     transparent: true,
     side: THREE.DoubleSide,
@@ -403,6 +404,7 @@ function createCarWindowMaterial({
     fragmentShader: buildCarWindowFragmentShader(),
   });
   material.depthWrite = false;
+  material.depthTest = false;
   material.userData.textureRefs = [baseMap].filter(Boolean);
   return material;
 }
@@ -627,6 +629,7 @@ function buildCarWindowFragmentShader() {
     uniform float uFresnelBias;
     uniform float uFresnelScale;
     uniform float uWindowAlpha;
+    uniform float uWindowMinAlpha;
     uniform float uAlphaTest;
     varying vec2 vUv;
     varying vec3 vWorldNormal;
@@ -645,7 +648,11 @@ function buildCarWindowFragmentShader() {
         reflectMix
       );
       vec3 color = reflectionColor * clamp(fresnel, 0.0, 1.0);
-      float alpha = clamp((1.0 - fresnel) * uWindowAlpha * baseSample.a, 0.0, 0.92);
+      float alpha = clamp(
+        max(uWindowMinAlpha, (1.0 - fresnel) * uWindowAlpha) * baseSample.a,
+        0.0,
+        0.92
+      );
       if (alpha <= uAlphaTest) discard;
       gl_FragColor = vec4(color, alpha);
     }
