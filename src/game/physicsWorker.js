@@ -5,6 +5,7 @@ import { createDrivingSimulation } from "./physics";
 let simulation = null;
 let inputState = createInputState();
 let queuedContacts = [];
+let contactIndex = 0;
 let workerCarRoot = null;
 
 self.onmessage = async (event) => {
@@ -13,6 +14,7 @@ self.onmessage = async (event) => {
   if (type === "init") {
     inputState = createInputState();
     queuedContacts = normalizeContacts(payload.contacts);
+    contactIndex = 0;
     workerCarRoot = createWorkerCarRoot(payload.rig);
     simulation = await createDrivingSimulation({
       carId: payload.carId,
@@ -33,6 +35,7 @@ self.onmessage = async (event) => {
 
   if (type === "step") {
     queuedContacts = normalizeContacts(payload.contacts);
+    contactIndex = 0;
     Object.assign(inputState, payload.inputState ?? {});
     simulation.update(payload.dt ?? 0);
     postState("step");
@@ -66,7 +69,13 @@ function postState(kind) {
 function createQueuedSampler() {
   return {
     sample() {
-      return queuedContacts.shift() ?? null;
+      if (queuedContacts.length === 0) {
+        return null;
+      }
+
+      const contact = queuedContacts[contactIndex % queuedContacts.length] ?? null;
+      contactIndex += 1;
+      return contact;
     },
     raycast() {
       return null;
