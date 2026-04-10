@@ -104,6 +104,8 @@ const sunOcclusionOrigin = new THREE.Vector3();
 const sunOcclusionDirection = new THREE.Vector3();
 const sunWorldPosition = new THREE.Vector3();
 let smoothedVehicleSunVisibility = 1;
+const FRAME_TRACE_LIMIT = 240;
+const frameTrace = [];
 
 if (typeof window !== "undefined") {
   window.__flatoutDebug = {
@@ -197,6 +199,12 @@ if (typeof window !== "undefined") {
       sceneState.chaseCamera = null;
       controls.enabled = true;
     },
+    get frameTrace() {
+      return frameTrace;
+    },
+    frameTraceSummary(count = 60) {
+      return summarizeFrameTrace(frameTrace.slice(-count));
+    },
   };
 }
 
@@ -210,23 +218,50 @@ animate();
 
 function animate() {
   requestAnimationFrame(animate);
+  const frameStart = performance.now();
   const deltaSeconds = Math.min(frameClock.getDelta(), 0.1);
+  const simStart = performance.now();
   sceneState.drivingSimulation?.update(deltaSeconds);
+  const simMs = performance.now() - simStart;
+  const chaseStart = performance.now();
   sceneState.chaseCamera?.update(deltaSeconds);
+  const chaseMs = performance.now() - chaseStart;
+  const envStart = performance.now();
   sceneState.environmentController?.update(camera);
+  const environmentMs = performance.now() - envStart;
+  const sunStart = performance.now();
   updateVehicleSunOcclusion(deltaSeconds);
+  const sunMs = performance.now() - sunStart;
+  const lightsStart = performance.now();
   updateVehicleLights();
+  const lightsMs = performance.now() - lightsStart;
   updateHudTelemetry(hud, {
     speedKph: sceneState.drivingSimulation?.speedKph?.() ?? 0,
   });
 
+  let controlsMs = 0;
   if (!sceneState.chaseCamera) {
+    const controlsStart = performance.now();
     controls.update();
+    controlsMs = performance.now() - controlsStart;
   }
 
+  const renderStart = performance.now();
   colorFilterPass.render(scene, camera, {
     scene: sceneState.environmentController?.getOverlayScene?.(),
     camera: sceneState.environmentController?.getOverlayCamera?.(),
+  });
+  const renderMs = performance.now() - renderStart;
+  recordFrameTrace({
+    deltaSeconds,
+    simMs,
+    chaseMs,
+    environmentMs,
+    sunMs,
+    lightsMs,
+    controlsMs,
+    renderMs,
+    totalMs: performance.now() - frameStart,
   });
 }
 
@@ -280,6 +315,47 @@ function updateVehicleLights() {
     sceneState.environmentState,
     sceneState.lightsConfig,
   );
+}
+
+function recordFrameTrace(sample) {
+  frameTrace.push(sample);
+  if (frameTrace.length > FRAME_TRACE_LIMIT) {
+    frameTrace.splice(0, frameTrace.length - FRAME_TRACE_LIMIT);
+  }
+}
+
+function summarizeFrameTrace(samples) {
+  return {
+    frames: samples.length,
+    avgSimMs: averageFrameMetric(samples, "simMs"),
+    avgChaseMs: averageFrameMetric(samples, "chaseMs"),
+    avgEnvironmentMs: averageFrameMetric(samples, "environmentMs"),
+    avgSunMs: averageFrameMetric(samples, "sunMs"),
+    avgLightsMs: averageFrameMetric(samples, "lightsMs"),
+    avgControlsMs: averageFrameMetric(samples, "controlsMs"),
+    avgRenderMs: averageFrameMetric(samples, "renderMs"),
+    avgTotalMs: averageFrameMetric(samples, "totalMs"),
+    maxTotalMs: maxFrameMetric(samples, "totalMs"),
+    last: samples[samples.length - 1] ?? null,
+  };
+}
+
+function averageFrameMetric(samples, key) {
+  if (samples.length === 0) {
+    return null;
+  }
+
+  return (
+    samples.reduce((sum, sample) => sum + (sample[key] ?? 0), 0) / samples.length
+  );
+}
+
+function maxFrameMetric(samples, key) {
+  if (samples.length === 0) {
+    return null;
+  }
+
+  return Math.max(...samples.map((sample) => sample[key] ?? 0));
 }
 
 function applySelection(nextPartialSelection) {

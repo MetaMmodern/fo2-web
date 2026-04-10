@@ -1,12 +1,29 @@
 export function createDrivingInput(target = window) {
   const pressedKeys = new Set();
+  let version = 0;
+
+  const snapshot = () => ({
+    throttle: pressedKeys.has("KeyW") || pressedKeys.has("ArrowUp") ? 1 : 0,
+    brake: pressedKeys.has("KeyS") || pressedKeys.has("ArrowDown") ? 1 : 0,
+    steer:
+      (pressedKeys.has("KeyA") || pressedKeys.has("ArrowLeft") ? 1 : 0) -
+      (pressedKeys.has("KeyD") || pressedKeys.has("ArrowRight") ? 1 : 0),
+    handbrake: pressedKeys.has("Space") ? 1 : 0,
+    resetPressed: pressedKeys.has("KeyR") ? 1 : 0,
+  });
 
   const onKeyDown = (event) => {
+    const previousSize = pressedKeys.size;
     pressedKeys.add(event.code);
+    if (pressedKeys.size !== previousSize) {
+      version += 1;
+    }
   };
 
   const onKeyUp = (event) => {
-    pressedKeys.delete(event.code);
+    if (pressedKeys.delete(event.code)) {
+      version += 1;
+    }
   };
 
   target.addEventListener("keydown", onKeyDown);
@@ -14,23 +31,28 @@ export function createDrivingInput(target = window) {
 
   return {
     get throttle() {
-      return pressedKeys.has("KeyW") || pressedKeys.has("ArrowUp") ? 1 : 0;
+      return snapshot().throttle;
     },
     get brake() {
-      return pressedKeys.has("KeyS") || pressedKeys.has("ArrowDown") ? 1 : 0;
+      return snapshot().brake;
     },
     get steer() {
-      const left =
-        pressedKeys.has("KeyA") || pressedKeys.has("ArrowLeft") ? 1 : 0;
-      const right =
-        pressedKeys.has("KeyD") || pressedKeys.has("ArrowRight") ? 1 : 0;
-      return left - right;
+      return snapshot().steer;
     },
     get handbrake() {
-      return pressedKeys.has("Space") ? 1 : 0;
+      return snapshot().handbrake;
     },
     get resetPressed() {
-      return pressedKeys.has("KeyR") ? 1 : 0;
+      return snapshot().resetPressed;
+    },
+    get version() {
+      return version;
+    },
+    snapshot,
+    clearResetPressed() {
+      if (pressedKeys.delete("KeyR")) {
+        version += 1;
+      }
     },
     dispose() {
       target.removeEventListener("keydown", onKeyDown);

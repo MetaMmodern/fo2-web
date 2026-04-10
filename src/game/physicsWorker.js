@@ -2,11 +2,18 @@ import * as THREE from "three";
 
 import { createDrivingSimulation } from "./physics";
 
+const WORKER_STEP_DT = 1 / 60;
+const WORKER_STEP_MS = 1000 / 60;
+const POST_EVERY_TICKS = 2;
+
 let simulation = null;
 let inputState = createInputState();
 let queuedContacts = [];
 let contactIndex = 0;
 let workerCarRoot = null;
+let tickTimer = null;
+let tickCount = 0;
+let postSequence = 0;
 
 self.onmessage = async (event) => {
   const { type, payload } = event.data ?? {};
@@ -15,6 +22,7 @@ self.onmessage = async (event) => {
     inputState = createInputState();
     queuedContacts = normalizeContacts(payload.contacts);
     contactIndex = 0;
+    Object.assign(inputState, payload.inputState ?? {});
     workerCarRoot = createWorkerCarRoot(payload.rig);
     simulation = await createDrivingSimulation({
       carId: payload.carId,
@@ -24,6 +32,8 @@ self.onmessage = async (event) => {
       trackFloorSampler: createQueuedSampler(),
       debugOptions: payload.debugOptions ?? null,
     });
+    tickCount = 0;
+    startTickLoop();
     console.info("[physics-worker] ready", { carId: payload.carId });
     postState("ready");
     return;
@@ -33,20 +43,70 @@ self.onmessage = async (event) => {
     return;
   }
 
-  if (type === "step") {
+  if (type === "contacts") {
     queuedContacts = normalizeContacts(payload.contacts);
     contactIndex = 0;
+    return;
+  }
+
+  if (type === "input") {
     Object.assign(inputState, payload.inputState ?? {});
-    simulation.update(payload.dt ?? 0);
-    postState("step");
+    if (payload.consumeReset) {
+      inputState.resetPressed = false;
+    }
+    return;
+  }
+
+  if (type === "dispose") {
+    stopTickLoop();
+    simulation = null;
+    workerCarRoot = null;
   }
 };
 
-function postState(kind) {
+function startTickLoop() {
+  stopTickLoop();
+
+  const runTick = () => {
+    if (!simulation) {
+      tickTimer = null;
+      return;
+    }
+
+    const updateStart = performance.now();
+    simulation.update(WORKER_STEP_DT);
+    const updateMs = performance.now() - updateStart;
+    tickCount += 1;
+    if (tickCount >= POST_EVERY_TICKS) {
+      tickCount = 0;
+      postState("step", { updateMs });
+    }
+    tickTimer = self.setTimeout(runTick, WORKER_STEP_MS);
+  };
+
+  tickTimer = self.setTimeout(runTick, WORKER_STEP_MS);
+}
+
+function stopTickLoop() {
+  if (tickTimer !== null) {
+    self.clearTimeout(tickTimer);
+    tickTimer = null;
+  }
+}
+
+function postState(kind, stats = {}) {
+  const cameraState = simulation?.getCameraState?.() ?? null;
+  const lightState = simulation?.getLightState?.() ?? null;
   self.postMessage({
     type: "state",
     payload: {
       kind,
+      sentAt: performance.now(),
+      sequence: postSequence++,
+      workerStats: {
+        updateMs: stats.updateMs ?? 0,
+        queuedContacts: queuedContacts.length,
+      },
       pose: {
         position: workerCarRoot.position.toArray(),
         quaternion: workerCarRoot.quaternion.toArray(),
@@ -59,9 +119,13 @@ function postState(kind) {
           quaternion: node.quaternion.toArray(),
         })),
       speedKph: simulation?.speedKph?.() ?? 0,
-      cameraState: clonePlain(simulation?.getCameraState?.() ?? null),
-      lightState: clonePlain(simulation?.getLightState?.() ?? null),
-      config: clonePlain(simulation?.getConfig?.() ?? null),
+      cameraState: cameraState ? { ...cameraState } : null,
+      lightState: lightState ? { ...lightState } : null,
+      ...(kind === "ready"
+        ? {
+            config: cloneShallow(simulation?.getConfig?.() ?? null),
+          }
+        : {}),
     },
   });
 }
@@ -179,6 +243,6 @@ function createInputState() {
   };
 }
 
-function clonePlain(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
+function cloneShallow(value) {
+  return value == null ? value : { ...value };
 }
