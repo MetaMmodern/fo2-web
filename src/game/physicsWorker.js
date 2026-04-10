@@ -75,15 +75,24 @@ function createQueuedSampler() {
 }
 
 function createWorkerCarRoot(rig) {
+  const collisionBounds = rig.userData?.collisionBounds ?? null;
+  const rootBoundingBox = createBoundingBox(collisionBounds);
   const nodes = new Map();
+  const children = [];
+
   for (const [name, node] of Object.entries(rig.nodes ?? {})) {
-    nodes.set(name, {
+    const workerNode = {
       name,
       position: new THREE.Vector3().fromArray(node.position ?? [0, 0, 0]),
       quaternion: new THREE.Quaternion().fromArray(
         node.quaternion ?? [0, 0, 0, 1],
       ),
-    });
+      children: [],
+      matrixWorld: new THREE.Matrix4(),
+      updateWorldMatrix() {},
+    };
+    nodes.set(name, workerNode);
+    children.push(workerNode);
   }
 
   return {
@@ -92,9 +101,20 @@ function createWorkerCarRoot(rig) {
       rig.quaternion ?? [0, 0, 0, 1],
     ),
     userData: {
-      collisionBounds: rig.userData?.collisionBounds ?? null,
+      collisionBounds,
     },
+    geometry: rootBoundingBox
+      ? {
+          boundingBox: rootBoundingBox,
+          getAttribute() {
+            return undefined;
+          },
+          computeBoundingBox() {},
+        }
+      : undefined,
     __nodes: nodes,
+    children,
+    matrixWorld: new THREE.Matrix4(),
     getObjectByName(name) {
       return nodes.get(name) ?? null;
     },
@@ -110,6 +130,17 @@ function createWorkerCarRoot(rig) {
       }
     },
   };
+}
+
+function createBoundingBox(collisionBounds) {
+  if (!collisionBounds?.min || !collisionBounds?.max) {
+    return null;
+  }
+
+  return new THREE.Box3(
+    new THREE.Vector3().fromArray(collisionBounds.min),
+    new THREE.Vector3().fromArray(collisionBounds.max),
+  );
 }
 
 function normalizeContacts(contacts) {
