@@ -26,7 +26,7 @@ import {
   setVehicleLightState,
   setVehicleSunVisibility,
 } from "./game/materials";
-import { createDrivingSimulation } from "./game/physics";
+import { createDrivingSimulation } from "./game/physicsWorkerClient";
 import { createColorFilterPass } from "./game/postprocessing";
 import {
   createChaseCamera,
