@@ -17,10 +17,14 @@ export async function loadTrack(
   renderer,
   environmentState = null,
 ) {
-  const [trackRoot, trackMaterialInfo, startPoints] = await Promise.all([
+  const [trackRoot, trackMaterialInfo, startPoints, collisionAsset] = await Promise.all([
     loadGltf(assetUrls.model, assetUrls.trackTextures),
     loadTrackMaterialInfo(assetUrls.log),
     loadStartPoints(assetUrls.startPoints),
+    loadCollisionAsset(
+      assetUrls.collisionModel ?? null,
+      assetUrls.collisionMeta ?? null,
+    ),
   ]);
 
   const maxAnisotropy = renderer?.capabilities?.getMaxAnisotropy?.() ?? 1;
@@ -36,12 +40,27 @@ export async function loadTrack(
     environmentState,
   );
   alignTrackAtOrigin(trackRoot);
+
+  if (collisionAsset?.root) {
+    collisionAsset.root.position.copy(trackRoot.position);
+    collisionAsset.root.quaternion.copy(trackRoot.quaternion);
+    collisionAsset.root.scale.copy(trackRoot.scale);
+    collisionAsset.root.scale.z *= -1;
+    prepareCollisionDebugVisuals(collisionAsset.root);
+    collisionAsset.root.updateWorldMatrix(true, true);
+  }
+
   scene.add(trackRoot);
 
   return {
     trackRoot,
     startPoints,
-    floorSampler: createTrackFloorSampler(trackRoot),
+    collisionAsset,
+    contactSampler: createTrackFloorSampler(
+      collisionAsset?.root ?? trackRoot,
+      { includeInvisible: Boolean(collisionAsset?.root) },
+    ),
+    sceneSampler: createTrackFloorSampler(trackRoot),
   };
 }
 
@@ -89,18 +108,19 @@ export function placeVehicleOnTrack(
   carRoot.rotation.set(0, Math.PI, 0);
 }
 
-export function createTrackFloorSampler(trackRoot) {
+export function createTrackFloorSampler(trackRoot, options = {}) {
   const meshes = [];
   const raycaster = new THREE.Raycaster();
   raycaster.firstHitOnly = false;
   raycaster.far = 128;
+  const includeInvisible = options.includeInvisible ?? false;
 
   trackRoot.traverse((node) => {
     if (!node.isMesh || !node.geometry) {
       return;
     }
 
-    if (!node.visible) {
+    if (!includeInvisible && !node.visible) {
       return;
     }
 
@@ -186,6 +206,61 @@ function loadGltf(url, textureUrls = {}) {
   return new Promise((resolve, reject) => {
     loader.load(url, (gltf) => resolve(gltf.scene), undefined, reject);
   });
+}
+
+function prepareCollisionDebugVisuals(root) {
+  root.visible = false;
+
+  root.traverse((node) => {
+    if (!node.isMesh) {
+      return;
+    }
+
+    const debugMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00e5a8,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.2,
+      depthWrite: false,
+    });
+    node.material = debugMaterial;
+    node.renderOrder = 10;
+  });
+}
+
+async function loadCollisionAsset(collisionModelUrl, collisionMetaUrl) {
+  if (!collisionModelUrl) {
+    return null;
+  }
+
+  const [root, meta] = await Promise.all([
+    loadGltf(collisionModelUrl),
+    loadJsonIfPresent(collisionMetaUrl),
+  ]);
+
+  return {
+    root,
+    meta,
+  };
+}
+
+async function loadJsonIfPresent(url) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to load json asset: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.warn("Ignoring collision metadata load failure:", error);
+    return null;
+  }
 }
 
 function createTrackLoader(textureUrls = {}) {

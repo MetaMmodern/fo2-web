@@ -14,7 +14,6 @@ const TMP_D = new THREE.Vector3();
 const TMP_E = new THREE.Vector3();
 const TMP_QUAT = new THREE.Quaternion();
 const TMP_QUAT_B = new THREE.Quaternion();
-const TMP_MAT = new THREE.Matrix4();
 
 const MIN_SUBSTEPS = 1;
 const MAX_SUBSTEPS = 4;
@@ -24,6 +23,8 @@ const CONTACT_RAY_HEIGHT = 2.8;
 const CONTACT_RAY_DISTANCE = 4.6;
 const RESET_FALL_Y = -30;
 const DEFAULT_GRAVITY = 18;
+const BODY_COLLISION_BUFFER = 0.06;
+const BODY_COLLISION_MAX_PUSHES = 2;
 
 const DEFAULT_STEERING = {
   Sensitivity: 0.5,
@@ -60,6 +61,7 @@ export async function createDrivingSimulation({
   assetUrls,
   input,
   trackFloorSampler = null,
+  bodyCollisionSampler = null,
   debugOptions = null,
 }) {
   const config = normalizeDrivingConfig(
@@ -123,20 +125,13 @@ export async function createDrivingSimulation({
       const substepDt = dt / substepCount;
 
       for (let index = 0; index < substepCount; index += 1) {
-        const substepContacts =
-          runtimeDebug.sampleContacts && horizontalSpeed(state.velocity) < 3
-            ? sampleWheelContacts(
-                carRoot,
-                wheelLayout,
-                trackFloorSampler,
-              )
-            : sampledContacts;
         runVehicleSubstep(
           carRoot,
           config,
           wheelLayout,
           state,
-          substepContacts,
+          sampledContacts,
+          bodyCollisionSampler ?? trackFloorSampler,
           runtimeDebug,
           substepDt,
         );
@@ -228,6 +223,7 @@ function normalizeDrivingConfig(rawConfig, carRoot) {
   return {
     steering,
     bodyCollision,
+    bodyCollisionProbes: buildBodyCollisionProbes(bodyCollision),
     localTireDynamics,
     surfaceDynamics: rawConfig.surfaceDynamics ?? {},
     massKg: massBase * massFudge,
@@ -338,6 +334,58 @@ function buildGearRatios(gearbox) {
   }
 
   return ratios;
+}
+
+function buildBodyCollisionProbes(bodyCollision) {
+  const probes = [];
+
+  addBodyCollisionProbeSet(
+    probes,
+    bodyCollision.collisionFullMin,
+    bodyCollision.collisionFullMax,
+    0.24,
+  );
+  addBodyCollisionProbeSet(
+    probes,
+    bodyCollision.collisionBottomMin,
+    bodyCollision.collisionBottomMax,
+    0.2,
+  );
+  addBodyCollisionProbeSet(
+    probes,
+    bodyCollision.collisionTopMin,
+    bodyCollision.collisionTopMax,
+    0.18,
+  );
+
+  return probes;
+}
+
+function addBodyCollisionProbeSet(probes, minArray, maxArray, radiusScale) {
+  if (!Array.isArray(minArray) || !Array.isArray(maxArray)) {
+    return;
+  }
+
+  const min = new THREE.Vector3().fromArray(minArray);
+  const max = new THREE.Vector3().fromArray(maxArray);
+  const extentX = Math.max((max.x - min.x) * 0.5, 0.05);
+  const extentY = Math.max((max.y - min.y) * 0.5, 0.05);
+  const extentZ = Math.max((max.z - min.z) * 0.5, 0.05);
+  const radius = Math.max(Math.min(extentX, extentY, extentZ) * radiusScale * 2, 0.08);
+  const centerY = (min.y + max.y) * 0.5;
+  const lowerY = THREE.MathUtils.lerp(min.y, max.y, 0.25);
+  const upperY = THREE.MathUtils.lerp(min.y, max.y, 0.75);
+
+  probes.push(
+    { local: new THREE.Vector3(min.x, centerY, 0), radius },
+    { local: new THREE.Vector3(max.x, centerY, 0), radius },
+    { local: new THREE.Vector3(0, centerY, min.z), radius },
+    { local: new THREE.Vector3(0, centerY, max.z), radius },
+    { local: new THREE.Vector3(0, lowerY, min.z), radius },
+    { local: new THREE.Vector3(0, lowerY, max.z), radius },
+    { local: new THREE.Vector3(min.x * 0.75, upperY, 0), radius },
+    { local: new THREE.Vector3(max.x * 0.75, upperY, 0), radius },
+  );
 }
 
 function buildReverseRatio(gearbox) {
@@ -599,6 +647,7 @@ function runVehicleSubstep(
   wheelLayout,
   state,
   sampledContacts,
+  bodyCollisionSampler,
   runtimeDebug,
   dt,
 ) {
@@ -674,8 +723,18 @@ function runVehicleSubstep(
   state.yaw += state.yawRate * dt;
 
   stabilizeIdleState(state, dt);
+  const previousPosition = carRoot.position.clone();
+  const previousQuaternion = carRoot.quaternion.clone();
   carRoot.position.addScaledVector(state.velocity, dt);
   applyVehicleOrientation(carRoot, state);
+  resolveVehicleBodyCollisions(
+    carRoot,
+    state,
+    config,
+    bodyCollisionSampler,
+    previousPosition,
+    previousQuaternion,
+  );
   updatePlanarBasisFromQuaternion(state, carRoot.quaternion);
 
   if (!previousGrounded && state.grounded) {
@@ -814,6 +873,71 @@ function computeGroundedBodyY(groundedContacts, state, wheelLayout) {
 function alignVehicleToGround(carRoot, state, desiredGroundY, dt) {
   const follow = 1 - Math.exp(-18 * dt);
   carRoot.position.y = THREE.MathUtils.lerp(carRoot.position.y, desiredGroundY, follow);
+}
+
+function resolveVehicleBodyCollisions(
+  carRoot,
+  state,
+  config,
+  trackFloorSampler,
+  previousPosition,
+  previousQuaternion,
+) {
+  if (!trackFloorSampler?.raycast || config.bodyCollisionProbes.length === 0) {
+    return;
+  }
+
+  for (let pushIndex = 0; pushIndex < BODY_COLLISION_MAX_PUSHES; pushIndex += 1) {
+    let adjusted = false;
+
+    for (const probe of config.bodyCollisionProbes) {
+      const previousProbe = TMP_A
+        .copy(probe.local)
+        .applyQuaternion(previousQuaternion)
+        .add(previousPosition);
+      const currentProbe = TMP_B
+        .copy(probe.local)
+        .applyQuaternion(carRoot.quaternion)
+        .add(carRoot.position);
+      const travel = TMP_C.copy(currentProbe).sub(previousProbe);
+      const travelDistance = travel.length();
+
+      if (travelDistance < 1e-5) {
+        continue;
+      }
+
+      const hit = trackFloorSampler.raycast(previousProbe, travel, {
+        rayDistance: travelDistance + probe.radius + BODY_COLLISION_BUFFER,
+        minUpDot: -1,
+        maxUpDot: 1,
+      });
+
+      if (!hit || Math.abs(hit.normal.y) > 0.55) {
+        continue;
+      }
+
+      const penetration =
+        probe.radius + BODY_COLLISION_BUFFER - Math.max(hit.distance, 0);
+
+      if (penetration <= 0) {
+        continue;
+      }
+
+      carRoot.position.addScaledVector(hit.normal, penetration);
+      const velocityIntoSurface = state.velocity.dot(hit.normal);
+
+      if (velocityIntoSurface < 0) {
+        state.velocity.addScaledVector(hit.normal, -velocityIntoSurface);
+      }
+
+      state.yawRate *= 0.85;
+      adjusted = true;
+    }
+
+    if (!adjusted) {
+      break;
+    }
+  }
 }
 
 function accumulateWheelForces(

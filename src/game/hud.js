@@ -12,6 +12,17 @@ export function createHud(
 ) {
   const hudRoot = document.createElement("aside");
   hudRoot.className = "hud hud-collapsed";
+  const perfRoot = document.createElement("aside");
+  perfRoot.className = "perf-hud";
+  perfRoot.innerHTML = `
+    <div class="perf-hud-line" data-role="fps">FPS: --</div>
+    <div class="perf-hud-line" data-role="frame">Frame: -- ms</div>
+    <div class="perf-hud-line" data-role="sim">Sim: -- ms</div>
+    <div class="perf-hud-line" data-role="render">Render: -- ms</div>
+    <div class="perf-hud-line" data-role="camera">Camera: -- ms</div>
+    <div class="perf-hud-line perf-hud-debug" data-role="physics-debug">Physics: --</div>
+    <div class="perf-hud-line perf-hud-debug" data-role="world-debug">World: --</div>
+  `;
   hudRoot.innerHTML = `
     <div class="hud-header">
       <button class="hud-toggle" type="button" aria-expanded="false">Show HUD</button>
@@ -163,13 +174,22 @@ export function createHud(
   }
 
   container.appendChild(hudRoot);
+  container.appendChild(perfRoot);
 
   const hud = {
     root: hudRoot,
+    perfRoot,
     trackSelect,
     carSelect,
     skinSelect,
     speedValue,
+    fpsValue: perfRoot.querySelector('[data-role="fps"]'),
+    frameValue: perfRoot.querySelector('[data-role="frame"]'),
+    simValue: perfRoot.querySelector('[data-role="sim"]'),
+    renderValue: perfRoot.querySelector('[data-role="render"]'),
+    cameraValue: perfRoot.querySelector('[data-role="camera"]'),
+    physicsDebugValue: perfRoot.querySelector('[data-role="physics-debug"]'),
+    worldDebugValue: perfRoot.querySelector('[data-role="world-debug"]'),
   };
 
   syncHudSelection(hud, { tracks, cars, selection });
@@ -185,8 +205,62 @@ export function syncHudSelection(hud, { tracks, cars, selection }) {
   setSelectOptions(hud.skinSelect, skins, selection.skinId);
 }
 
-export function updateHudTelemetry(hud, { speedKph = 0 }) {
+export function updateHudTelemetry(
+  hud,
+  {
+    speedKph = 0,
+    fps = null,
+    frameMs = null,
+    simMs = null,
+    renderMs = null,
+    chaseMs = null,
+    physicsDebug = null,
+    worldDebug = null,
+  },
+) {
   hud.speedValue.textContent = `Speed: ${Math.round(speedKph)} km/h`;
+
+  if (hud.fpsValue) {
+    hud.fpsValue.textContent = Number.isFinite(fps)
+      ? `FPS: ${Math.round(fps)}`
+      : "FPS: --";
+  }
+
+  if (hud.frameValue) {
+    hud.frameValue.textContent = Number.isFinite(frameMs)
+      ? `Frame: ${frameMs.toFixed(1)} ms`
+      : "Frame: -- ms";
+  }
+
+  if (hud.simValue) {
+    hud.simValue.textContent = Number.isFinite(simMs)
+      ? `Sim: ${simMs.toFixed(1)} ms`
+      : "Sim: -- ms";
+  }
+
+  if (hud.renderValue) {
+    hud.renderValue.textContent = Number.isFinite(renderMs)
+      ? `Render: ${renderMs.toFixed(1)} ms`
+      : "Render: -- ms";
+  }
+
+  if (hud.cameraValue) {
+    hud.cameraValue.textContent = Number.isFinite(chaseMs)
+      ? `Camera: ${chaseMs.toFixed(1)} ms`
+      : "Camera: -- ms";
+  }
+
+  if (hud.physicsDebugValue) {
+    hud.physicsDebugValue.textContent = physicsDebug
+      ? `Physics: ${physicsDebug}`
+      : "Physics: --";
+  }
+
+  if (hud.worldDebugValue) {
+    hud.worldDebugValue.textContent = worldDebug
+      ? `World: ${worldDebug}`
+      : "World: --";
+  }
 }
 
 function setSelectOptions(select, items, selectedId) {

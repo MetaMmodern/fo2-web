@@ -30,6 +30,7 @@ self.onmessage = async (event) => {
       assetUrls: payload.assetUrls,
       input: inputState,
       trackFloorSampler: createQueuedSampler(),
+      bodyCollisionSampler: createQueuedSampler(),
       debugOptions: payload.debugOptions ?? null,
     });
     tickCount = 0;

@@ -89,7 +89,9 @@ colorFilterPass.applyWeatherProfile(initialTrack.environment.weatherProfile);
 const selection = { ...defaultSelection };
 const sceneState = {
   trackRoot: null,
-  floorSampler: null,
+  collisionAsset: null,
+  contactSampler: null,
+  sceneSampler: null,
   startPoints: [],
   carRoot: null,
   tireRoot: null,
@@ -106,6 +108,10 @@ const sunWorldPosition = new THREE.Vector3();
 let smoothedVehicleSunVisibility = 1;
 const FRAME_TRACE_LIMIT = 240;
 const frameTrace = [];
+let smoothedFrameMs = 16.7;
+let smoothedSimMs = 0;
+let smoothedRenderMs = 0;
+let smoothedChaseMs = 0;
 
 if (typeof window !== "undefined") {
   window.__flatoutDebug = {
@@ -202,6 +208,17 @@ if (typeof window !== "undefined") {
     get frameTrace() {
       return frameTrace;
     },
+    showCollisionDebug(show = true) {
+      if (sceneState.collisionAsset?.root) {
+        sceneState.collisionAsset.root.visible = Boolean(show);
+        if (show && !sceneState.collisionAsset.root.parent) {
+          scene.add(sceneState.collisionAsset.root);
+        }
+        if (!show && sceneState.collisionAsset.root.parent === scene) {
+          scene.remove(sceneState.collisionAsset.root);
+        }
+      }
+    },
     frameTraceSummary(count = 60) {
       return summarizeFrameTrace(frameTrace.slice(-count));
     },
@@ -235,9 +252,6 @@ function animate() {
   const lightsStart = performance.now();
   updateVehicleLights();
   const lightsMs = performance.now() - lightsStart;
-  updateHudTelemetry(hud, {
-    speedKph: sceneState.drivingSimulation?.speedKph?.() ?? 0,
-  });
 
   let controlsMs = 0;
   if (!sceneState.chaseCamera) {
@@ -252,6 +266,25 @@ function animate() {
     camera: sceneState.environmentController?.getOverlayCamera?.(),
   });
   const renderMs = performance.now() - renderStart;
+  const totalMs = performance.now() - frameStart;
+  smoothedFrameMs = THREE.MathUtils.lerp(smoothedFrameMs, totalMs, 0.12);
+  smoothedSimMs = THREE.MathUtils.lerp(smoothedSimMs, simMs, 0.12);
+  smoothedRenderMs = THREE.MathUtils.lerp(smoothedRenderMs, renderMs, 0.12);
+  smoothedChaseMs = THREE.MathUtils.lerp(smoothedChaseMs, chaseMs, 0.12);
+  updateHudTelemetry(hud, {
+    speedKph: sceneState.drivingSimulation?.speedKph?.() ?? 0,
+    fps: smoothedFrameMs > 1e-3 ? 1000 / smoothedFrameMs : null,
+    frameMs: smoothedFrameMs,
+    simMs: smoothedSimMs,
+    renderMs: smoothedRenderMs,
+    chaseMs: smoothedChaseMs,
+    physicsDebug: formatPhysicsDebug(
+      sceneState.drivingSimulation?.getDebugState?.() ?? null,
+    ),
+    worldDebug: formatWorldDebug(
+      sceneState.drivingSimulation?.getDebugState?.() ?? null,
+    ),
+  });
   recordFrameTrace({
     deltaSeconds,
     simMs,
@@ -261,14 +294,54 @@ function animate() {
     lightsMs,
     controlsMs,
     renderMs,
-    totalMs: performance.now() - frameStart,
+    totalMs,
   });
+}
+
+function formatPhysicsDebug(debugState) {
+  if (!debugState) {
+    return null;
+  }
+
+  const pos = debugState.chassisPosition;
+  const vel = debugState.chassisVelocity;
+  return [
+    `m=${debugState.mode ?? "--"}`,
+    `g=${debugState.grounded ? 1 : 0}`,
+    `toi=${Number.isFinite(debugState.groundToi) ? debugState.groundToi.toFixed(2) : "--"}`,
+    `thr=${debugState.throttle.toFixed(1)}`,
+    `st=${debugState.steer.toFixed(1)}`,
+    `eng=${debugState.engineForce.toFixed(0)}`,
+    `spd=${debugState.speedHorizontal.toFixed(2)}`,
+    `y=${pos.y.toFixed(2)}`,
+    `vy=${vel.y.toFixed(2)}`,
+  ].join(" ");
+}
+
+function formatWorldDebug(debugState) {
+  const world = debugState?.staticWorld;
+
+  if (!world) {
+    return null;
+  }
+
+  const minY = Array.isArray(world.boundsMin) ? world.boundsMin[1] : null;
+  const maxY = Array.isArray(world.boundsMax) ? world.boundsMax[1] : null;
+
+  return [
+    `on=${world.enabled ? 1 : 0}`,
+    `col=${world.colliderCount ?? 0}`,
+    `mesh=${world.meshCount ?? 0}`,
+    `tri=${Math.round(world.triangleCount ?? 0)}`,
+    `minY=${Number.isFinite(minY) ? minY.toFixed(2) : "--"}`,
+    `maxY=${Number.isFinite(maxY) ? maxY.toFixed(2) : "--"}`,
+  ].join(" ");
 }
 
 function updateVehicleSunOcclusion(deltaSeconds) {
   if (
     !sceneState.carRoot ||
-    !sceneState.floorSampler ||
+    !sceneState.sceneSampler ||
     !sceneState.environmentState?.sunPosition
   ) {
     return;
@@ -288,7 +361,7 @@ function updateVehicleSunOcclusion(deltaSeconds) {
 
   sunOcclusionDirection.divideScalar(sunDistance);
 
-  const hit = sceneState.floorSampler.raycast(sunOcclusionOrigin, sunOcclusionDirection, {
+  const hit = sceneState.sceneSampler.raycast(sunOcclusionOrigin, sunOcclusionDirection, {
     rayDistance: sunDistance,
     minUpDot: -1,
     maxUpDot: 1,
@@ -402,7 +475,12 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       scene.remove(sceneState.trackRoot);
       disposeHierarchy(sceneState.trackRoot);
       sceneState.trackRoot = null;
-      sceneState.floorSampler = null;
+      if (sceneState.collisionAsset?.root) {
+        disposeHierarchy(sceneState.collisionAsset.root);
+      }
+      sceneState.collisionAsset = null;
+      sceneState.contactSampler = null;
+      sceneState.sceneSampler = null;
       sceneState.startPoints = [];
     }
 
@@ -427,7 +505,9 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       sceneState.environmentState,
     );
     sceneState.trackRoot = loadedTrack.trackRoot;
-    sceneState.floorSampler = loadedTrack.floorSampler;
+    sceneState.collisionAsset = loadedTrack.collisionAsset ?? null;
+    sceneState.contactSampler = loadedTrack.contactSampler ?? null;
+    sceneState.sceneSampler = loadedTrack.sceneSampler ?? null;
     sceneState.startPoints = loadedTrack.startPoints;
     syncEnvironmentSunToTrack(sceneState.environmentState, sceneState.trackRoot);
     smoothedVehicleSunVisibility = 1;
@@ -437,6 +517,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     const previousCameraState = sceneState.chaseCamera?.getState?.() ?? null;
     sceneState.chaseCamera?.dispose?.();
     sceneState.chaseCamera = null;
+    sceneState.drivingSimulation?.dispose?.();
     sceneState.drivingSimulation = null;
     sceneState.lightsConfig = null;
 
@@ -488,7 +569,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
         sceneState.trackRoot,
         carRoot,
         sceneState.startPoints,
-        sceneState.floorSampler,
+        sceneState.contactSampler,
       );
     }
 
@@ -497,15 +578,14 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       carRoot,
       assetUrls: vehicleAssetUrls,
       input: drivingInput,
-      trackFloorSampler: sceneState.floorSampler,
-      debugOptions: drivingDebug,
+      collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
     });
     sceneState.chaseCamera = createChaseCamera(camera, controls, carRoot, {
       ...(cameraConfig ?? {}),
       debugControls: cameraDebug,
       getDynamics: () =>
         sceneState.drivingSimulation?.getCameraState?.() ?? null,
-      trackFloorSampler: sceneState.floorSampler,
+      trackFloorSampler: sceneState.sceneSampler,
       initialState: previousCameraState,
     });
     updateVehicleLights();
@@ -514,15 +594,15 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       sceneState.trackRoot,
       sceneState.carRoot,
       sceneState.startPoints,
-      sceneState.floorSampler,
+      sceneState.contactSampler,
     );
+    sceneState.drivingSimulation?.dispose?.();
     sceneState.drivingSimulation = await createDrivingSimulation({
       carId: car.id,
       carRoot: sceneState.carRoot,
       assetUrls: buildVehicleAssetUrls(car, skin),
       input: drivingInput,
-      trackFloorSampler: sceneState.floorSampler,
-      debugOptions: drivingDebug,
+      collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
     });
     smoothedVehicleSunVisibility = 1;
     setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);

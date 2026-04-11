@@ -420,6 +420,8 @@ function buildTracks(globalImports) {
     const trackDir = path.join(tracksRoot, familyId, trackId, variantId);
     const textureDir = path.join(tracksRoot, familyId, "textures");
     const logPath = path.join(trackDir, "geometry/track_geom_log.txt");
+    const collisionModelPath = path.join(trackDir, "geometry/collision.glb");
+    const collisionMetaPath = path.join(trackDir, "geometry/collision.meta.json");
     const logText = fs.readFileSync(logPath, "utf8");
     const textureFileMap = createTextureFileMap(textureDir);
     const requestedTextures = collectRequestedTrackTextures(logText);
@@ -496,6 +498,12 @@ function buildTracks(globalImports) {
     const skyTopImport = resolveSkyTopImport({
       weatherText,
     });
+    const collisionModelImport = fileExists(collisionModelPath)
+      ? addImport(collisionModelPath)
+      : "null";
+    const collisionMetaImport = fileExists(collisionMetaPath)
+      ? addImport(collisionMetaPath)
+      : "null";
 
     return `{
       id: ${JSON.stringify(trackKey)},
@@ -505,6 +513,8 @@ function buildTracks(globalImports) {
       variantId: ${JSON.stringify(variantKey)},
       model: ${addImport(modelPath)},
       log: ${addImport(logPath)},
+      collisionModel: ${collisionModelImport},
+      collisionMeta: ${collisionMetaImport},
       startPoints: ${addImport(path.join(trackDir, "data/startpoints.bed"))},
       lightmap: ${addImport(path.join(trackDir, "lighting/lightmap1_w2.png"))},
       trackTextures: {
