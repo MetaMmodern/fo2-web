@@ -9,6 +9,7 @@ export function createHud(
     onCarChange,
     onSkinChange,
     cameraDebug = null,
+    runtimeDebug = null,
   },
   container = document.body,
 ) {
@@ -46,6 +47,7 @@ export function createHud(
       meshes: "--",
       triangles: "--",
       dynamic: "--",
+      categories: "--",
       minY: "--",
       maxY: "--",
     },
@@ -85,6 +87,7 @@ export function createHud(
 
   const sceneFolder = mainGui.addFolder("Scene");
   const telemetryFolder = mainGui.addFolder("Telemetry");
+  const runtimeFolder = mainGui.addFolder("Runtime");
   const cameraFolder = mainGui.addFolder("Camera Debug");
   const helpFolder = mainGui.addFolder("Controls");
 
@@ -130,6 +133,32 @@ export function createHud(
     .name("Speed")
     .listen();
   setReadonlyController(speedController);
+
+  if (runtimeDebug) {
+    runtimeFolder.add(runtimeDebug, "paused").name("Paused").listen();
+    runtimeFolder
+      .add(runtimeDebug, "autoPauseAfterLoad")
+      .name("Auto pause after load");
+    runtimeFolder.add(runtimeDebug, "togglePause").name("Pause/Resume sim");
+    runtimeFolder
+      .add(runtimeDebug, "collisionFramesVisible")
+      .name("Collision frames")
+      .listen();
+    runtimeFolder
+      .add(runtimeDebug, "toggleCollisionFrames")
+      .name("Toggle collision frames");
+    runtimeFolder
+      .add(runtimeDebug, "renderGeometryVisible")
+      .name("Render geometry")
+      .listen();
+    runtimeFolder
+      .add(runtimeDebug, "toggleRenderGeometry")
+      .name("Toggle render geometry");
+  } else {
+    addInfoBlock(runtimeFolder, [
+      "Runtime controls unavailable for this scene.",
+    ]);
+  }
 
   const cameraControllers = [];
   if (cameraDebug) {
@@ -186,6 +215,7 @@ export function createHud(
     "Orbit: I/J/K/L move, U/O vertical",
     "Orbit: 1/2 slower or faster step",
     "Orbit: mouse wheel changes FOV",
+    "Scene auto-pauses after load when enabled",
   ]);
 
   const perfSummaryFolder = perfGui.addFolder("Frame");
@@ -269,6 +299,12 @@ export function createHud(
         perfState.world,
         "dynamic",
         "Dynamic",
+      ),
+      categories: makeReadonlyMetric(
+        perfWorldFolder,
+        perfState.world,
+        "categories",
+        "Categories",
       ),
       minY: makeReadonlyMetric(perfWorldFolder, perfState.world, "minY", "Min Y"),
       maxY: makeReadonlyMetric(perfWorldFolder, perfState.world, "maxY", "Max Y"),
@@ -373,6 +409,7 @@ export function updateHudTelemetry(
       meshes: "mesh",
       triangles: "tri",
       dynamic: "dyn",
+      categories: "cats",
       minY: "minY",
       maxY: "maxY",
     },

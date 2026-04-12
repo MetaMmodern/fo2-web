@@ -61,11 +61,29 @@ const cameraDebug = {
   rotateFactorScale: 1,
   shakeScale: 1,
 };
+const runtimeDebug = {
+  paused: false,
+  autoPauseAfterLoad: false,
+  collisionFramesVisible: false,
+  renderGeometryVisible: true,
+  togglePause() {
+    runtimeDebug.paused = !runtimeDebug.paused;
+  },
+  toggleCollisionFrames() {
+    runtimeDebug.collisionFramesVisible = !runtimeDebug.collisionFramesVisible;
+    setCollisionFrameVisibility(runtimeDebug.collisionFramesVisible);
+  },
+  toggleRenderGeometry() {
+    runtimeDebug.renderGeometryVisible = !runtimeDebug.renderGeometryVisible;
+    setRenderGeometryVisibility(runtimeDebug.renderGeometryVisible);
+  },
+};
 const hud = createHud({
   tracks: trackCatalog,
   cars: carCatalog,
   selection: { ...defaultSelection },
   cameraDebug,
+  runtimeDebug,
   onTrackChange(trackId) {
     applySelection({ trackId });
   },
@@ -210,15 +228,7 @@ if (typeof window !== "undefined") {
       return frameTrace;
     },
     showCollisionDebug(show = true) {
-      if (sceneState.collisionAsset?.root) {
-        sceneState.collisionAsset.root.visible = Boolean(show);
-        if (show && !sceneState.collisionAsset.root.parent) {
-          scene.add(sceneState.collisionAsset.root);
-        }
-        if (!show && sceneState.collisionAsset.root.parent === scene) {
-          scene.remove(sceneState.collisionAsset.root);
-        }
-      }
+      setCollisionFrameVisibility(show);
     },
     frameTraceSummary(count = 60) {
       return summarizeFrameTrace(frameTrace.slice(-count));
@@ -237,12 +247,15 @@ animate();
 function animate() {
   requestAnimationFrame(animate);
   const frameStart = performance.now();
-  const deltaSeconds = Math.min(frameClock.getDelta(), 0.1);
+  const measuredDeltaSeconds = Math.min(frameClock.getDelta(), 0.1);
+  const deltaSeconds = runtimeDebug.paused ? 0 : measuredDeltaSeconds;
   const simStart = performance.now();
-  sceneState.drivingSimulation?.update(deltaSeconds);
+  if (!runtimeDebug.paused) {
+    sceneState.drivingSimulation?.update(deltaSeconds);
+  }
   const simMs = performance.now() - simStart;
   const chaseStart = performance.now();
-  sceneState.chaseCamera?.update(deltaSeconds);
+  sceneState.chaseCamera?.update(measuredDeltaSeconds);
   const chaseMs = performance.now() - chaseStart;
   const envStart = performance.now();
   sceneState.environmentController?.update(camera);
@@ -338,6 +351,7 @@ function formatWorldDebug(debugState) {
     `mesh=${world.meshCount ?? 0}`,
     `tri=${Math.round(world.triangleCount ?? 0)}`,
     `dyn=${world.dynamicBodyCount ?? 0}/${world.dynamicObjectCount ?? 0}`,
+    `cats=${world.dynamicCategorySummary || "--"}`,
     `minY=${Number.isFinite(minY) ? minY.toFixed(2) : "--"}`,
     `maxY=${Number.isFinite(maxY) ? maxY.toFixed(2) : "--"}`,
   ].join(" ");
@@ -518,6 +532,8 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     sceneState.startPoints = loadedTrack.startPoints;
     syncEnvironmentSunToTrack(sceneState.environmentState, sceneState.trackRoot);
     smoothedVehicleSunVisibility = 1;
+    setCollisionFrameVisibility(runtimeDebug.collisionFramesVisible);
+    setRenderGeometryVisibility(runtimeDebug.renderGeometryVisible);
   }
 
   if (reloadCar) {
@@ -588,6 +604,10 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
       dynamicObjects: sceneState.dynamicObjects,
     });
+    if (runtimeDebug.autoPauseAfterLoad) {
+      runtimeDebug.paused = true;
+    }
+    setRenderGeometryVisibility(runtimeDebug.renderGeometryVisible);
     sceneState.chaseCamera = createChaseCamera(camera, controls, carRoot, {
       ...(cameraConfig ?? {}),
       debugControls: cameraDebug,
@@ -613,8 +633,12 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
       dynamicObjects: sceneState.dynamicObjects,
     });
+    if (runtimeDebug.autoPauseAfterLoad) {
+      runtimeDebug.paused = true;
+    }
     smoothedVehicleSunVisibility = 1;
     setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);
+    setRenderGeometryVisibility(runtimeDebug.renderGeometryVisible);
     updateVehicleLights();
   }
 }
@@ -638,6 +662,28 @@ function syncEnvironmentSunToTrack(environmentState, trackRoot) {
     alignedSceneSun.y,
     alignedSceneSun.z,
   );
+}
+
+function setCollisionFrameVisibility(show) {
+  if (sceneState.collisionAsset?.root) {
+    sceneState.collisionAsset.root.visible = Boolean(show);
+    if (show && !sceneState.collisionAsset.root.parent) {
+      scene.add(sceneState.collisionAsset.root);
+    }
+    if (!show && sceneState.collisionAsset.root.parent === scene) {
+      scene.remove(sceneState.collisionAsset.root);
+    }
+  }
+}
+
+function setRenderGeometryVisibility(show) {
+  if (sceneState.trackRoot) {
+    sceneState.trackRoot.visible = Boolean(show);
+  }
+
+  if (sceneState.carRoot) {
+    sceneState.carRoot.visible = Boolean(show);
+  }
 }
 
 function disposeHierarchy(root) {

@@ -253,7 +253,25 @@ function extractDynamicObjectsFromCollisionMeta(trackRoot, collisionAsset) {
     return [];
   }
 
-  const allowedNames = new Set(["rubber_cone", "rubber_tire"]);
+  const allowedNames = new Set([
+    "rubber_cone",
+    "rubber_tire",
+    "wood_light",
+    "metal_light",
+    "plastic_light",
+    "metal_barrel",
+    "cardboard_box",
+    "hay_box",
+    "metal_obstacle",
+    "concrete_block_superheavy",
+    "fence_wood",
+    "fence_metal",
+    "window",
+    "explosive_gaspump",
+    "metal_lightpole",
+    "metal_structure_tilt",
+    "metal_gate_180",
+  ]);
   const modelLookup = buildDynamicModelLookup(dynamicModels);
   const trackNodeLookup = buildTrackNodeLookup(trackRoot);
   const seen = new Set();

@@ -70,3 +70,9 @@ Verify that the live runtime now has:
     - `track_cdb2.gen` remains unresolved and is explicitly called out as a likely later parity/input for lower-level collision details
     - decomp notes also expose a separate recovered dynamic-object subsystem (`InitializeRecoveredDynamicObjects`)
     - therefore cones / loose tires / similar roadside props should not be expected to emerge automatically from the current static collision world path
+- Runtime status after the first dynamic-object passes:
+  - garagetest cones and loose tires now spawn from collision metadata and interact with the car as separate Rapier bodies
+  - tire stacks required cylinder collider alignment; a rotated prototype caused first-step overlap explosions
+  - garagetest banner/sign objects (`wood_light`, `metal_light`) can be made physically present as blockers, but source-faithful breakage is still blocked on the original hinge/joint obstacle path
+  - the current converted garagetest track asset does not expose the expected `dummy_*` anchors for those banner/sign objects, while other tracks like `city1/a` do expose `dummy_*` anchors
+  - consequence: loose props such as barrels/boxes/fences/windows/gas pumps can advance as the next validation slice, but banner breakage should wait for recovered anchor/joint data instead of being faked

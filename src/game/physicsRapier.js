@@ -51,11 +51,18 @@ export async function createDrivingSimulation({
     .add(new THREE.Vector3(0, computeSpawnLift(config), 0));
   const spawnRotation = carRoot.quaternion.clone();
   const chassis = createChassisBody(world, config, spawnTranslation, spawnRotation);
+  const chassisColliders = Array.from(
+    { length: chassis.numColliders() },
+    (_, index) => chassis.collider(index),
+  );
   const vehicleController = createVehicleController(world, chassis, config);
   const cameraState = createCameraState();
   const debugState = createDebugState();
   debugState.staticWorld = staticWorldDebug;
   debugState.staticWorld.dynamicBodyCount = dynamicObjectState.length;
+  debugState.staticWorld.dynamicCategorySummary = summarizeDynamicCategories(
+    dynamicObjectState,
+  );
   let accumulator = 0;
   let previousResetPressed = false;
 
@@ -81,6 +88,12 @@ export async function createDrivingSimulation({
 
       while (accumulator >= FIXED_DT && stepCount < MAX_STEPS_PER_FRAME) {
         stepVehicle(world, chassis, vehicleController, config, input, debugState);
+        activateImpactedDynamicObjects(
+          world,
+          dynamicObjectState,
+          chassis,
+          chassisColliders,
+        );
         world.step();
         accumulator -= FIXED_DT;
         stepCount += 1;
@@ -477,48 +490,242 @@ function createDynamicSceneObjects(world, dynamicObjects) {
       continue;
     }
 
-    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+    const category = getDynamicCategoryConfig(object.dynamicName);
+    const bodyDesc = (category.bodyType === "fixed"
+      ? RAPIER.RigidBodyDesc.fixed()
+      : RAPIER.RigidBodyDesc.dynamic())
       .setTranslation(bodyTranslation.x, bodyTranslation.y, bodyTranslation.z)
       .setRotation(bodyRotation)
       .setCanSleep(true)
       .setCcdEnabled(true);
 
-    if (object.dynamicName === "rubber_tire") {
-      bodyDesc.setLinearDamping(0.12).setAngularDamping(0.18).setAdditionalMass(10);
-    } else {
-      bodyDesc.setLinearDamping(0.4).setAngularDamping(0.55).setAdditionalMass(6);
+    if (category.bodyType === "dynamic") {
+      bodyDesc
+        .setLinearDamping(category.linearDamping)
+        .setAngularDamping(category.angularDamping)
+        .setAdditionalMass(category.mass);
     }
 
     const body = world.createRigidBody(bodyDesc);
-    let colliderDesc;
-
-    if (object.dynamicName === "rubber_tire") {
-      const radius = Math.max(halfExtents.x, halfExtents.y, halfExtents.z);
-      colliderDesc = RAPIER.ColliderDesc.ball(Math.max(radius, 0.08));
-    } else {
-      colliderDesc = RAPIER.ColliderDesc.cuboid(
-        Math.max(halfExtents.x, 0.04),
-        Math.max(halfExtents.y, 0.04),
-        Math.max(halfExtents.z, 0.04),
-      );
-    }
+    const colliderDesc = createDynamicObjectCollider(object, halfExtents, localCenter);
 
     colliderDesc
-      .setTranslation(localCenter.x, localCenter.y, localCenter.z)
-      .setRestitution(object.dynamicName === "rubber_tire" ? 0.18 : 0.08)
-      .setFriction(object.dynamicName === "rubber_tire" ? 0.95 : 0.75)
+      .setRestitution(category.restitution)
+      .setFriction(category.friction)
       .setDensity(1);
     world.createCollider(colliderDesc, body);
 
     entries.push({
       ...object,
       body,
+      collider: body.collider(0),
+      category,
+      dormant: category.releaseOnImpact,
       renderParent: renderNode.parent ?? null,
       renderScale: renderNode.scale.clone(),
     });
   }
 
+  if (entries.length > 0) {
+    console.info("Dynamic object bodies spawned.", {
+      total: entries.length,
+      categories: Object.fromEntries(countDynamicCategories(entries)),
+    });
+  }
+
   return entries;
+}
+
+function countDynamicCategories(entries) {
+  const counts = new Map();
+
+  for (const entry of entries) {
+    const key = entry.dynamicName ?? "unknown";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return new Map([...counts.entries()].sort((a, b) => b[1] - a[1]));
+}
+
+function summarizeDynamicCategories(entries, limit = 5) {
+  return [...countDynamicCategories(entries).entries()]
+    .slice(0, limit)
+    .map(([name, count]) => `${name}:${count}`)
+    .join(",");
+}
+
+function createDynamicObjectCollider(object, halfExtents, localCenter) {
+  if (object.dynamicName === "rubber_tire") {
+    const radius = Math.max(halfExtents.x, halfExtents.z, 0.08);
+    const halfHeight = Math.max(halfExtents.y, 0.04);
+    return RAPIER.ColliderDesc.cylinder(halfHeight, radius)
+      .setTranslation(localCenter.x, localCenter.y, localCenter.z);
+  }
+
+  return RAPIER.ColliderDesc.cuboid(
+    Math.max(halfExtents.x, 0.04),
+    Math.max(halfExtents.y, 0.04),
+    Math.max(halfExtents.z, 0.04),
+  ).setTranslation(localCenter.x, localCenter.y, localCenter.z);
+}
+
+function getDynamicCategoryConfig(dynamicName) {
+  switch (dynamicName) {
+    case "rubber_tire":
+      return {
+        bodyType: "dynamic",
+        releaseOnImpact: false,
+        mass: 12,
+        linearDamping: 0.1,
+        angularDamping: 0.12,
+        friction: 1.05,
+        restitution: 0.12,
+      };
+    case "rubber_cone":
+      return {
+        bodyType: "dynamic",
+        releaseOnImpact: false,
+        mass: 5,
+        linearDamping: 0.32,
+        angularDamping: 0.4,
+        friction: 0.72,
+        restitution: 0.08,
+      };
+    case "wood_light":
+    case "metal_light":
+      // TODO: FO2 billboard/frame parity needs the recovered hinge/joint obstacle path.
+      // Keep banner/frame pieces standing until impacted instead of letting
+      // them collapse under gravity from frame 1.
+      return {
+        bodyType: "fixed",
+        releaseOnImpact: true,
+        mass: 18,
+        linearDamping: 0.32,
+        angularDamping: 0.38,
+        friction: 0.85,
+        restitution: 0.04,
+      };
+    case "metal_barrel":
+    case "cardboard_box":
+    case "hay_box":
+      return {
+        bodyType: "dynamic",
+        releaseOnImpact: false,
+        mass: 8,
+        linearDamping: 0.28,
+        angularDamping: 0.32,
+        friction: 0.76,
+        restitution: 0.08,
+      };
+    case "plastic_light":
+    case "window":
+    case "fence_wood":
+    case "fence_metal":
+    case "explosive_gaspump":
+    case "metal_lightpole":
+    case "metal_structure_tilt":
+    case "metal_gate_180":
+      return {
+        bodyType: "fixed",
+        releaseOnImpact: true,
+        mass: 18,
+        linearDamping: 0.32,
+        angularDamping: 0.38,
+        friction: 0.82,
+        restitution: 0.05,
+      };
+    case "metal_obstacle":
+    case "concrete_block_superheavy":
+      return {
+        bodyType: "dynamic",
+        releaseOnImpact: false,
+        mass: 35,
+        linearDamping: 0.4,
+        angularDamping: 0.48,
+        friction: 0.9,
+        restitution: 0.04,
+      };
+    default:
+      return {
+        bodyType: "dynamic",
+        releaseOnImpact: false,
+        mass: 6,
+        linearDamping: 0.4,
+        angularDamping: 0.55,
+        friction: 0.75,
+        restitution: 0.08,
+      };
+  }
+}
+
+function activateImpactedDynamicObjects(
+  world,
+  dynamicObjectState,
+  chassis,
+  chassisColliders,
+) {
+  if (!Array.isArray(dynamicObjectState) || dynamicObjectState.length === 0) {
+    return;
+  }
+
+  const chassisTranslation = chassis.translation();
+  const chassisVelocity = rapierVectorToThree(chassis.linvel(), TMP_VEC_D);
+  const chassisSpeed = horizontalSpeed(chassisVelocity);
+
+  if (chassisSpeed < 0.5) {
+    return;
+  }
+
+  for (const entry of dynamicObjectState) {
+    if (!entry.dormant || !entry.body || !entry.collider) {
+      continue;
+    }
+
+    const translation = entry.body.translation();
+    const dx = translation.x - chassisTranslation.x;
+    const dy = translation.y - chassisTranslation.y;
+    const dz = translation.z - chassisTranslation.z;
+
+    if (dx * dx + dy * dy + dz * dz > 64) {
+      continue;
+    }
+
+    let touchingChassis = false;
+
+    for (const chassisCollider of chassisColliders) {
+      if (!chassisCollider || chassisCollider.handle === entry.collider.handle) {
+        continue;
+      }
+
+      world.contactPair(entry.collider, chassisCollider, () => {
+        touchingChassis = true;
+      });
+
+      if (touchingChassis) {
+        break;
+      }
+    }
+
+    if (!touchingChassis) {
+      continue;
+    }
+
+    entry.dormant = false;
+    entry.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    entry.body.setLinearDamping(entry.category.linearDamping);
+    entry.body.setAngularDamping(entry.category.angularDamping);
+    entry.body.setAdditionalMass(entry.category.mass, true);
+    entry.body.recomputeMassPropertiesFromColliders();
+
+    const impulse = chassisVelocity
+      .clone()
+      .multiplyScalar(Math.max(entry.category.mass * 0.18, 1.5));
+    entry.body.applyImpulseAtPoint(
+      vectorFromThree(impulse),
+      { x: translation.x, y: translation.y + 0.25, z: translation.z },
+      true,
+    );
+  }
 }
 
 function syncDynamicSceneObjects(dynamicObjectState) {
@@ -604,6 +811,25 @@ function createChassisBody(world, config, translation, rotation) {
     .setRestitution(0.04)
     .setDensity(0);
   world.createCollider(lowInteractionDesc, body);
+
+  const frontInteractionHalfHeight = Math.min(
+    Math.max(config.bodyHalfExtents.y * 0.25, 0.12),
+    0.22,
+  );
+  const frontInteractionDesc = RAPIER.ColliderDesc.cuboid(
+    Math.max(config.trackWidth * 0.34, config.bodyHalfExtents.x * 0.74),
+    frontInteractionHalfHeight,
+    Math.max(config.bodyHalfExtents.z * 0.08, 0.08),
+  )
+    .setTranslation(
+      0,
+      -config.bodyHalfExtents.y + frontInteractionHalfHeight + 0.14,
+      -config.bodyHalfExtents.z - 0.06,
+    )
+    .setFriction(0.16)
+    .setRestitution(0.04)
+    .setDensity(0);
+  world.createCollider(frontInteractionDesc, body);
 
   return body;
 }
