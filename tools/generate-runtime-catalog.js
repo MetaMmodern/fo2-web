@@ -502,7 +502,7 @@ function buildTracks(globalImports) {
       ? addImport(collisionModelPath)
       : "null";
     const collisionMetaImport = fileExists(collisionMetaPath)
-      ? addImport(collisionMetaPath)
+      ? addImport(collisionMetaPath, { url: false })
       : "null";
 
     return `{

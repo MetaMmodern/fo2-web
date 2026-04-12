@@ -90,6 +90,7 @@ const selection = { ...defaultSelection };
 const sceneState = {
   trackRoot: null,
   collisionAsset: null,
+  dynamicObjects: [],
   contactSampler: null,
   sceneSampler: null,
   startPoints: [],
@@ -311,7 +312,10 @@ function formatPhysicsDebug(debugState) {
     `toi=${Number.isFinite(debugState.groundToi) ? debugState.groundToi.toFixed(2) : "--"}`,
     `thr=${debugState.throttle.toFixed(1)}`,
     `st=${debugState.steer.toFixed(1)}`,
-    `eng=${debugState.engineForce.toFixed(0)}`,
+    `drv=${debugState.engineForce.toFixed(0)}`,
+    `wc=${debugState.wheelContacts ?? 0}`,
+    `imp=${Number.isFinite(debugState.forwardImpulse) ? debugState.forwardImpulse.toFixed(0) : "--"}`,
+    `sus=${Number.isFinite(debugState.suspensionForce) ? debugState.suspensionForce.toFixed(0) : "--"}`,
     `spd=${debugState.speedHorizontal.toFixed(2)}`,
     `y=${pos.y.toFixed(2)}`,
     `vy=${vel.y.toFixed(2)}`,
@@ -333,6 +337,7 @@ function formatWorldDebug(debugState) {
     `col=${world.colliderCount ?? 0}`,
     `mesh=${world.meshCount ?? 0}`,
     `tri=${Math.round(world.triangleCount ?? 0)}`,
+    `dyn=${world.dynamicBodyCount ?? 0}/${world.dynamicObjectCount ?? 0}`,
     `minY=${Number.isFinite(minY) ? minY.toFixed(2) : "--"}`,
     `maxY=${Number.isFinite(maxY) ? maxY.toFixed(2) : "--"}`,
   ].join(" ");
@@ -479,6 +484,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
         disposeHierarchy(sceneState.collisionAsset.root);
       }
       sceneState.collisionAsset = null;
+      sceneState.dynamicObjects = [];
       sceneState.contactSampler = null;
       sceneState.sceneSampler = null;
       sceneState.startPoints = [];
@@ -506,6 +512,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     );
     sceneState.trackRoot = loadedTrack.trackRoot;
     sceneState.collisionAsset = loadedTrack.collisionAsset ?? null;
+    sceneState.dynamicObjects = loadedTrack.dynamicObjects ?? [];
     sceneState.contactSampler = loadedTrack.contactSampler ?? null;
     sceneState.sceneSampler = loadedTrack.sceneSampler ?? null;
     sceneState.startPoints = loadedTrack.startPoints;
@@ -579,6 +586,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       assetUrls: vehicleAssetUrls,
       input: drivingInput,
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
+      dynamicObjects: sceneState.dynamicObjects,
     });
     sceneState.chaseCamera = createChaseCamera(camera, controls, carRoot, {
       ...(cameraConfig ?? {}),
@@ -603,6 +611,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       assetUrls: buildVehicleAssetUrls(car, skin),
       input: drivingInput,
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
+      dynamicObjects: sceneState.dynamicObjects,
     });
     smoothedVehicleSunVisibility = 1;
     setVehicleSunVisibility(sceneState.carRoot, smoothedVehicleSunVisibility);

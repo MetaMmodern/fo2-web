@@ -1,3 +1,5 @@
+import GUI from "lil-gui";
+
 export function createHud(
   {
     tracks,
@@ -10,186 +12,289 @@ export function createHud(
   },
   container = document.body,
 ) {
-  const hudRoot = document.createElement("aside");
-  hudRoot.className = "hud hud-collapsed";
-  const perfRoot = document.createElement("aside");
-  perfRoot.className = "perf-hud";
-  perfRoot.innerHTML = `
-    <div class="perf-hud-line" data-role="fps">FPS: --</div>
-    <div class="perf-hud-line" data-role="frame">Frame: -- ms</div>
-    <div class="perf-hud-line" data-role="sim">Sim: -- ms</div>
-    <div class="perf-hud-line" data-role="render">Render: -- ms</div>
-    <div class="perf-hud-line" data-role="camera">Camera: -- ms</div>
-    <div class="perf-hud-line perf-hud-debug" data-role="physics-debug">Physics: --</div>
-    <div class="perf-hud-line perf-hud-debug" data-role="world-debug">World: --</div>
-  `;
-  hudRoot.innerHTML = `
-    <div class="hud-header">
-      <button class="hud-toggle" type="button" aria-expanded="false">Show HUD</button>
-    </div>
-    <div class="hud-body">
-      <div class="hud-section">
-        <div class="hud-title">Scene</div>
-        <label class="hud-control">
-          <span class="hud-control-label">Track</span>
-          <select class="hud-select" data-role="track"></select>
-        </label>
-        <label class="hud-control">
-          <span class="hud-control-label">Car</span>
-          <select class="hud-select" data-role="car"></select>
-        </label>
-        <label class="hud-control">
-          <span class="hud-control-label">Skin</span>
-          <select class="hud-select" data-role="skin"></select>
-        </label>
-      </div>
-      <div class="hud-section">
-        <div class="hud-title">Telemetry</div>
-        <div class="hud-text" data-role="speed">Speed: 0 km/h</div>
-      </div>
-      <div class="hud-section">
-        <div class="hud-title">Camera Debug</div>
-        <label class="hud-control hud-control-inline">
-          <span class="hud-control-label">Enable chase dynamics</span>
-          <input class="hud-checkbox" type="checkbox" data-role="camera-enable-dynamics" checked />
-        </label>
-        <label class="hud-control">
-          <span class="hud-control-label">Heading response <span class="hud-value" data-role="camera-heading-response-value">1.00</span></span>
-          <input class="hud-range" type="range" min="0" max="2" step="0.05" value="1" data-role="camera-heading-response" />
-        </label>
-        <label class="hud-control">
-          <span class="hud-control-label">Position response <span class="hud-value" data-role="camera-position-response-value">1.00</span></span>
-          <input class="hud-range" type="range" min="0" max="2" step="0.05" value="1" data-role="camera-position-response" />
-        </label>
-        <label class="hud-control">
-          <span class="hud-control-label">Look response <span class="hud-value" data-role="camera-look-response-value">1.00</span></span>
-          <input class="hud-range" type="range" min="0" max="2" step="0.05" value="1" data-role="camera-look-response" />
-        </label>
-        <label class="hud-control">
-          <span class="hud-control-label">Vertical response <span class="hud-value" data-role="camera-vertical-factor-value">1.00</span></span>
-          <input class="hud-range" type="range" min="0" max="2" step="0.05" value="1" data-role="camera-vertical-factor" />
-        </label>
-        <label class="hud-control">
-          <span class="hud-control-label">Rotate response <span class="hud-value" data-role="camera-rotate-factor-value">1.00</span></span>
-          <input class="hud-range" type="range" min="0" max="2" step="0.05" value="1" data-role="camera-rotate-factor" />
-        </label>
-        <label class="hud-control">
-          <span class="hud-control-label">Shake scale <span class="hud-value" data-role="camera-shake-scale-value">1.00</span></span>
-          <input class="hud-range" type="range" min="0" max="2" step="0.05" value="1" data-role="camera-shake-scale" />
-        </label>
-        <div class="hud-text">Code path: <code>createChaseCamera()</code> and <code>resolveCarTrackerPose()</code> in <code>src/game/scene.js</code></div>
-      </div>
-      <div class="hud-section">
-        <div class="hud-title">Controls</div>
-        <div class="hud-text">W/S or arrows: throttle and brake</div>
-        <div class="hud-text">A/D or arrows: steer</div>
-        <div class="hud-text">Space: handbrake</div>
-        <div class="hud-text">R: reset car</div>
-        <div class="hud-text">C: cycle chase cameras</div>
-        <div class="hud-text">\`: toggle orbit debug camera</div>
-        <div class="hud-text">Orbit: I/J/K/L move, U/O vertical</div>
-        <div class="hud-text">Orbit: 1/2 slower or faster step</div>
-        <div class="hud-text">Orbit: mouse wheel changes FOV</div>
-      </div>
-    </div>
-  `;
+  const sceneSelection = {
+    trackId: selection.trackId ?? tracks[0]?.id ?? "",
+    carId: selection.carId ?? cars[0]?.id ?? "",
+    skinId: selection.skinId ?? "",
+  };
+  const telemetry = {
+    speed: "0 km/h",
+  };
+  const perfState = {
+    fps: "--",
+    frame: "-- ms",
+    sim: "-- ms",
+    render: "-- ms",
+    camera: "-- ms",
+    physics: {
+      mode: "--",
+      grounded: "--",
+      toi: "--",
+      throttle: "--",
+      steer: "--",
+      drive: "--",
+      wheelContacts: "--",
+      impulse: "--",
+      suspension: "--",
+      speed: "--",
+      y: "--",
+      vy: "--",
+    },
+    world: {
+      enabled: "--",
+      colliders: "--",
+      meshes: "--",
+      triangles: "--",
+      dynamic: "--",
+      minY: "--",
+      maxY: "--",
+    },
+  };
+  const suppressCallbacks = {
+    value: false,
+  };
+  const perfActions = {
+    copyAll: () => {
+      copyTextToClipboard(formatPerfSummary(perfState));
+    },
+    copyPhysics: () => {
+      copyTextToClipboard(formatPerfGroup("Physics", perfState.physics));
+    },
+    copyWorld: () => {
+      copyTextToClipboard(formatPerfGroup("World", perfState.world));
+    },
+  };
 
-  const toggleButton = hudRoot.querySelector(".hud-toggle");
-  const trackSelect = hudRoot.querySelector('[data-role="track"]');
-  const carSelect = hudRoot.querySelector('[data-role="car"]');
-  const skinSelect = hudRoot.querySelector('[data-role="skin"]');
-  const speedValue = hudRoot.querySelector('[data-role="speed"]');
-  const cameraEnableDynamics = hudRoot.querySelector(
-    '[data-role="camera-enable-dynamics"]',
+  const mainGui = new GUI({
+    autoPlace: false,
+    title: "Debug HUD",
+    closeFolders: false,
+  });
+  const perfGui = new GUI({
+    autoPlace: false,
+    title: "Perf HUD",
+    closeFolders: false,
+  });
+
+  container.appendChild(mainGui.domElement);
+  container.appendChild(perfGui.domElement);
+
+  applyGuiChrome(mainGui, "debug-gui debug-gui-main");
+  applyGuiChrome(perfGui, "debug-gui debug-gui-perf");
+  mainGui.close();
+
+  const sceneFolder = mainGui.addFolder("Scene");
+  const telemetryFolder = mainGui.addFolder("Telemetry");
+  const cameraFolder = mainGui.addFolder("Camera Debug");
+  const helpFolder = mainGui.addFolder("Controls");
+
+  const trackController = addSelectionController(
+    sceneFolder,
+    sceneSelection,
+    "trackId",
+    tracks,
+    (trackId) => {
+      if (!suppressCallbacks.value) {
+        onTrackChange?.(trackId);
+      }
+    },
+    "Track",
+  );
+  const carController = addSelectionController(
+    sceneFolder,
+    sceneSelection,
+    "carId",
+    cars,
+    (carId) => {
+      if (!suppressCallbacks.value) {
+        onCarChange?.(carId);
+      }
+    },
+    "Car",
+  );
+  const skinController = addSelectionController(
+    sceneFolder,
+    sceneSelection,
+    "skinId",
+    [],
+    (skinId) => {
+      if (!suppressCallbacks.value) {
+        onSkinChange?.(skinId);
+      }
+    },
+    "Skin",
   );
 
-  toggleButton.addEventListener("click", () => {
-    const collapsed = hudRoot.classList.toggle("hud-collapsed");
-    toggleButton.textContent = collapsed ? "Show HUD" : "Hide HUD";
-    toggleButton.setAttribute("aria-expanded", collapsed ? "false" : "true");
-  });
+  const speedController = telemetryFolder
+    .add(telemetry, "speed")
+    .name("Speed")
+    .listen();
+  setReadonlyController(speedController);
 
-  trackSelect.addEventListener("change", () => {
-    onTrackChange?.(trackSelect.value);
-  });
-
-  carSelect.addEventListener("change", () => {
-    onCarChange?.(carSelect.value);
-  });
-
-  skinSelect.addEventListener("change", () => {
-    onSkinChange?.(skinSelect.value);
-  });
-
+  const cameraControllers = [];
   if (cameraDebug) {
-    bindCheckboxControl(cameraEnableDynamics, cameraDebug, "enableDynamics", true);
-    bindRangeControl(
-      hudRoot,
-      "camera-heading-response",
-      "camera-heading-response-value",
-      cameraDebug,
-      "headingResponseScale",
-      1,
+    cameraFolder
+      .add(cameraDebug, "enableDynamics")
+      .name("Enable chase dynamics");
+    cameraControllers.push(
+      cameraFolder
+        .add(cameraDebug, "headingResponseScale", 0, 2, 0.05)
+        .name("Heading response"),
     );
-    bindRangeControl(
-      hudRoot,
-      "camera-position-response",
-      "camera-position-response-value",
-      cameraDebug,
-      "positionResponseScale",
-      1,
+    cameraControllers.push(
+      cameraFolder
+        .add(cameraDebug, "positionResponseScale", 0, 2, 0.05)
+        .name("Position response"),
     );
-    bindRangeControl(
-      hudRoot,
-      "camera-look-response",
-      "camera-look-response-value",
-      cameraDebug,
-      "lookResponseScale",
-      1,
+    cameraControllers.push(
+      cameraFolder
+        .add(cameraDebug, "lookResponseScale", 0, 2, 0.05)
+        .name("Look response"),
     );
-    bindRangeControl(
-      hudRoot,
-      "camera-vertical-factor",
-      "camera-vertical-factor-value",
-      cameraDebug,
-      "verticalFactorScale",
-      1,
+    cameraControllers.push(
+      cameraFolder
+        .add(cameraDebug, "verticalFactorScale", 0, 2, 0.05)
+        .name("Vertical response"),
     );
-    bindRangeControl(
-      hudRoot,
-      "camera-rotate-factor",
-      "camera-rotate-factor-value",
-      cameraDebug,
-      "rotateFactorScale",
-      1,
+    cameraControllers.push(
+      cameraFolder
+        .add(cameraDebug, "rotateFactorScale", 0, 2, 0.05)
+        .name("Rotate response"),
     );
-    bindRangeControl(
-      hudRoot,
-      "camera-shake-scale",
-      "camera-shake-scale-value",
-      cameraDebug,
-      "shakeScale",
-      1,
+    cameraControllers.push(
+      cameraFolder.add(cameraDebug, "shakeScale", 0, 2, 0.05).name("Shake scale"),
     );
+    for (const controller of cameraControllers) {
+      controller.listen();
+    }
+    addInfoBlock(cameraFolder, [
+      "Code path: createChaseCamera() and resolveCarTrackerPose() in src/game/scene.js",
+    ]);
+  } else {
+    addInfoBlock(cameraFolder, [
+      "Camera debug controls unavailable for this scene.",
+    ]);
   }
 
-  container.appendChild(hudRoot);
-  container.appendChild(perfRoot);
+  addInfoBlock(helpFolder, [
+    "W/S or arrows: throttle and brake",
+    "A/D or arrows: steer",
+    "Space: handbrake",
+    "R: reset car",
+    "C: cycle chase cameras",
+    "`: toggle orbit debug camera",
+    "Orbit: I/J/K/L move, U/O vertical",
+    "Orbit: 1/2 slower or faster step",
+    "Orbit: mouse wheel changes FOV",
+  ]);
+
+  const perfSummaryFolder = perfGui.addFolder("Frame");
+  const perfPhysicsFolder = perfGui.addFolder("Physics");
+  const perfWorldFolder = perfGui.addFolder("World");
+  perfGui.add(perfActions, "copyAll").name("Copy all");
+  perfPhysicsFolder.add(perfActions, "copyPhysics").name("Copy physics");
+  perfWorldFolder.add(perfActions, "copyWorld").name("Copy world");
+  const perfControllers = {
+    fps: makeReadonlyMetric(perfSummaryFolder, perfState, "fps", "FPS"),
+    frame: makeReadonlyMetric(perfSummaryFolder, perfState, "frame", "Frame"),
+    sim: makeReadonlyMetric(perfSummaryFolder, perfState, "sim", "Sim"),
+    render: makeReadonlyMetric(perfSummaryFolder, perfState, "render", "Render"),
+    camera: makeReadonlyMetric(perfSummaryFolder, perfState, "camera", "Camera"),
+    physics: {
+      mode: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "mode",
+        "Mode",
+      ),
+      grounded: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "grounded",
+        "Grounded",
+      ),
+      toi: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "toi", "TOI"),
+      throttle: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "throttle",
+        "Throttle",
+      ),
+      steer: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "steer", "Steer"),
+      drive: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "drive", "Drive"),
+      wheelContacts: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "wheelContacts",
+        "Wheel contacts",
+      ),
+      impulse: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "impulse",
+        "Impulse",
+      ),
+      suspension: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "suspension",
+        "Suspension",
+      ),
+      speed: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "speed", "Speed"),
+      y: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "y", "Y"),
+      vy: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "vy", "VY"),
+    },
+    world: {
+      enabled: makeReadonlyMetric(
+        perfWorldFolder,
+        perfState.world,
+        "enabled",
+        "Enabled",
+      ),
+      colliders: makeReadonlyMetric(
+        perfWorldFolder,
+        perfState.world,
+        "colliders",
+        "Colliders",
+      ),
+      meshes: makeReadonlyMetric(perfWorldFolder, perfState.world, "meshes", "Meshes"),
+      triangles: makeReadonlyMetric(
+        perfWorldFolder,
+        perfState.world,
+        "triangles",
+        "Triangles",
+      ),
+      dynamic: makeReadonlyMetric(
+        perfWorldFolder,
+        perfState.world,
+        "dynamic",
+        "Dynamic",
+      ),
+      minY: makeReadonlyMetric(perfWorldFolder, perfState.world, "minY", "Min Y"),
+      maxY: makeReadonlyMetric(perfWorldFolder, perfState.world, "maxY", "Max Y"),
+    },
+  };
 
   const hud = {
-    root: hudRoot,
-    perfRoot,
-    trackSelect,
-    carSelect,
-    skinSelect,
-    speedValue,
-    fpsValue: perfRoot.querySelector('[data-role="fps"]'),
-    frameValue: perfRoot.querySelector('[data-role="frame"]'),
-    simValue: perfRoot.querySelector('[data-role="sim"]'),
-    renderValue: perfRoot.querySelector('[data-role="render"]'),
-    cameraValue: perfRoot.querySelector('[data-role="camera"]'),
-    physicsDebugValue: perfRoot.querySelector('[data-role="physics-debug"]'),
-    worldDebugValue: perfRoot.querySelector('[data-role="world-debug"]'),
+    root: mainGui.domElement,
+    perfRoot: perfGui.domElement,
+    mainGui,
+    perfGui,
+    state: {
+      sceneSelection,
+      telemetry,
+      perf: perfState,
+    },
+    controllers: {
+      track: trackController,
+      car: carController,
+      skin: skinController,
+      speed: speedController,
+      perf: perfControllers,
+    },
+    handles: {
+      suppressCallbacks,
+    },
   };
 
   syncHudSelection(hud, { tracks, cars, selection });
@@ -197,12 +302,23 @@ export function createHud(
 }
 
 export function syncHudSelection(hud, { tracks, cars, selection }) {
-  setSelectOptions(hud.trackSelect, tracks, selection.trackId);
-  setSelectOptions(hud.carSelect, cars, selection.carId);
-
   const selectedCar = cars.find((car) => car.id === selection.carId) ?? cars[0] ?? null;
   const skins = selectedCar?.skins ?? [];
-  setSelectOptions(hud.skinSelect, skins, selection.skinId);
+  const sceneSelection = hud.state.sceneSelection;
+
+  hud.handles.suppressCallbacks.value = true;
+  updateSelectionController(hud.controllers.track, tracks, selection.trackId);
+  updateSelectionController(hud.controllers.car, cars, selection.carId);
+  updateSelectionController(hud.controllers.skin, skins, selection.skinId);
+
+  sceneSelection.trackId = selection.trackId ?? tracks[0]?.id ?? "";
+  sceneSelection.carId = selection.carId ?? cars[0]?.id ?? "";
+  sceneSelection.skinId = selection.skinId ?? skins[0]?.id ?? "";
+
+  refreshSelectionController(hud.controllers.track, sceneSelection.trackId);
+  refreshSelectionController(hud.controllers.car, sceneSelection.carId);
+  refreshSelectionController(hud.controllers.skin, sceneSelection.skinId);
+  hud.handles.suppressCallbacks.value = false;
 }
 
 export function updateHudTelemetry(
@@ -218,71 +334,221 @@ export function updateHudTelemetry(
     worldDebug = null,
   },
 ) {
-  hud.speedValue.textContent = `Speed: ${Math.round(speedKph)} km/h`;
+  hud.state.telemetry.speed = `${Math.round(speedKph)} km/h`;
+  hud.controllers.speed.updateDisplay();
 
-  if (hud.fpsValue) {
-    hud.fpsValue.textContent = Number.isFinite(fps)
-      ? `FPS: ${Math.round(fps)}`
-      : "FPS: --";
+  hud.state.perf.fps = Number.isFinite(fps) ? `${Math.round(fps)}` : "--";
+  hud.state.perf.frame = Number.isFinite(frameMs) ? `${frameMs.toFixed(1)} ms` : "-- ms";
+  hud.state.perf.sim = Number.isFinite(simMs) ? `${simMs.toFixed(1)} ms` : "-- ms";
+  hud.state.perf.render = Number.isFinite(renderMs)
+    ? `${renderMs.toFixed(1)} ms`
+    : "-- ms";
+  hud.state.perf.camera = Number.isFinite(chaseMs)
+    ? `${chaseMs.toFixed(1)} ms`
+    : "-- ms";
+  applyPerfDebugValues(
+    hud.state.perf.physics,
+    parseDebugPairs(physicsDebug),
+    {
+      mode: "m",
+      grounded: "g",
+      toi: "toi",
+      throttle: "thr",
+      steer: "st",
+      drive: "drv",
+      wheelContacts: "wc",
+      impulse: "imp",
+      suspension: "sus",
+      speed: "spd",
+      y: "y",
+      vy: "vy",
+    },
+  );
+  applyPerfDebugValues(
+    hud.state.perf.world,
+    parseDebugPairs(worldDebug),
+    {
+      enabled: "on",
+      colliders: "col",
+      meshes: "mesh",
+      triangles: "tri",
+      dynamic: "dyn",
+      minY: "minY",
+      maxY: "maxY",
+    },
+  );
+
+  for (const controller of Object.values(hud.controllers.perf.physics)) {
+    controller.updateDisplay();
   }
-
-  if (hud.frameValue) {
-    hud.frameValue.textContent = Number.isFinite(frameMs)
-      ? `Frame: ${frameMs.toFixed(1)} ms`
-      : "Frame: -- ms";
+  for (const controller of Object.values(hud.controllers.perf.world)) {
+    controller.updateDisplay();
   }
-
-  if (hud.simValue) {
-    hud.simValue.textContent = Number.isFinite(simMs)
-      ? `Sim: ${simMs.toFixed(1)} ms`
-      : "Sim: -- ms";
-  }
-
-  if (hud.renderValue) {
-    hud.renderValue.textContent = Number.isFinite(renderMs)
-      ? `Render: ${renderMs.toFixed(1)} ms`
-      : "Render: -- ms";
-  }
-
-  if (hud.cameraValue) {
-    hud.cameraValue.textContent = Number.isFinite(chaseMs)
-      ? `Camera: ${chaseMs.toFixed(1)} ms`
-      : "Camera: -- ms";
-  }
-
-  if (hud.physicsDebugValue) {
-    hud.physicsDebugValue.textContent = physicsDebug
-      ? `Physics: ${physicsDebug}`
-      : "Physics: --";
-  }
-
-  if (hud.worldDebugValue) {
-    hud.worldDebugValue.textContent = worldDebug
-      ? `World: ${worldDebug}`
-      : "World: --";
-  }
-}
-
-function setSelectOptions(select, items, selectedId) {
-  const nextSignature = items.map((item) => `${item.id}:${item.label}`).join("|");
-
-  if (select.dataset.signature !== nextSignature) {
-    select.innerHTML = items
-      .map(
-        (item) =>
-          `<option value="${escapeAttribute(item.id)}">${escapeHtml(item.label)}</option>`,
-      )
-      .join("");
-    select.dataset.signature = nextSignature;
-  }
-
-  if (selectedId != null) {
-    select.value = selectedId;
+  for (const controller of [
+    hud.controllers.perf.fps,
+    hud.controllers.perf.frame,
+    hud.controllers.perf.sim,
+    hud.controllers.perf.render,
+    hud.controllers.perf.camera,
+  ]) {
+    controller.updateDisplay();
   }
 }
 
-function escapeAttribute(value) {
-  return String(value).replace(/"/g, "&quot;");
+function addSelectionController(folder, target, key, items, onChange, name) {
+  const controller = folder
+    .add(target, key, buildOptionMap(items))
+    .name(name)
+    .onChange(onChange);
+  controller.__hudSignature = buildOptionSignature(items);
+  return controller;
+}
+
+function updateSelectionController(controller, items, value) {
+  const nextSignature = buildOptionSignature(items);
+  if (controller.__hudSignature !== nextSignature) {
+    if (typeof controller.options === "function") {
+      controller.options(buildOptionMap(items));
+      controller.__hudSignature = nextSignature;
+    }
+  }
+
+  if (value != null) {
+    controller.object[controller.property] = value;
+  }
+}
+
+function refreshSelectionController(controller, value) {
+  if (typeof controller.setValue === "function") {
+    controller.setValue(value);
+    return;
+  }
+
+  controller.object[controller.property] = value;
+  controller.updateDisplay();
+}
+
+function makeReadonlyMetric(gui, target, key, name) {
+  const controller = gui.add(target, key).name(name).listen();
+  setReadonlyController(controller);
+  return controller;
+}
+
+function parseDebugPairs(debugText) {
+  if (typeof debugText !== "string" || debugText.trim().length === 0) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    debugText
+      .trim()
+      .split(/\s+/)
+      .map((segment) => {
+        const splitIndex = segment.indexOf("=");
+        if (splitIndex <= 0) {
+          return null;
+        }
+
+        return [
+          segment.slice(0, splitIndex),
+          segment.slice(splitIndex + 1),
+        ];
+      })
+      .filter(Boolean),
+  );
+}
+
+function applyPerfDebugValues(target, values, fieldMap) {
+  for (const [targetKey, sourceKey] of Object.entries(fieldMap)) {
+    target[targetKey] = values[sourceKey] ?? "--";
+  }
+}
+
+function formatPerfSummary(perfState) {
+  return [
+    "Frame",
+    `FPS=${perfState.fps}`,
+    `Frame=${perfState.frame}`,
+    `Sim=${perfState.sim}`,
+    `Render=${perfState.render}`,
+    `Camera=${perfState.camera}`,
+    "",
+    formatPerfGroup("Physics", perfState.physics),
+    "",
+    formatPerfGroup("World", perfState.world),
+  ].join("\n");
+}
+
+function formatPerfGroup(title, values) {
+  return [
+    title,
+    ...Object.entries(values).map(
+      ([key, value]) => `${formatPerfLabel(key)}=${value}`,
+    ),
+  ].join("\n");
+}
+
+function formatPerfLabel(key) {
+  return key.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+}
+
+async function copyTextToClipboard(text) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through to the legacy path when clipboard API access is blocked.
+    }
+  }
+
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
+function setReadonlyController(controller) {
+  if (typeof controller.disable === "function") {
+    controller.disable();
+    return;
+  }
+
+  controller.domElement.classList.add("is-readonly");
+  const input = controller.domElement.querySelector("input, select");
+  if (input) {
+    input.disabled = true;
+    input.tabIndex = -1;
+  }
+}
+
+function buildOptionMap(items) {
+  return Object.fromEntries(items.map((item) => [item.label, item.id]));
+}
+
+function buildOptionSignature(items) {
+  return items.map((item) => `${item.id}:${item.label}`).join("|");
+}
+
+function applyGuiChrome(gui, className) {
+  gui.domElement.className = `${gui.domElement.className} ${className}`.trim();
+}
+
+function addInfoBlock(folder, lines) {
+  const block = document.createElement("div");
+  block.className = "debug-gui-info";
+  block.innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
+  folder.domElement.appendChild(block);
 }
 
 function escapeHtml(value) {
@@ -290,29 +556,4 @@ function escapeHtml(value) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-}
-
-function bindCheckboxControl(input, target, key, fallback) {
-  const value = typeof target[key] === "boolean" ? target[key] : fallback;
-  target[key] = value;
-  input.checked = value;
-  input.addEventListener("change", () => {
-    target[key] = input.checked;
-  });
-}
-
-function bindRangeControl(root, inputRole, valueRole, target, key, fallback) {
-  const input = root.querySelector(`[data-role="${inputRole}"]`);
-  const value = root.querySelector(`[data-role="${valueRole}"]`);
-  const initialValue = Number.isFinite(target[key]) ? target[key] : fallback;
-
-  target[key] = initialValue;
-  input.value = String(initialValue);
-  value.textContent = initialValue.toFixed(2);
-
-  input.addEventListener("input", () => {
-    const nextValue = Number.parseFloat(input.value);
-    target[key] = Number.isFinite(nextValue) ? nextValue : fallback;
-    value.textContent = target[key].toFixed(2);
-  });
 }

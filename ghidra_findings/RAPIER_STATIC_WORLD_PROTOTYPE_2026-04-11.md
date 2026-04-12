@@ -50,3 +50,23 @@ Verify that the live runtime now has:
 - wall/body collision from Rapier
 - slope/body attitude from Rapier rigid-body contacts
 - materially better behavior than the previous custom raycast-driven authored collision path
+
+## Current Prototype Gaps Observed In Runtime
+
+- Vehicle light-state handoff in the Rapier wrapper still needs parity verification against the existing material/light config path.
+  - A wrapper mismatch was found where boolean `braking` / `reversing` flags were being returned instead of the expected `brakeStrength` / `reverseStrength` values.
+  - Even after correcting the output shape, runtime validation is still required.
+- Driven wheels should visibly free-spin in the air under throttle.
+  - Current runtime observation from the garage-test ramp case: with all wheels airborne, the driven wheels do not keep spinning as expected.
+  - This is important beyond visuals because it may also be contributing to post-jump momentum loss or wheel re-contact harshness in the current prototype.
+- Per-car wheel visual fitment is not solved yet.
+  - Some cars now sit roughly correctly.
+  - Others still show wheels too high, too low, or intersecting the ground/body.
+- Dynamic roadside-object interaction is now the next correct short-term step.
+  - Collision metadata already exposes dynamic-object classes such as `rubber_cone` and `rubber_tire`.
+  - These props must be removed from the static trimesh once promoted to dynamic Rapier bodies.
+  - Follow-up diagnosis from original data/decomp notes:
+    - static authored track collision was intentionally completed from `track_geom.w32` + `track_bvh.gen`
+    - `track_cdb2.gen` remains unresolved and is explicitly called out as a likely later parity/input for lower-level collision details
+    - decomp notes also expose a separate recovered dynamic-object subsystem (`InitializeRecoveredDynamicObjects`)
+    - therefore cones / loose tires / similar roadside props should not be expected to emerge automatically from the current static collision world path

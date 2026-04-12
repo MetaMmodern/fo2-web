@@ -1,6 +1,6 @@
 import {
   carCatalog,
-  defaultSelection,
+  defaultSelection as generatedDefaultSelection,
   trackCatalog,
 } from "./generated/runtimeAssetCatalog";
 import { getDrivingDbConfigByCarId } from "./drivingConfigCatalog";
@@ -39,6 +39,20 @@ const legacyTireTextureIds = [
   "tire_011",
   "tire_016",
 ];
+const startupCar = carCatalog.find((car) => car.id === "car_7") ?? carCatalog[0] ?? null;
+const startupTrack =
+  trackCatalog.find((track) => track.id === "garagetest/garagetest1/a") ??
+  trackCatalog[0] ??
+  null;
+const defaultSelection = {
+  trackId: startupTrack?.id ?? generatedDefaultSelection.trackId ?? null,
+  carId: startupCar?.id ?? generatedDefaultSelection.carId ?? null,
+  skinId:
+    startupCar?.defaultSkinId ??
+    startupCar?.skins?.[0]?.id ??
+    generatedDefaultSelection.skinId ??
+    null,
+};
 
 export { carCatalog, defaultSelection, trackCatalog };
 

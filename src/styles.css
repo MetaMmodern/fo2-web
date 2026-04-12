@@ -19,132 +19,55 @@ canvas {
   display: block;
 }
 
-.hud {
+.debug-gui {
   position: fixed;
   top: 16px;
+  z-index: 10;
+  --width: min(420px, calc(100vw - 32px));
+}
+
+.debug-gui-main {
   left: 16px;
-  width: min(420px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
-  padding: 12px 14px;
-  background: rgba(17, 17, 17, 0.78);
-  color: #f3f3f3;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
-  z-index: 10;
-  overflow-y: auto;
 }
 
-.hud-header {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 8px;
-}
-
-.hud-body {
-  display: block;
-}
-
-.hud-collapsed {
-  width: auto;
-}
-
-.hud-collapsed .hud-body {
-  display: none;
-}
-
-.hud-toggle {
-  border: 0;
-  border-radius: 999px;
-  padding: 6px 10px;
-  background: #ddd2b3;
-  color: #201a10;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.hud-section + .hud-section {
-  margin-top: 10px;
-}
-
-.hud-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #d0cabd;
-}
-
-.hud-text {
-  margin-top: 4px;
-  font-size: 13px;
-  line-height: 1.4;
-  word-break: break-word;
-}
-
-.hud-control + .hud-control {
-  margin-top: 8px;
-}
-
-.hud-control-inline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.hud-control-label,
-.hud-value {
-  display: block;
-  font-size: 12px;
-  color: #d9d2c4;
-}
-
-.hud-range {
-  width: 100%;
-  margin-top: 4px;
-}
-
-.hud-select {
-  width: 100%;
-  margin-top: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: rgba(255, 248, 234, 0.08);
-  color: #f3f3f3;
-  font: inherit;
-}
-
-.hud-checkbox {
-  width: 16px;
-  height: 16px;
-  accent-color: #ddd2b3;
-}
-
-.perf-hud {
-  position: fixed;
-  top: 16px;
+.debug-gui-perf {
   right: 16px;
-  min-width: 132px;
-  padding: 10px 12px;
-  background: rgba(17, 17, 17, 0.82);
-  color: #f3f3f3;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
-  z-index: 10;
-  pointer-events: none;
+  --width: min(280px, calc(100vw - 32px));
 }
 
-.perf-hud-line {
+.debug-gui.lil-gui {
+  max-height: calc(100vh - 32px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  overflow-y: auto;
+  color: #f3f3f3;
+}
+
+.debug-gui-info {
+  padding: 8px 0 2px;
   font-size: 12px;
   line-height: 1.45;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: #d9d2c4;
 }
 
-.perf-hud-line + .perf-hud-line {
-  margin-top: 4px;
+.debug-gui .is-readonly input,
+.debug-gui .is-readonly select {
+  opacity: 0.9;
+  cursor: default;
+}
+
+@media (max-width: 900px) {
+  .debug-gui-main,
+  .debug-gui-perf {
+    left: 12px;
+    right: auto;
+  }
+
+  .debug-gui-main {
+    top: 12px;
+  }
+
+  .debug-gui-perf {
+    top: auto;
+    bottom: 12px;
+  }
 }

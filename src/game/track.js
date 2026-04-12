@@ -56,6 +56,7 @@ export async function loadTrack(
     trackRoot,
     startPoints,
     collisionAsset,
+    dynamicObjects: extractDynamicObjectsFromCollisionMeta(trackRoot, collisionAsset),
     contactSampler: createTrackFloorSampler(
       collisionAsset?.root ?? trackRoot,
       { includeInvisible: Boolean(collisionAsset?.root) },
@@ -244,9 +245,173 @@ async function loadCollisionAsset(collisionModelUrl, collisionMetaUrl) {
   };
 }
 
+function extractDynamicObjectsFromCollisionMeta(trackRoot, collisionAsset) {
+  const dynamicEntries = collisionAsset?.meta?.dynamicObjects;
+  const dynamicModels = collisionAsset?.meta?.models ?? [];
+
+  if (!trackRoot || !Array.isArray(dynamicEntries)) {
+    return [];
+  }
+
+  const allowedNames = new Set(["rubber_cone", "rubber_tire"]);
+  const modelLookup = buildDynamicModelLookup(dynamicModels);
+  const trackNodeLookup = buildTrackNodeLookup(trackRoot);
+  const seen = new Set();
+  const result = [];
+  let skippedByCategory = 0;
+  let skippedByRenderNode = 0;
+
+  for (const entry of dynamicEntries) {
+    const name = entry?.name ?? null;
+    const dynamicName = entry?.dynamicName ?? null;
+
+    if (!name || !dynamicName || seen.has(name)) {
+      continue;
+    }
+
+    if (!allowedNames.has(dynamicName)) {
+      skippedByCategory += 1;
+      continue;
+    }
+
+    const renderNode = resolveTrackNodeByName(trackNodeLookup, name);
+    const collisionNode = collisionAsset?.root?.getObjectByName?.(name) ?? null;
+
+    if (!renderNode) {
+      skippedByRenderNode += 1;
+      continue;
+    }
+
+    seen.add(name);
+    result.push({
+      name,
+      collisionName: name,
+      dynamicName,
+      model: resolveDynamicModelByName(modelLookup, name),
+      renderNode,
+      collisionNode,
+      flags: entry.flags ?? 0,
+    });
+  }
+
+  if (result.length === 0 && dynamicEntries.length > 0) {
+    console.warn("Dynamic object extraction produced no runtime props.", {
+      totalEntries: dynamicEntries.length,
+      allowedCategories: Array.from(allowedNames),
+      skippedByCategory,
+      skippedByRenderNode,
+      trackNodeCount: trackNodeLookup.nodeCount,
+      trackNamedNodeCount: trackNodeLookup.namedNodeCount,
+      trackDynamicCandidateCount: trackNodeLookup.dynamicCandidateCount,
+    });
+  } else if (result.length > 0) {
+    console.info("Dynamic object extraction ready.", {
+      totalEntries: dynamicEntries.length,
+      extracted: result.length,
+      skippedByCategory,
+      skippedByRenderNode,
+    });
+  }
+
+  return result;
+}
+
+function buildTrackNodeLookup(trackRoot) {
+  const exact = new Map();
+  const normalized = new Map();
+  let nodeCount = 0;
+  let namedNodeCount = 0;
+  let dynamicCandidateCount = 0;
+
+  trackRoot.traverse((node) => {
+    nodeCount += 1;
+
+    if (typeof node.name !== "string" || node.name.length === 0) {
+      return;
+    }
+
+    namedNodeCount += 1;
+    exact.set(node.name, node);
+
+    const normalizedName = normalizeSceneNodeName(node.name);
+    if (normalizedName.startsWith("dyn_")) {
+      dynamicCandidateCount += 1;
+    }
+    if (!normalized.has(normalizedName)) {
+      normalized.set(normalizedName, node);
+    }
+  });
+
+  return {
+    exact,
+    normalized,
+    nodeCount,
+    namedNodeCount,
+    dynamicCandidateCount,
+  };
+}
+
+function resolveTrackNodeByName(lookup, name) {
+  if (!lookup || !name) {
+    return null;
+  }
+
+  return lookup.exact.get(name) ?? lookup.normalized.get(normalizeSceneNodeName(name)) ?? null;
+}
+
+function buildDynamicModelLookup(models) {
+  const exact = new Map();
+  const family = new Map();
+
+  for (const model of models) {
+    if (!model?.name) {
+      continue;
+    }
+
+    exact.set(model.name, model);
+    const familyKey = normalizeDynamicModelFamily(model.name);
+
+    if (!family.has(familyKey)) {
+      family.set(familyKey, model);
+    }
+  }
+
+  return { exact, family };
+}
+
+function resolveDynamicModelByName(lookup, name) {
+  if (!lookup || !name) {
+    return null;
+  }
+
+  return (
+    lookup.exact.get(name) ??
+    lookup.family.get(normalizeDynamicModelFamily(name)) ??
+    null
+  );
+}
+
+function normalizeDynamicModelFamily(name) {
+  return name
+    .replace(/@\d+$/u, "")
+    .replace(/_\d{2,3}$/u, "_##");
+}
+
+function normalizeSceneNodeName(name) {
+  return String(name)
+    .replace(/\0+$/u, "")
+    .trim()
+    .replace(/@\d+$/u, "")
+    .replace(/\.\d+$/u, "");
+}
+
 async function loadJsonIfPresent(url) {
   if (!url) {
     return null;
+  }
+
+  if (typeof url === "object") {
+    return url;
   }
 
   try {
@@ -256,11 +421,42 @@ async function loadJsonIfPresent(url) {
       throw new Error(`Failed to load json asset: ${response.status}`);
     }
 
-    return await response.json();
+    const text = await response.text();
+
+    try {
+      return JSON.parse(text);
+    } catch (parseError) {
+      const bundledJson = await loadJsonModuleFallback(url);
+
+      if (bundledJson) {
+        return bundledJson;
+      }
+
+      throw parseError;
+    }
   } catch (error) {
     console.warn("Ignoring collision metadata load failure:", error);
     return null;
   }
+}
+
+async function loadJsonModuleFallback(url) {
+  try {
+    const module = await import(/* @vite-ignore */ url);
+    const value = module?.default ?? module ?? null;
+
+    if (typeof value === "string") {
+      return JSON.parse(value);
+    }
+
+    if (value && typeof value === "object") {
+      return value;
+    }
+  } catch (moduleError) {
+    console.warn("JSON module fallback failed:", moduleError);
+  }
+
+  return null;
 }
 
 function createTrackLoader(textureUrls = {}) {
