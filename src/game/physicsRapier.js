@@ -6,6 +6,10 @@ import { loadDrivingConfig } from "./drivingConfig";
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const LOCAL_FORWARD = new THREE.Vector3(0, 0, -1);
 const LOCAL_RIGHT = new THREE.Vector3(1, 0, 0);
+const COLLISION_GROUP_STATIC = 0x0001;
+const COLLISION_GROUP_PROP = 0x0002;
+const COLLISION_GROUP_HELPER = 0x0004;
+const COLLISION_GROUP_VEHICLE = 0x0008;
 const FIXED_DT = 1 / 60;
 const MAX_STEPS_PER_FRAME = 4;
 const MAX_FRAME_DELTA = 0.1;
@@ -144,11 +148,25 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
   const car = rawConfig.car ?? {};
   const body = rawConfig.body ?? {};
   const engine = rawConfig.engine ?? {};
+  const gearbox = rawConfig.gearbox ?? {};
   const suspension = rawConfig.suspension ?? {};
   const steering = rawConfig.steering ?? {};
+  const localTireDynamics = rawConfig.localTireDynamics ?? {};
   const bounds = resolveBodyBounds(bodyCollision, carRoot);
   const wheelMetrics = resolveWheelLayout(carRoot);
   const wheelLayout = buildWheelVisualLayout(carRoot, suspension);
+  const gearRatios = buildGearRatios(gearbox);
+  const defaultDifferential = rawConfig.differentials?.defaultFront ?? {};
+  const frontDifferential = resolveDifferential(
+    body.FrontDifferential,
+    rawConfig.differentials,
+    defaultDifferential,
+  );
+  const rearDifferential = resolveDifferential(
+    body.RearDifferential,
+    rawConfig.differentials,
+    rawConfig.differentials?.defaultRear ?? defaultDifferential,
+  );
 
   return {
     gravity: 18,
@@ -215,6 +233,48 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
     },
     wheelLayout,
     visualRideHeight: computeVisualRideHeight(bounds, wheelLayout),
+    tireConfig: {
+      rollingResistance: pickScalar(localTireDynamics.RollingResistance, 0.5),
+      inducedDragCoeff: pickScalar(localTireDynamics.InducedDragCoeff, 1),
+    },
+    engine: {
+      idleRpm: pickScalar(engine.IdleRpm, 1000),
+      peakTorqueRpm: pickScalar(engine.PeakTorqueRpm, 4500),
+      peakTorque: pickScalar(engine.PeakTorque, 210),
+      peakPowerRpm: pickScalar(engine.PeakPowerRpm, 6000),
+      peakPower: pickScalar(engine.PeakPower, 120),
+      redLineRpm: pickScalar(engine.RedLineRpm, 6500),
+      zeroPowerRpm: pickScalar(engine.ZeroPowerRpm, 600),
+      inertia: pickScalar(engine.InertiaEngine, 0.15),
+      friction: pickScalar(engine.EngineFriction, 0.015),
+    },
+    gearbox: {
+      ratios: gearRatios,
+      reverseRatio: buildReverseRatio(gearbox),
+      endRatio: pickScalar(gearbox.EndRatio, 3.7),
+      clutchEngageTime: pickScalar(gearbox.ClutchEngageTime, 0.1),
+      clutchReleaseTime: pickScalar(gearbox.ClutchReleaseTime, 0.1),
+      clutchTorque: pickScalar(gearbox.ClutchTorque, 280),
+    },
+    shiftBands: buildShiftBands({
+      gearRatios,
+      reverseRatio: buildReverseRatio(gearbox),
+      endRatio: pickScalar(gearbox.EndRatio, 3.7),
+      engine: {
+        peakTorqueRpm: pickScalar(engine.PeakTorqueRpm, 4500),
+        peakPowerRpm: pickScalar(engine.PeakPowerRpm, 6000),
+        redLineRpm: pickScalar(engine.RedLineRpm, 6500),
+      },
+      drivenWheelRadius: averageDrivenWheelRadiusFromLayout(
+        wheelLayout,
+        Boolean(body.FrontTraction),
+        body.RearTraction !== false,
+      ),
+    }),
+    differentials: {
+      front: frontDifferential,
+      rear: rearDifferential,
+    },
   };
 }
 
@@ -305,6 +365,8 @@ function buildWheelVisualLayout(carRoot, suspension) {
           : Number.parseFloat(suspension?.RearDefaultCompression ?? 0.1),
         0,
       ),
+      currentRotation: 0,
+      angularVelocity: 0,
       spinAngle: 0,
       steerAngle: 0,
     };
@@ -367,7 +429,13 @@ function buildStaticWorldFromRoot(world, root, dynamicObjects = []) {
     merged.indices,
   )
     .setFriction(1.1)
-    .setRestitution(0);
+    .setRestitution(0)
+    .setCollisionGroups(
+      interactionGroups(
+        COLLISION_GROUP_STATIC,
+        COLLISION_GROUP_VEHICLE | COLLISION_GROUP_PROP,
+      ),
+    );
   world.createCollider(colliderDesc);
 
   return {
@@ -512,6 +580,15 @@ function createDynamicSceneObjects(world, dynamicObjects) {
     colliderDesc
       .setRestitution(category.restitution)
       .setFriction(category.friction)
+      .setCollisionGroups(
+        interactionGroups(
+          COLLISION_GROUP_PROP,
+          COLLISION_GROUP_STATIC |
+            COLLISION_GROUP_PROP |
+            COLLISION_GROUP_HELPER |
+            COLLISION_GROUP_VEHICLE,
+        ),
+      )
       .setDensity(1);
     world.createCollider(colliderDesc, body);
 
@@ -575,6 +652,8 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "dynamic",
         releaseOnImpact: false,
+        releaseMinSpeed: 0,
+        impulseScale: 0.18,
         mass: 12,
         linearDamping: 0.1,
         angularDamping: 0.12,
@@ -585,6 +664,8 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "dynamic",
         releaseOnImpact: false,
+        releaseMinSpeed: 0,
+        impulseScale: 0.18,
         mass: 5,
         linearDamping: 0.32,
         angularDamping: 0.4,
@@ -599,6 +680,8 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "fixed",
         releaseOnImpact: true,
+        releaseMinSpeed: 1.25,
+        impulseScale: 0.2,
         mass: 18,
         linearDamping: 0.32,
         angularDamping: 0.38,
@@ -611,14 +694,27 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "dynamic",
         releaseOnImpact: false,
+        releaseMinSpeed: 0,
+        impulseScale: 0.18,
         mass: 8,
         linearDamping: 0.28,
         angularDamping: 0.32,
         friction: 0.76,
         restitution: 0.08,
       };
-    case "plastic_light":
     case "window":
+      return {
+        bodyType: "fixed",
+        releaseOnImpact: true,
+        releaseMinSpeed: 0.2,
+        impulseScale: 0.42,
+        mass: 3,
+        linearDamping: 0.12,
+        angularDamping: 0.16,
+        friction: 0.18,
+        restitution: 0.02,
+      };
+    case "plastic_light":
     case "fence_wood":
     case "fence_metal":
     case "explosive_gaspump":
@@ -628,6 +724,8 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "fixed",
         releaseOnImpact: true,
+        releaseMinSpeed: 0.9,
+        impulseScale: 0.2,
         mass: 18,
         linearDamping: 0.32,
         angularDamping: 0.38,
@@ -639,6 +737,8 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "dynamic",
         releaseOnImpact: false,
+        releaseMinSpeed: 0,
+        impulseScale: 0.16,
         mass: 35,
         linearDamping: 0.4,
         angularDamping: 0.48,
@@ -649,6 +749,8 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "dynamic",
         releaseOnImpact: false,
+        releaseMinSpeed: 0,
+        impulseScale: 0.18,
         mass: 6,
         linearDamping: 0.4,
         angularDamping: 0.55,
@@ -672,12 +774,12 @@ function activateImpactedDynamicObjects(
   const chassisVelocity = rapierVectorToThree(chassis.linvel(), TMP_VEC_D);
   const chassisSpeed = horizontalSpeed(chassisVelocity);
 
-  if (chassisSpeed < 0.5) {
-    return;
-  }
-
   for (const entry of dynamicObjectState) {
     if (!entry.dormant || !entry.body || !entry.collider) {
+      continue;
+    }
+
+    if (chassisSpeed < (entry.category.releaseMinSpeed ?? 0.5)) {
       continue;
     }
 
@@ -719,7 +821,12 @@ function activateImpactedDynamicObjects(
 
     const impulse = chassisVelocity
       .clone()
-      .multiplyScalar(Math.max(entry.category.mass * 0.18, 1.5));
+      .multiplyScalar(
+        Math.max(
+          entry.category.mass * (entry.category.impulseScale ?? 0.18),
+          1.2,
+        ),
+      );
     entry.body.applyImpulseAtPoint(
       vectorFromThree(impulse),
       { x: translation.x, y: translation.y + 0.25, z: translation.z },
@@ -760,8 +867,10 @@ function createChassisBody(world, config, translation, rotation) {
     .setTranslation(translation.x, translation.y, translation.z)
     .setRotation(rotation)
     .setAdditionalMass(config.massKg)
-    .setLinearDamping(0.35)
-    .setAngularDamping(1.6)
+    // Keep chassis damping low. Rapier linear damping is a direct velocity decay term,
+    // so large values act like a permanent handbrake and fight the wheel controller.
+    .setLinearDamping(0.02)
+    .setAngularDamping(0.9)
     .setCanSleep(false)
     .setCcdEnabled(true)
     .setAdditionalSolverIterations(4);
@@ -776,6 +885,12 @@ function createChassisBody(world, config, translation, rotation) {
     .setFriction(0.08)
     .setRestitution(0)
     .setContactSkin(0.02)
+    .setCollisionGroups(
+      interactionGroups(
+        COLLISION_GROUP_VEHICLE,
+        COLLISION_GROUP_STATIC | COLLISION_GROUP_PROP,
+      ),
+    )
     .setDensity(0);
   world.createCollider(colliderDesc, body);
   body.setAdditionalMassProperties(
@@ -809,6 +924,9 @@ function createChassisBody(world, config, translation, rotation) {
     )
     .setFriction(0.12)
     .setRestitution(0.04)
+    .setCollisionGroups(
+      interactionGroups(COLLISION_GROUP_HELPER, COLLISION_GROUP_PROP),
+    )
     .setDensity(0);
   world.createCollider(lowInteractionDesc, body);
 
@@ -828,6 +946,9 @@ function createChassisBody(world, config, translation, rotation) {
     )
     .setFriction(0.16)
     .setRestitution(0.04)
+    .setCollisionGroups(
+      interactionGroups(COLLISION_GROUP_HELPER, COLLISION_GROUP_PROP),
+    )
     .setDensity(0);
   world.createCollider(frontInteractionDesc, body);
 
@@ -930,6 +1051,7 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     ? rapierVectorToThree(groundHit.normal, TMP_VEC_C).normalize()
     : WORLD_UP;
   const grounded = Boolean(groundHit && groundHit.timeOfImpact <= config.bodyHalfExtents.y + 0.5);
+  updateGearboxState(debugState, config, speedForward, FIXED_DT);
 
   if (ENABLE_DIRECT_DRIVE_DEBUG) {
     const targetForwardSpeed = throttle * 14 - brake * 8;
@@ -972,7 +1094,11 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
 
   chassis.resetForces(true);
   chassis.resetTorques(true);
-  const engineForceTotal = throttle * config.peakTorque * -42;
+  const engineForceTotal = computeEngineDriveForceTotal(
+    debugState,
+    config,
+    throttle,
+  );
   const frontBrake = brake * config.brakeTorque * config.brakeBalance;
   const rearBrake =
     brake * config.brakeTorque * (1 - config.brakeBalance) +
@@ -988,9 +1114,12 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
       steerAngle = wheel.side < 0 ? frontSteerAngles.left : frontSteerAngles.right;
     }
     vehicleController.setWheelSteering(wheelIndex, steerAngle);
+    const wheelEngineForce = driven
+      ? computeDriveForceForWheel(wheel, debugState, config, throttle)
+      : 0;
     vehicleController.setWheelEngineForce(
       wheelIndex,
-      driven ? engineForceTotal * 0.5 : 0,
+      wheelEngineForce,
     );
     vehicleController.setWheelBrake(
       wheelIndex,
@@ -1042,6 +1171,7 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     (sum, _, wheelIndex) => sum + Math.abs(vehicleController.wheelSuspensionForce(wheelIndex) ?? 0),
     0,
   );
+  updateDrivenWheelState(config, vehicleController, FIXED_DT);
 
   debugState.grounded = grounded;
   debugState.groundToi = groundHit?.timeOfImpact ?? null;
@@ -1240,6 +1370,14 @@ function createDebugState() {
     brakeAxis: 0,
     handbrakeAxis: 0,
     reverseLatched: false,
+    gear: 1,
+    shiftFromGear: 1,
+    shiftTargetGear: 1,
+    shiftTimer: 0,
+    upshiftCooldown: 0,
+    downshiftCooldown: 0,
+    clutch: 1,
+    engineRpm: 1000,
     grounded: false,
     groundToi: null,
     throttle: 0,
@@ -1280,6 +1418,10 @@ function horizontalSpeed(vector) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function interactionGroups(group, mask) {
+  return ((group & 0xffff) << 16) | (mask & 0xffff);
 }
 
 function dampToward(current, target, rate, dt) {
@@ -1345,6 +1487,419 @@ function pickVec4(value, fallback) {
 function speedHorizontalNow(speedForwardNow, chassis) {
   const vel = chassis.linvel();
   return Math.hypot(vel.x, vel.z) * 3.6;
+}
+
+function buildGearRatios(gearbox) {
+  const ratios = [];
+
+  for (let gearIndex = 1; gearIndex <= 6; gearIndex += 1) {
+    const gearValue = gearbox[`Gear${gearIndex}`];
+    const ratio = Array.isArray(gearValue) ? gearValue[0] : 0;
+
+    if (Number.isFinite(ratio) && Math.abs(ratio) > 1e-3) {
+      ratios.push(ratio);
+    }
+  }
+
+  return ratios;
+}
+
+function buildReverseRatio(gearbox) {
+  const reverse = gearbox.GearR;
+  return Array.isArray(reverse) ? reverse[0] : -4.1;
+}
+
+function resolveDifferential(nodePath, differentials, fallback) {
+  if (typeof nodePath !== "string") {
+    return fallback;
+  }
+
+  if (nodePath.endsWith("/Front")) {
+    return differentials?.front ?? fallback;
+  }
+
+  if (nodePath.endsWith("/Rear")) {
+    return differentials?.rear ?? fallback;
+  }
+
+  if (nodePath.endsWith("/DefaultFront")) {
+    return differentials?.defaultFront ?? fallback;
+  }
+
+  if (nodePath.endsWith("/DefaultRear")) {
+    return differentials?.defaultRear ?? fallback;
+  }
+
+  return fallback;
+}
+
+function updateGearboxState(debugState, config, speedForward, dt) {
+  debugState.upshiftCooldown = Math.max((debugState.upshiftCooldown ?? 0) - dt, 0);
+  debugState.downshiftCooldown = Math.max((debugState.downshiftCooldown ?? 0) - dt, 0);
+  const idleRpm = config.engine.idleRpm;
+  const speedKph = Math.abs(speedForward) * 3.6;
+  const targetRpmFromSpeed = projectEngineRpmForSpeed(speedForward, debugState.gear, config);
+  const freeRevTarget =
+    idleRpm +
+    Math.abs(debugState.throttleAxis ?? 0) * (config.engine.redLineRpm - idleRpm);
+
+  debugState.engineRpm = dampToward(
+    debugState.engineRpm ?? idleRpm,
+    Math.max(targetRpmFromSpeed, freeRevTarget * 0.28, idleRpm),
+    8,
+    dt,
+  );
+
+  if (debugState.reverseLatched) {
+    debugState.gear = -1;
+    debugState.shiftTimer = 0;
+    debugState.clutch = 1;
+    return;
+  }
+
+  const ratios = config.gearbox.ratios;
+
+  if (ratios.length === 0) {
+    debugState.gear = 1;
+    debugState.clutch = 1;
+    return;
+  }
+
+  if ((debugState.shiftTimer ?? 0) > 0) {
+    debugState.shiftTimer = Math.max(debugState.shiftTimer - dt, 0);
+    debugState.clutch = clamp(
+      1 -
+        debugState.shiftTimer /
+          Math.max(config.gearbox.clutchEngageTime, 0.05),
+      0.2,
+      1,
+    );
+
+    if (debugState.shiftTimer === 0) {
+      debugState.gear = debugState.shiftTargetGear;
+      debugState.clutch = 1;
+    }
+
+    return;
+  }
+
+  debugState.gear = clamp(debugState.gear <= 0 ? 1 : debugState.gear, 1, ratios.length);
+  debugState.clutch = 1;
+  const currentBand = config.shiftBands[debugState.gear - 1] ?? null;
+  const throttleOpen = (debugState.throttleAxis ?? 0) > 0.12;
+
+  if (
+    currentBand &&
+    (debugState.upshiftCooldown ?? 0) <= 0 &&
+    debugState.gear < ratios.length &&
+    throttleOpen &&
+    speedKph >= currentBand.upshiftKph
+  ) {
+    startShift(debugState, debugState.gear + 1, config, "up");
+    return;
+  }
+
+  if (
+    currentBand &&
+    (debugState.downshiftCooldown ?? 0) <= 0 &&
+    debugState.gear > 1 &&
+    speedKph <= currentBand.downshiftKph
+  ) {
+    startShift(debugState, debugState.gear - 1, config, "down");
+  }
+}
+
+function startShift(debugState, nextGear, config, direction = "up") {
+  if (nextGear === debugState.gear) {
+    return;
+  }
+
+  debugState.shiftFromGear = debugState.gear;
+  debugState.shiftTargetGear = nextGear;
+  debugState.shiftTimer =
+    Math.max(config.gearbox.clutchEngageTime, 0.05) +
+    Math.max(config.gearbox.clutchReleaseTime, 0.05);
+  debugState.clutch = 0.2;
+  const cooldown =
+    direction === "down"
+      ? Math.max(debugState.shiftTimer, 0.35)
+      : Math.max(debugState.shiftTimer, 0.75);
+  if (direction === "down") {
+    debugState.downshiftCooldown = cooldown;
+  } else {
+    debugState.upshiftCooldown = cooldown;
+  }
+}
+
+function computeEngineDriveForceTotal(debugState, config, throttle) {
+  const throttleMagnitude =
+    debugState.gear < 0
+      ? Math.abs(Math.min(throttle, 0))
+      : Math.max(throttle, 0);
+
+  if (throttleMagnitude <= 1e-4) {
+    return 0;
+  }
+
+  const engineTorque =
+    sampleEngineTorque(config.engine, debugState.engineRpm) * throttleMagnitude;
+  const gearRatio = getCurrentGearRatio(debugState, config);
+  const wheelRadius = averageDrivenWheelRadius(config);
+  const axleTorque =
+    engineTorque *
+    gearRatio *
+    config.gearbox.endRatio *
+    Math.max(debugState.clutch ?? 1, 0.2) *
+    (debugState.gear < 0 ? -1 : 1);
+
+  return -(axleTorque / Math.max(wheelRadius, 0.1));
+}
+
+function computeDriveForceForWheel(wheel, debugState, config, throttle) {
+  const driven =
+    (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
+
+  if (!driven) {
+    return 0;
+  }
+
+  const throttleMagnitude =
+    debugState.gear < 0
+      ? Math.abs(Math.min(throttle, 0))
+      : Math.max(throttle, 0);
+
+  if (throttleMagnitude <= 1e-4) {
+    return 0;
+  }
+
+  const handbrakeDriveScale =
+    !wheel.front
+      ? THREE.MathUtils.lerp(
+          1,
+          0,
+          THREE.MathUtils.clamp(debugState.handbrakeAxis ?? 0, 0, 1),
+        )
+      : 1;
+  const engineTorque =
+    sampleEngineTorque(config.engine, debugState.engineRpm) * throttleMagnitude;
+  const gearRatio = getCurrentGearRatio(debugState, config);
+  const differential = wheel.front
+    ? config.differentials.front
+    : config.differentials.rear;
+  const torqueScale = sampleCurve(
+    differential?.throttleCurve,
+    throttleMagnitude,
+  );
+  const maxTorque = pickScalar(differential?.MaxTorque, 5500);
+  const wheelTorque =
+    engineTorque *
+      gearRatio *
+      config.gearbox.endRatio *
+      Math.max(debugState.clutch ?? 1, 0.2) *
+      (debugState.gear < 0 ? -1 : 1) *
+      handbrakeDriveScale *
+      (0.35 + torqueScale * 0.65);
+  const clampedTorque = clamp(wheelTorque, -maxTorque, maxTorque);
+  const wheelRadius = Math.max(wheel.tireRadius ?? 0.34, 0.1);
+  return -(clampedTorque / wheelRadius);
+}
+
+function getCurrentGearRatio(debugState, config) {
+  if ((debugState.gear ?? 1) < 0) {
+    return Math.abs(config.gearbox.reverseRatio);
+  }
+
+  return config.gearbox.ratios[(debugState.gear ?? 1) - 1] ?? config.gearbox.ratios[0] ?? 1;
+}
+
+function projectEngineRpmForGear(driveWheelOmega, gear, config) {
+  const ratio =
+    gear < 0
+      ? Math.abs(config.gearbox.reverseRatio)
+      : config.gearbox.ratios[gear - 1] ?? config.gearbox.ratios[0] ?? 1;
+  return Math.abs(driveWheelOmega * ratio * config.gearbox.endRatio) * (60 / (Math.PI * 2));
+}
+
+function projectEngineRpmForSpeed(speedForward, gear, config) {
+  const wheelRadius = averageDrivenWheelRadius(config);
+  const wheelOmega = Math.abs(speedForward) / Math.max(wheelRadius, 0.1);
+  return projectEngineRpmForGear(wheelOmega, gear, config);
+}
+
+function updateDrivenWheelState(config, vehicleController, dt) {
+  for (const [wheelIndex, wheel] of config.wheelLayout.entries()) {
+    const rotation = vehicleController.wheelRotation(wheelIndex);
+
+    if (!Number.isFinite(rotation)) {
+      continue;
+    }
+
+    const delta = unwrapAngleDelta(rotation - wheel.currentRotation);
+    wheel.angularVelocity = delta / Math.max(dt, 1e-5);
+    wheel.currentRotation = rotation;
+  }
+}
+
+function averageDrivenWheelOmega(config) {
+  let totalOmega = 0;
+  let count = 0;
+
+  for (const wheel of config.wheelLayout) {
+    const driven =
+      (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
+
+    if (!driven) {
+      continue;
+    }
+
+    totalOmega += wheel.angularVelocity ?? 0;
+    count += 1;
+  }
+
+  return count > 0 ? totalOmega / count : 0;
+}
+
+function averageDrivenWheelLinearSpeed(config) {
+  let totalSpeed = 0;
+  let count = 0;
+
+  for (const wheel of config.wheelLayout) {
+    const driven =
+      (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
+
+    if (!driven) {
+      continue;
+    }
+
+    totalSpeed +=
+      Math.abs(wheel.angularVelocity ?? 0) * Math.max(wheel.tireRadius ?? 0.34, 0.1);
+    count += 1;
+  }
+
+  return count > 0 ? totalSpeed / count : 0;
+}
+
+function averageDrivenWheelRadius(config) {
+  let totalRadius = 0;
+  let count = 0;
+
+  for (const wheel of config.wheelLayout) {
+    const driven =
+      (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
+
+    if (!driven) {
+      continue;
+    }
+
+    totalRadius += Math.max(wheel.tireRadius ?? 0.34, 0.1);
+    count += 1;
+  }
+
+  return count > 0 ? totalRadius / count : 0.34;
+}
+
+function averageDrivenWheelRadiusFromLayout(wheelLayout, frontTraction, rearTraction) {
+  let totalRadius = 0;
+  let count = 0;
+
+  for (const wheel of wheelLayout) {
+    const driven =
+      (wheel.front && frontTraction) || (!wheel.front && rearTraction);
+
+    if (!driven) {
+      continue;
+    }
+
+    totalRadius += Math.max(wheel.tireRadius ?? 0.34, 0.1);
+    count += 1;
+  }
+
+  return count > 0 ? totalRadius / count : 0.34;
+}
+
+function buildShiftBands({ gearRatios, endRatio, engine, drivenWheelRadius }) {
+  return gearRatios.map((ratio, index) => {
+    const upshiftKph = rpmToKph(
+      engine.redLineRpm * 0.99,
+      ratio,
+      endRatio,
+      drivenWheelRadius,
+    );
+    const downshiftKph = rpmToKph(
+      Math.max(engine.idleRpm * 1.8, engine.peakTorqueRpm * 0.55),
+      ratio,
+      endRatio,
+      drivenWheelRadius,
+    );
+
+    return {
+      upshiftKph,
+      downshiftKph: index === 0 ? 0 : downshiftKph,
+    };
+  });
+}
+
+function rpmToKph(rpm, gearRatio, endRatio, wheelRadius) {
+  const wheelOmega = (rpm * Math.PI * 2) / 60;
+  const vehicleSpeedMs =
+    (wheelOmega * Math.max(wheelRadius, 0.1)) /
+    Math.max(Math.abs(gearRatio * endRatio), 0.1);
+  return vehicleSpeedMs * 3.6;
+}
+
+function sampleEngineTorque(engine, rpm) {
+  const idle = engine.idleRpm;
+  const torquePeakRpm = engine.peakTorqueRpm;
+  const powerPeakRpm = engine.peakPowerRpm;
+  const redline = engine.redLineRpm;
+  const peakTorque = engine.peakTorque;
+  const torqueAtPowerPeak = peakTorque * 0.86;
+
+  if (rpm <= torquePeakRpm) {
+    return THREE.MathUtils.lerp(
+      peakTorque * 0.58,
+      peakTorque,
+      inverseLerp(idle, torquePeakRpm, rpm),
+    );
+  }
+
+  if (rpm <= powerPeakRpm) {
+    return THREE.MathUtils.lerp(
+      peakTorque,
+      torqueAtPowerPeak,
+      inverseLerp(torquePeakRpm, powerPeakRpm, rpm),
+    );
+  }
+
+  return THREE.MathUtils.lerp(
+    torqueAtPowerPeak,
+    peakTorque * 0.38,
+    inverseLerp(powerPeakRpm, redline, rpm),
+  );
+}
+
+function sampleCurve(curve, normalized) {
+  if (!Array.isArray(curve) || curve.length === 0) {
+    return normalized;
+  }
+
+  const scaled = clamp(normalized, 0, 1) * (curve.length - 1);
+  const lowIndex = Math.floor(scaled);
+  const highIndex = Math.min(lowIndex + 1, curve.length - 1);
+  const alpha = scaled - lowIndex;
+  return THREE.MathUtils.lerp(curve[lowIndex], curve[highIndex], alpha);
+}
+
+function unwrapAngleDelta(delta) {
+  if (delta > Math.PI) {
+    return delta - Math.PI * 2;
+  }
+
+  if (delta < -Math.PI) {
+    return delta + Math.PI * 2;
+  }
+
+  return delta;
 }
 
 function moveToward(current, target, maxDelta) {

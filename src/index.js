@@ -323,6 +323,8 @@ function formatPhysicsDebug(debugState) {
     `m=${debugState.mode ?? "--"}`,
     `g=${debugState.grounded ? 1 : 0}`,
     `toi=${Number.isFinite(debugState.groundToi) ? debugState.groundToi.toFixed(2) : "--"}`,
+    `gear=${Number.isFinite(debugState.gear) ? debugState.gear : "--"}`,
+    `rpm=${Number.isFinite(debugState.engineRpm) ? debugState.engineRpm.toFixed(0) : "--"}`,
     `thr=${debugState.throttle.toFixed(1)}`,
     `st=${debugState.steer.toFixed(1)}`,
     `drv=${debugState.engineForce.toFixed(0)}`,

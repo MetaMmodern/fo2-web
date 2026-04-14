@@ -49,6 +49,7 @@ This is a short-term plan, not the final architecture note.
    - tire/suspension parameters
    - car body collision volumes from `body.ini`
    - dynamic object interaction rules
+   - Status update 2026-04-14: recovered Ghidra pass confirms the native auto-shift path is driven by projected forward speed plus runtime gearbox threshold arrays, not by a simple RPM gate. Do not keep tuning Rapier shift thresholds heuristically; recover and port `Gearbox_GetRecommendedGear` / gearbox runtime threshold preparation first.
 
 5. Revisit surface tilt only after the contact/suspension/body pose path is coherent.
    - Surface tilt should emerge from contact and suspension state.

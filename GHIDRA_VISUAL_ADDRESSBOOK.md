@@ -125,8 +125,10 @@ Source of truth notes:
 - `FUN_00429640` @ `0x00429640` — Chassis/drag/steering propagation stage within each vehicle substep.
 - `FUN_00429be0` @ `0x00429be0` — Main wheel/tire force and yaw-torque accumulation stage within each substep.
 - `FUN_00441ae0` @ `0x00441ae0` — Wheel steer-angle clamp stage after car-level steer input is computed.
-- `FUN_00441f10` @ `0x00441f10` — Auto gear-selection helper based on projected forward speed and gearbox thresholds.
-- `FUN_00442160` @ `0x00442160` — Shift request/state-machine entry.
+- `FUN_00441f10` @ `0x00441f10` — Auto gear-selection helper based on projected forward speed and runtime threshold arrays at gearbox `+0x9c/+0xa0`; includes explicit reverse/neutral/launch cases.
+- `FUN_00442160` @ `0x00442160` — Shift request/state-machine entry; validates requested gear in `[-1, numGears]`, writes requested gear to gearbox `+0x48`, and arms the timed shift state at `+0x4c/+0x50`.
+- `FUN_004421d0` @ `0x004421d0` — Timed shift-state integrator; applies the requested gear once the engage window `+0xc0` is reached and returns to idle after the full engage+release window `+0xc0 + +0xbc`.
+- `FUN_00441c40` @ `0x00441c40` — Gearbox handling loader; copies ratio/threshold data into runtime offsets `+0x5c..+0x98`, sets `numGears` at `+0x58`, and seeds clutch/auto-shift timing fields from loaded gearbox data.
 - `FUN_00454b50` @ `0x00454b50` — Builds the runtime engine curve table from `PeakPower*`, `PeakTorque*`, `RedLineRpm`, `RpmLimit`, and `ZeroPowerRpm`.
 
 ### Key strings / config keys
