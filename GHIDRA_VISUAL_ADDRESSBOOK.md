@@ -115,6 +115,7 @@ Source of truth notes:
 - `FUN_00414ea0` @ `0x00414ea0` — Collision sound bootstrap: loads `data/sound/collision_sounds.bed`; registers `CollisionSoundTypes` and fixed event groups including `SuspensionBottomOut`.
 - `FUN_0043aa30` @ `0x0043aa30` — Tire dynamics config consumer for `Data.Physics.TireDynamics`.
 - `FUN_00469f50` @ `0x00469f50` — Registers `Data.Physics.Car.Steering_PC` defaults and speed-limited steering behavior.
+  - Confirmed 2026-04-14: steering bootstrap uses speed buckets `20/90/200/300` plus analog/digital min/max rates, centering, and steering-speed-rate tables before steer reaches the vehicle runtime.
 - `FUN_00454c60` @ `0x00454c60` — Reads the larger car physics tree: differential, throttle/brake/speed curves, gearbox, suspension, tires, and engine.
 - `FUN_0046c8e0` @ `0x0046c8e0` — Local-player per-frame control path: samples controller state, shapes steer/gas/brake/handbrake inputs, then calls the vehicle step.
 - `0x0046f510` — Unnamed local-player steering/input shaping block recovered from disassembly; applies speed-bucket steering limits, analog centering, and final clamp before `FUN_0046fa50`.
@@ -125,6 +126,7 @@ Source of truth notes:
 - `FUN_00429640` @ `0x00429640` — Chassis/drag/steering propagation stage within each vehicle substep.
 - `FUN_00429be0` @ `0x00429be0` — Main wheel/tire force and yaw-torque accumulation stage within each substep.
 - `FUN_00441ae0` @ `0x00441ae0` — Wheel steer-angle clamp stage after car-level steer input is computed.
+  - Confirmed 2026-04-14: applies a second rack-side dynamic steer cap from live vehicle/runtime fields at `+0x300/+0x304/+0x370/+0x374`; final wheel steer is not determined by player input shaping alone.
 - `FUN_00441f10` @ `0x00441f10` — Auto gear-selection helper based on projected forward speed and runtime threshold arrays at gearbox `+0x9c/+0xa0`; includes explicit reverse/neutral/launch cases.
 - `FUN_00442160` @ `0x00442160` — Shift request/state-machine entry; validates requested gear in `[-1, numGears]`, writes requested gear to gearbox `+0x48`, and arms the timed shift state at `+0x4c/+0x50`.
 - `FUN_004421d0` @ `0x004421d0` — Timed shift-state integrator; applies the requested gear once the engage window `+0xc0` is reached and returns to idle after the full engage+release window `+0xc0 + +0xbc`.

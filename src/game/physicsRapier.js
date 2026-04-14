@@ -247,6 +247,17 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
       zeroPowerRpm: pickScalar(engine.ZeroPowerRpm, 600),
       inertia: pickScalar(engine.InertiaEngine, 0.15),
       friction: pickScalar(engine.EngineFriction, 0.015),
+      launchShiftRpm: Math.max(
+        pickScalar(engine.PeakTorqueRpm, 4500),
+        pickScalar(engine.IdleRpm, 1000) + 1200,
+      ),
+      launchTargetRpm: Math.min(
+        pickScalar(engine.RedLineRpm, 6500) * 0.94,
+        Math.max(
+          pickScalar(engine.PeakTorqueRpm, 4500) + 300,
+          pickScalar(engine.IdleRpm, 1000) + 1600,
+        ),
+      ),
     },
     gearbox: {
       ratios: gearRatios,
@@ -1370,9 +1381,9 @@ function createDebugState() {
     brakeAxis: 0,
     handbrakeAxis: 0,
     reverseLatched: false,
-    gear: 1,
-    shiftFromGear: 1,
-    shiftTargetGear: 1,
+    gear: 0,
+    shiftFromGear: 0,
+    shiftTargetGear: 0,
     shiftTimer: 0,
     upshiftCooldown: 0,
     downshiftCooldown: 0,
@@ -1538,14 +1549,32 @@ function updateGearboxState(debugState, config, speedForward, dt) {
   debugState.downshiftCooldown = Math.max((debugState.downshiftCooldown ?? 0) - dt, 0);
   const idleRpm = config.engine.idleRpm;
   const speedKph = Math.abs(speedForward) * 3.6;
-  const targetRpmFromSpeed = projectEngineRpmForSpeed(speedForward, debugState.gear, config);
-  const freeRevTarget =
-    idleRpm +
-    Math.abs(debugState.throttleAxis ?? 0) * (config.engine.redLineRpm - idleRpm);
+  const throttleMagnitude = Math.abs(debugState.throttleAxis ?? 0);
+  let rpmTarget = idleRpm;
+
+  if ((debugState.gear ?? 0) === 0 && speedKph <= 6) {
+    rpmTarget =
+      idleRpm +
+      throttleMagnitude * (config.engine.launchTargetRpm - idleRpm);
+  } else {
+    const targetRpmFromSpeed = projectEngineRpmForSpeed(
+      speedForward,
+      debugState.gear,
+      config,
+    );
+    const launchFreeRevTarget =
+      idleRpm + throttleMagnitude * (config.engine.launchTargetRpm - idleRpm);
+    const couplingBlend =
+      clamp(speedKph / 28, 0, 1) * clamp(debugState.clutch ?? 1, 0.2, 1);
+    rpmTarget = Math.max(
+      idleRpm,
+      THREE.MathUtils.lerp(launchFreeRevTarget, targetRpmFromSpeed, couplingBlend),
+    );
+  }
 
   debugState.engineRpm = dampToward(
     debugState.engineRpm ?? idleRpm,
-    Math.max(targetRpmFromSpeed, freeRevTarget * 0.28, idleRpm),
+    rpmTarget,
     8,
     dt,
   );
@@ -1583,10 +1612,41 @@ function updateGearboxState(debugState, config, speedForward, dt) {
     return;
   }
 
+  if (
+    speedKph <= 1.5 &&
+    throttleMagnitude < 0.08 &&
+    (debugState.gear ?? 0) > 0
+  ) {
+    debugState.gear = 0;
+    debugState.shiftFromGear = 0;
+    debugState.shiftTargetGear = 0;
+    debugState.clutch = 1;
+    return;
+  }
+
+  if ((debugState.gear ?? 0) === 0) {
+    debugState.clutch = 0.2;
+
+    if (
+      throttleMagnitude > 0.12 &&
+      speedKph <= 6 &&
+      (debugState.engineRpm ?? idleRpm) >= config.engine.launchShiftRpm
+    ) {
+      startShift(debugState, 1, config, "up");
+    }
+
+    return;
+  }
+
   debugState.gear = clamp(debugState.gear <= 0 ? 1 : debugState.gear, 1, ratios.length);
   debugState.clutch = 1;
   const currentBand = config.shiftBands[debugState.gear - 1] ?? null;
   const throttleOpen = (debugState.throttleAxis ?? 0) > 0.12;
+
+  if (throttleOpen && speedKph <= 12 && debugState.gear > 1) {
+    startShift(debugState, 1, config, "down");
+    return;
+  }
 
   if (
     currentBand &&
@@ -1705,6 +1765,10 @@ function computeDriveForceForWheel(wheel, debugState, config, throttle) {
 }
 
 function getCurrentGearRatio(debugState, config) {
+  if ((debugState.gear ?? 1) === 0) {
+    return 0;
+  }
+
   if ((debugState.gear ?? 1) < 0) {
     return Math.abs(config.gearbox.reverseRatio);
   }
@@ -1820,7 +1884,7 @@ function averageDrivenWheelRadiusFromLayout(wheelLayout, frontTraction, rearTrac
 function buildShiftBands({ gearRatios, endRatio, engine, drivenWheelRadius }) {
   return gearRatios.map((ratio, index) => {
     const upshiftKph = rpmToKph(
-      engine.redLineRpm * 0.99,
+      engine.redLineRpm * 0.985,
       ratio,
       endRatio,
       drivenWheelRadius,
@@ -1853,7 +1917,13 @@ function sampleEngineTorque(engine, rpm) {
   const powerPeakRpm = engine.peakPowerRpm;
   const redline = engine.redLineRpm;
   const peakTorque = engine.peakTorque;
-  const torqueAtPowerPeak = peakTorque * 0.86;
+  const powerPeakAngularVelocity =
+    (Math.max(powerPeakRpm, idle) * Math.PI * 2) / 60;
+  const torqueAtPowerPeak = Math.max(
+    (Math.max(engine.peakPower, 1) * 1000) /
+      Math.max(powerPeakAngularVelocity, 1e-3),
+    peakTorque * 0.72,
+  );
 
   if (rpm <= torquePeakRpm) {
     return THREE.MathUtils.lerp(
