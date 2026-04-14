@@ -150,11 +150,17 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
   const engine = rawConfig.engine ?? {};
   const gearbox = rawConfig.gearbox ?? {};
   const suspension = rawConfig.suspension ?? {};
+  const tires = rawConfig.tires ?? {};
   const steering = rawConfig.steering ?? {};
   const localTireDynamics = rawConfig.localTireDynamics ?? {};
   const bounds = resolveBodyBounds(bodyCollision, carRoot);
   const wheelMetrics = resolveWheelLayout(carRoot);
-  const wheelLayout = buildWheelVisualLayout(carRoot, suspension);
+  const frontTireRadius = Math.max(Number.parseFloat(tires.FrontRadius ?? 0.34), 0.1);
+  const rearTireRadius = Math.max(Number.parseFloat(tires.RearRadius ?? tires.FrontRadius ?? 0.34), 0.1);
+  const wheelLayout = buildWheelVisualLayout(carRoot, suspension, {
+    frontTireRadius,
+    rearTireRadius,
+  });
   const gearRatios = buildGearRatios(gearbox);
   const defaultDifferential = rawConfig.differentials?.defaultFront ?? {};
   const frontDifferential = resolveDifferential(
@@ -232,6 +238,8 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
       relaxation: Math.max(Number.parseFloat(suspension.RearReboundDamp ?? 3), 1.8),
     },
     wheelLayout,
+    frontTireRadius,
+    rearTireRadius,
     visualRideHeight: computeVisualRideHeight(bounds, wheelLayout),
     tireConfig: {
       rollingResistance: pickScalar(localTireDynamics.RollingResistance, 0.5),
@@ -336,7 +344,7 @@ function averageVector(a, b, fallback) {
   return fallback.clone();
 }
 
-function buildWheelVisualLayout(carRoot, suspension) {
+function buildWheelVisualLayout(carRoot, suspension, tireConfig = {}) {
   const wheelNames = [
     { name: "placeholder_tire_fl", front: true, side: -1 },
     { name: "placeholder_tire_fr", front: true, side: 1 },
@@ -347,7 +355,9 @@ function buildWheelVisualLayout(carRoot, suspension) {
   return wheelNames.map((wheel) => {
     const anchor = carRoot.getObjectByName(wheel.name);
     const tire = carRoot.getObjectByName(`${wheel.name}_tire`);
-    const tireRadius = estimateTireRadius(tire);
+    const tireRadius = wheel.front
+      ? Math.max(tireConfig.frontTireRadius ?? estimateTireRadius(tire), 0.1)
+      : Math.max(tireConfig.rearTireRadius ?? estimateTireRadius(tire), 0.1);
 
     return {
       ...wheel,
@@ -1557,7 +1567,7 @@ function updateGearboxState(debugState, config, speedForward, dt) {
       idleRpm +
       throttleMagnitude * (config.engine.launchTargetRpm - idleRpm);
   } else {
-    const targetRpmFromSpeed = projectEngineRpmForSpeed(
+    const targetRpmFromDriveState = projectEngineRpmFromDriveState(
       speedForward,
       debugState.gear,
       config,
@@ -1568,7 +1578,7 @@ function updateGearboxState(debugState, config, speedForward, dt) {
       clamp(speedKph / 28, 0, 1) * clamp(debugState.clutch ?? 1, 0.2, 1);
     rpmTarget = Math.max(
       idleRpm,
-      THREE.MathUtils.lerp(launchFreeRevTarget, targetRpmFromSpeed, couplingBlend),
+      THREE.MathUtils.lerp(launchFreeRevTarget, targetRpmFromDriveState, couplingBlend),
     );
   }
 
@@ -1788,6 +1798,18 @@ function projectEngineRpmForSpeed(speedForward, gear, config) {
   const wheelRadius = averageDrivenWheelRadius(config);
   const wheelOmega = Math.abs(speedForward) / Math.max(wheelRadius, 0.1);
   return projectEngineRpmForGear(wheelOmega, gear, config);
+}
+
+function projectEngineRpmFromDriveState(speedForward, gear, config) {
+  const speedProjectedRpm = projectEngineRpmForSpeed(speedForward, gear, config);
+  const wheelOmega = Math.abs(averageDrivenWheelOmega(config));
+
+  if (!Number.isFinite(wheelOmega) || wheelOmega <= 1e-3) {
+    return speedProjectedRpm;
+  }
+
+  const wheelProjectedRpm = projectEngineRpmForGear(wheelOmega, gear, config);
+  return Math.max(speedProjectedRpm, wheelProjectedRpm);
 }
 
 function updateDrivenWheelState(config, vehicleController, dt) {

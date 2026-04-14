@@ -55,6 +55,81 @@ canvas {
   cursor: default;
 }
 
+.debug-gui .debug-gui-accent-metric .name,
+.debug-gui .debug-gui-accent-metric input {
+  color: var(--metric-accent, #7ee787);
+}
+
+.debug-gui .debug-gui-accent-metric input {
+  background:
+    linear-gradient(90deg, var(--metric-accent-soft, rgba(126, 231, 135, 0.18)), transparent);
+  border-radius: 999px;
+}
+
+.debug-gui .debug-gui-slider-metric {
+  position: relative;
+}
+
+.debug-gui .debug-gui-slider-metric .widget {
+  position: relative;
+}
+
+.debug-gui .debug-gui-slider-metric .slider {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 10px;
+  margin-right: 0;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      var(--metric-accent, #3ecf5e) 0%,
+      var(--metric-accent, #3ecf5e) var(--slider-fill, 0%),
+      rgba(255, 255, 255, 0.12) var(--slider-fill, 0%),
+      rgba(255, 255, 255, 0.12) 100%
+    );
+}
+
+.debug-gui .is-readonly-hide-input .slider + input,
+.debug-gui .is-readonly-hide-input input:not(.slider) {
+  display: none;
+}
+
+.debug-gui .debug-gui-slider-metric .slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0;
+  height: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.debug-gui .debug-gui-slider-metric .slider::-moz-range-thumb {
+  width: 0;
+  height: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.debug-gui .debug-gui-slider-metric .slider::-moz-range-track {
+  height: 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.debug-gui .debug-gui-slider-value {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #f8f6ef;
+  pointer-events: none;
+}
+
 @media (max-width: 900px) {
   .debug-gui-main,
   .debug-gui-perf {

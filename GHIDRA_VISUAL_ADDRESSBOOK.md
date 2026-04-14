@@ -132,6 +132,7 @@ Source of truth notes:
 - `FUN_004421d0` @ `0x004421d0` — Timed shift-state integrator; applies the requested gear once the engage window `+0xc0` is reached and returns to idle after the full engage+release window `+0xc0 + +0xbc`.
 - `FUN_00441c40` @ `0x00441c40` — Gearbox handling loader; copies ratio/threshold data into runtime offsets `+0x5c..+0x98`, sets `numGears` at `+0x58`, and seeds clutch/auto-shift timing fields from loaded gearbox data.
 - `FUN_00454b50` @ `0x00454b50` — Builds the runtime engine curve table from `PeakPower*`, `PeakTorque*`, `RedLineRpm`, `RpmLimit`, and `ZeroPowerRpm`.
+- Porting note 2026-04-14: the live Rapier wrapper must not replace this with a torque-only surrogate; wheel-radius parity also matters because auto-shift/runtime RPM tracking depends on driven-wheel rate state.
 
 ### Key strings / config keys
 

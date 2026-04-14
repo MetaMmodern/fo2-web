@@ -21,6 +21,11 @@ export function createHud(
   const telemetry = {
     speed: "0 km/h",
   };
+  const perfVisualState = {
+    physics: {
+      rpmValue: 0,
+    },
+  };
   const perfState = {
     fps: "--",
     frame: "-- ms",
@@ -233,6 +238,19 @@ export function createHud(
     render: makeReadonlyMetric(perfSummaryFolder, perfState, "render", "Render"),
     camera: makeReadonlyMetric(perfSummaryFolder, perfState, "camera", "Camera"),
     physics: {
+      speed: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "speed", "Speed"),
+      gear: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "gear", "Gear"),
+      rpm: makeReadonlySliderMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "rpm",
+        "RPM",
+        perfVisualState.physics,
+        "rpmValue",
+        0,
+        9000,
+        50,
+      ),
       mode: makeReadonlyMetric(
         perfPhysicsFolder,
         perfState.physics,
@@ -246,8 +264,6 @@ export function createHud(
         "Grounded",
       ),
       toi: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "toi", "TOI"),
-      gear: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "gear", "Gear"),
-      rpm: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "rpm", "RPM"),
       throttle: makeReadonlyMetric(
         perfPhysicsFolder,
         perfState.physics,
@@ -274,7 +290,6 @@ export function createHud(
         "suspension",
         "Suspension",
       ),
-      speed: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "speed", "Speed"),
       y: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "y", "Y"),
       vy: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "vy", "VY"),
     },
@@ -314,6 +329,21 @@ export function createHud(
       maxY: makeReadonlyMetric(perfWorldFolder, perfState.world, "maxY", "Max Y"),
     },
   };
+  applyMetricAccent(
+    perfControllers.physics.speed,
+    "hsl(0deg 78% 60%)",
+    "hsla(0deg 78% 60% / 0.2)",
+  );
+  applyMetricAccent(
+    perfControllers.physics.gear,
+    "hsl(48deg 92% 62%)",
+    "hsla(48deg 92% 62% / 0.2)",
+  );
+  applyMetricAccent(
+    perfControllers.physics.rpm,
+    "hsl(130deg 60% 52%)",
+    "hsla(130deg 60% 52% / 0.2)",
+  );
 
   const hud = {
     root: mainGui.domElement,
@@ -324,6 +354,7 @@ export function createHud(
       sceneSelection,
       telemetry,
       perf: perfState,
+      perfVisual: perfVisualState,
     },
     controllers: {
       track: trackController,
@@ -406,6 +437,14 @@ export function updateHudTelemetry(
       vy: "vy",
     },
   );
+  hud.state.perf.physics.speed = Number.isFinite(speedKph)
+    ? `${Math.round(speedKph)} km/h`
+    : "--";
+  hud.state.perfVisual.physics.rpmValue = clampMetricValue(
+    Number.parseFloat(hud.state.perf.physics.rpm),
+    0,
+    9000,
+  );
   applyPerfDebugValues(
     hud.state.perf.world,
     parseDebugPairs(worldDebug),
@@ -474,6 +513,49 @@ function refreshSelectionController(controller, value) {
 function makeReadonlyMetric(gui, target, key, name) {
   const controller = gui.add(target, key).name(name).listen();
   setReadonlyController(controller);
+  return controller;
+}
+
+function makeReadonlySliderMetric(
+  gui,
+  target,
+  key,
+  name,
+  sliderTarget,
+  sliderKey,
+  min,
+  max,
+  step,
+) {
+  const controller = gui.add(sliderTarget, sliderKey, min, max, step).name(name).listen();
+  controller.domElement.classList.add("debug-gui-slider-metric");
+  setReadonlyController(controller, { hideInput: true });
+  const slider = controller.domElement.querySelector(".slider");
+  if (slider) {
+    slider.setAttribute("aria-hidden", "true");
+  }
+  const valueLabel = document.createElement("span");
+  valueLabel.className = "debug-gui-slider-value";
+  controller.domElement.appendChild(valueLabel);
+  const updateSliderDisplay = controller.updateDisplay.bind(controller);
+  controller.updateDisplay = () => {
+    updateSliderDisplay();
+    valueLabel.textContent = target[key] ?? "--";
+    const range = controller.domElement.querySelector(".slider");
+    const minValue = Number.isFinite(min) ? min : 0;
+    const maxValue = Number.isFinite(max) ? max : 1;
+    const sliderValue = Number.isFinite(sliderTarget[sliderKey])
+      ? sliderTarget[sliderKey]
+      : minValue;
+    const normalized =
+      maxValue > minValue
+        ? (sliderValue - minValue) / (maxValue - minValue)
+        : 0;
+    if (range) {
+      range.style.setProperty("--slider-fill", `${clampMetricValue(normalized, 0, 1) * 100}%`);
+    }
+  };
+  controller.updateDisplay();
   return controller;
 }
 
@@ -561,18 +643,35 @@ async function copyTextToClipboard(text) {
   document.body.removeChild(textarea);
 }
 
-function setReadonlyController(controller) {
+function setReadonlyController(controller, options = {}) {
+  const { hideInput = false } = options;
   if (typeof controller.disable === "function") {
     controller.disable();
-    return;
   }
 
   controller.domElement.classList.add("is-readonly");
-  const input = controller.domElement.querySelector("input, select");
-  if (input) {
+  if (hideInput) {
+    controller.domElement.classList.add("is-readonly-hide-input");
+  }
+  const inputs = controller.domElement.querySelectorAll("input, select");
+  for (const input of inputs) {
     input.disabled = true;
     input.tabIndex = -1;
   }
+}
+
+function applyMetricAccent(controller, accent, accentSoft) {
+  controller.domElement.classList.add("debug-gui-accent-metric");
+  controller.domElement.style.setProperty("--metric-accent", accent);
+  controller.domElement.style.setProperty("--metric-accent-soft", accentSoft);
+}
+
+function clampMetricValue(value, min, max) {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.min(Math.max(value, min), max);
 }
 
 function buildOptionMap(items) {
