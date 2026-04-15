@@ -113,3 +113,36 @@ What is still missing:
 - exact mapping from the loaded gearbox handling block into those threshold arrays
 
 Until that is recovered, any further shift-threshold tuning is heuristic, not source-faithful.
+
+## Addendum 2026-04-14 (Later Pass)
+
+Additional constants and equations are now confirmed.
+
+### 6. Confirmed speed-unit and hysteresis constants in `Gearbox_GetRecommendedGear`
+
+From direct data-label reads and xrefs:
+
+- `FLOAT_0067dd6c = 3.6`
+  - used in the recommendation path to convert projected speed to km/h domain before threshold comparison.
+- `FLOAT_0067dd70 = 1.15`
+  - used as a low-speed guard scaling factor in the projected-speed branch.
+- `FLOAT_0067dbe8 = 10.0`
+  - applied as a downshift-side hysteresis margin in the threshold walk.
+
+Porting implication:
+
+- auto-shift parity should use the native km/h conversion and hysteresis constants directly.
+
+### 7. Confirmed nonlinear torque scalar in `Drivetrain_DistributeTorqueToDrivenWheels`
+
+From `0x00441090`:
+
+- runtime scalar is:
+  - `s = c * FLOAT_0067dc14 + c^3 * FLOAT_0067dc60`
+  - with `FLOAT_0067dc14 = 0.3`
+  - and `FLOAT_0067dc60 = 0.7`
+- `s` is written into runtime torque fields before the differential split stage.
+
+Porting implication:
+
+- drivetrain parity cannot be achieved by a simple linear throttle-to-force map; this nonlinear stage must be represented before left/right wheel torque distribution.

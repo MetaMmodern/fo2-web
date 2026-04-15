@@ -196,7 +196,6 @@ function normalizeDrivingConfig(rawConfig, carRoot) {
   const car = rawConfig.car ?? {};
   const localTireDynamics = rawConfig.localTireDynamics ?? {};
   const massBase = pickScalar(car.Mass, 980);
-  const massFudge = pickScalar(car.MassFudgeFactor, 1);
   const frontRadius = pickScalar(tires.FrontRadius, estimateWheelRadius(carRoot) ?? 0.33);
   const rearRadius = pickScalar(tires.RearRadius, frontRadius);
   const frontWidth = pickScalar(tires.FrontWidth, 0.22);
@@ -226,7 +225,9 @@ function normalizeDrivingConfig(rawConfig, carRoot) {
     bodyCollisionProbes: buildBodyCollisionProbes(bodyCollision),
     localTireDynamics,
     surfaceDynamics: rawConfig.surfaceDynamics ?? {},
-    massKg: massBase * massFudge,
+    // Native runtime consumer path for MassFudgeFactor is not fully confirmed yet.
+    // Keep direct mass until full native mass/fudge mapping is recovered.
+    massKg: massBase,
     centerOfMass: toVector3(car.CenterOfMass, [0, 0.1, 0.05]),
     centerOfDownforce: toVector3(car.CenterOfDownforce, [0, 0.45, 0]),
     brakeBalance: pickScalar(body.BrakeBalance, 0.6),

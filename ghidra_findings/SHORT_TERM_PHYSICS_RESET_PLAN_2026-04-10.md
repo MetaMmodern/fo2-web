@@ -50,6 +50,7 @@ This is a short-term plan, not the final architecture note.
    - car body collision volumes from `body.ini`
    - dynamic object interaction rules
    - Status update 2026-04-14: recovered Ghidra pass confirms the native auto-shift path is driven by projected forward speed plus runtime gearbox threshold arrays, not by a simple RPM gate. Do not keep tuning Rapier shift thresholds heuristically; recover and port `Gearbox_GetRecommendedGear` / gearbox runtime threshold preparation first.
+   - Status update 2026-04-14 (later): recovered native drivetrain torque stage confirms nonlinear scaling `s = 0.3*c + 0.7*c^3` before differential split (`Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090`). Treat this as required parity logic, not optional tuning.
 
 5. Revisit surface tilt only after the contact/suspension/body pose path is coherent.
    - Surface tilt should emerge from contact and suspension state.

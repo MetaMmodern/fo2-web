@@ -557,14 +557,16 @@ function computeWheelEngineForce(debugState, config, throttleMagnitude) {
     sampleEngineTorque(config.engine, debugState.engineRpm) * throttleMagnitude;
   const gearRatio = getCurrentGearRatio(debugState, config);
   const torqueScale = sampleCurve(config.differential.throttleCurve, throttleMagnitude);
+  const effectiveTorqueScale = 1 + (torqueScale - 1) * 0.25;
   const wheelTorque =
     engineTorque *
     gearRatio *
     config.gearbox.endRatio *
     Math.max(debugState.clutch ?? 1, 0.2) *
-    (0.35 + torqueScale * 0.65);
+    (0.35 + effectiveTorqueScale * 0.65);
+  const drivenWheelCount = Math.max(config.drivenWheelCount ?? 2, 1);
   const clampedTorque = clamp(
-    wheelTorque,
+    wheelTorque / drivenWheelCount,
     -config.differential.maxTorque,
     config.differential.maxTorque,
   );
@@ -576,6 +578,8 @@ function createSimConfig({
   engine,
   gearbox,
   drivenWheelRadius,
+  frontTraction,
+  rearTraction,
   aeroDrag,
   differential,
 }) {
@@ -605,6 +609,7 @@ function createSimConfig({
       drivenWheelRadius,
     }),
     drivenWheelRadius,
+    drivenWheelCount: Math.max((frontTraction ? 2 : 0) + (rearTraction ? 2 : 0), 2),
     aeroDrag,
     differential,
   };
@@ -617,13 +622,12 @@ function simulatePureAcceleration(input) {
   let time = 0;
   let nextLog = 0;
   const timeline = [];
-  const drivenWheelCount = (input.frontTraction ? 2 : 0) + (input.rearTraction ? 2 : 0);
 
   while (time <= 20) {
     debugState.throttleAxis = moveToward(debugState.throttleAxis, 1, FIXED_DT * 3.6);
     updateGearboxState(debugState, config, speedForward, FIXED_DT);
     const wheelForce = computeWheelEngineForce(debugState, config, debugState.throttleAxis);
-    const totalDriveForce = wheelForce * Math.max(drivenWheelCount, 1);
+    const totalDriveForce = wheelForce * config.drivenWheelCount;
     const dragForce =
       -Math.sign(speedForward) * speedForward * speedForward * config.aeroDrag[0] * 0.8;
     const acceleration = (totalDriveForce + dragForce) / config.massKg;

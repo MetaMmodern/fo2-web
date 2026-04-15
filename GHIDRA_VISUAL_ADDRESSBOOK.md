@@ -128,10 +128,20 @@ Source of truth notes:
 - `FUN_00441ae0` @ `0x00441ae0` — Wheel steer-angle clamp stage after car-level steer input is computed.
   - Confirmed 2026-04-14: applies a second rack-side dynamic steer cap from live vehicle/runtime fields at `+0x300/+0x304/+0x370/+0x374`; final wheel steer is not determined by player input shaping alone.
 - `FUN_00441f10` @ `0x00441f10` — Auto gear-selection helper based on projected forward speed and runtime threshold arrays at gearbox `+0x9c/+0xa0`; includes explicit reverse/neutral/launch cases.
+  - Confirmed 2026-04-14 constants/units:
+    - converts m/s-style projected speed to km/h with `FLOAT_0067dd6c = 3.6`
+    - applies low-speed blend guard `FLOAT_0067dd70 = 1.15`
+    - applies downshift hysteresis margin `FLOAT_0067dbe8 = 10.0`
+  - Porting implication: native autobox selection is speed-threshold based with hysteresis and guard scaling, not pure RPM threshold logic.
 - `FUN_00442160` @ `0x00442160` — Shift request/state-machine entry; validates requested gear in `[-1, numGears]`, writes requested gear to gearbox `+0x48`, and arms the timed shift state at `+0x4c/+0x50`.
 - `FUN_004421d0` @ `0x004421d0` — Timed shift-state integrator; applies the requested gear once the engage window `+0xc0` is reached and returns to idle after the full engage+release window `+0xc0 + +0xbc`.
 - `FUN_00441c40` @ `0x00441c40` — Gearbox handling loader; copies ratio/threshold data into runtime offsets `+0x5c..+0x98`, sets `numGears` at `+0x58`, and seeds clutch/auto-shift timing fields from loaded gearbox data.
 - `FUN_00454b50` @ `0x00454b50` — Builds the runtime engine curve table from `PeakPower*`, `PeakTorque*`, `RedLineRpm`, `RpmLimit`, and `ZeroPowerRpm`.
+- `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` — Driven-wheel torque distribution and differential dispatch stage.
+  - Confirmed 2026-04-14 torque scalar:
+    - nonlinear scale computed as `c*0.3 + c^3*0.7` (`FLOAT_0067dc14 = 0.3`, `FLOAT_0067dc60 = 0.7`)
+    - result written to runtime fields `+0x1a8` and `+0x1aa` before differential left/right solve
+  - Porting implication: replacing this with a linear throttle-only force mapping will under-match native launch and traction behavior.
 - Porting note 2026-04-14: the live Rapier wrapper must not replace this with a torque-only surrogate; wheel-radius parity also matters because auto-shift/runtime RPM tracking depends on driven-wheel rate state.
 
 ### Key strings / config keys

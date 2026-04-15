@@ -31,7 +31,6 @@ export function createHud(
     frame: "-- ms",
     sim: "-- ms",
     render: "-- ms",
-    camera: "-- ms",
     physics: {
       mode: "--",
       grounded: "--",
@@ -44,6 +43,8 @@ export function createHud(
       wheelContacts: "--",
       impulse: "--",
       suspension: "--",
+      simSteps: "--",
+      simBacklog: "--",
       speed: "--",
       y: "--",
       vy: "--",
@@ -95,7 +96,6 @@ export function createHud(
   const sceneFolder = mainGui.addFolder("Scene");
   const telemetryFolder = mainGui.addFolder("Telemetry");
   const runtimeFolder = mainGui.addFolder("Runtime");
-  const cameraFolder = mainGui.addFolder("Camera Debug");
   const helpFolder = mainGui.addFolder("Controls");
 
   const trackController = addSelectionController(
@@ -161,54 +161,40 @@ export function createHud(
     runtimeFolder
       .add(runtimeDebug, "toggleRenderGeometry")
       .name("Toggle render geometry");
+    if (runtimeDebug.physicsIsolation) {
+      const isolationFolder = runtimeFolder.addFolder("Physics isolation");
+      if (
+        typeof runtimeDebug.physicsAllOn === "function" &&
+        typeof runtimeDebug.physicsAllOff === "function"
+      ) {
+        isolationFolder.add(runtimeDebug, "physicsAllOn").name("All ON");
+        isolationFolder.add(runtimeDebug, "physicsAllOff").name("All OFF");
+      }
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "driveForce")
+        .name("Drive force");
+      isolationFolder.add(runtimeDebug.physicsIsolation, "gearbox").name("Gearbox");
+      isolationFolder.add(runtimeDebug.physicsIsolation, "steering").name("Steering");
+      isolationFolder.add(runtimeDebug.physicsIsolation, "braking").name("Braking");
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "handbrake")
+        .name("Handbrake");
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "differentialCurve")
+        .name("Diff curve");
+      isolationFolder.add(runtimeDebug.physicsIsolation, "aeroDrag").name("Aero drag");
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "lateralDrag")
+        .name("Lateral drag");
+      isolationFolder.add(runtimeDebug.physicsIsolation, "downforce").name("Downforce");
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "uprightAssist")
+        .name("Upright assist");
+      isolationFolder.add(runtimeDebug.physicsIsolation, "gravity").name("Gravity");
+    }
   } else {
     addInfoBlock(runtimeFolder, [
       "Runtime controls unavailable for this scene.",
-    ]);
-  }
-
-  const cameraControllers = [];
-  if (cameraDebug) {
-    cameraFolder
-      .add(cameraDebug, "enableDynamics")
-      .name("Enable chase dynamics");
-    cameraControllers.push(
-      cameraFolder
-        .add(cameraDebug, "headingResponseScale", 0, 2, 0.05)
-        .name("Heading response"),
-    );
-    cameraControllers.push(
-      cameraFolder
-        .add(cameraDebug, "positionResponseScale", 0, 2, 0.05)
-        .name("Position response"),
-    );
-    cameraControllers.push(
-      cameraFolder
-        .add(cameraDebug, "lookResponseScale", 0, 2, 0.05)
-        .name("Look response"),
-    );
-    cameraControllers.push(
-      cameraFolder
-        .add(cameraDebug, "verticalFactorScale", 0, 2, 0.05)
-        .name("Vertical response"),
-    );
-    cameraControllers.push(
-      cameraFolder
-        .add(cameraDebug, "rotateFactorScale", 0, 2, 0.05)
-        .name("Rotate response"),
-    );
-    cameraControllers.push(
-      cameraFolder.add(cameraDebug, "shakeScale", 0, 2, 0.05).name("Shake scale"),
-    );
-    for (const controller of cameraControllers) {
-      controller.listen();
-    }
-    addInfoBlock(cameraFolder, [
-      "Code path: createChaseCamera() and resolveCarTrackerPose() in src/game/scene.js",
-    ]);
-  } else {
-    addInfoBlock(cameraFolder, [
-      "Camera debug controls unavailable for this scene.",
     ]);
   }
 
@@ -217,11 +203,6 @@ export function createHud(
     "A/D or arrows: steer",
     "Space: handbrake",
     "R: reset car",
-    "C: cycle chase cameras",
-    "`: toggle orbit debug camera",
-    "Orbit: I/J/K/L move, U/O vertical",
-    "Orbit: 1/2 slower or faster step",
-    "Orbit: mouse wheel changes FOV",
     "Scene auto-pauses after load when enabled",
   ]);
 
@@ -236,7 +217,6 @@ export function createHud(
     frame: makeReadonlyMetric(perfSummaryFolder, perfState, "frame", "Frame"),
     sim: makeReadonlyMetric(perfSummaryFolder, perfState, "sim", "Sim"),
     render: makeReadonlyMetric(perfSummaryFolder, perfState, "render", "Render"),
-    camera: makeReadonlyMetric(perfSummaryFolder, perfState, "camera", "Camera"),
     physics: {
       speed: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "speed", "Speed"),
       gear: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "gear", "Gear"),
@@ -289,6 +269,18 @@ export function createHud(
         perfState.physics,
         "suspension",
         "Suspension",
+      ),
+      simSteps: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "simSteps",
+        "Sim steps",
+      ),
+      simBacklog: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "simBacklog",
+        "Sim backlog",
       ),
       y: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "y", "Y"),
       vy: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "vy", "VY"),
@@ -414,9 +406,6 @@ export function updateHudTelemetry(
   hud.state.perf.render = Number.isFinite(renderMs)
     ? `${renderMs.toFixed(1)} ms`
     : "-- ms";
-  hud.state.perf.camera = Number.isFinite(chaseMs)
-    ? `${chaseMs.toFixed(1)} ms`
-    : "-- ms";
   applyPerfDebugValues(
     hud.state.perf.physics,
     parseDebugPairs(physicsDebug),
@@ -432,6 +421,8 @@ export function updateHudTelemetry(
       wheelContacts: "wc",
       impulse: "imp",
       suspension: "sus",
+      simSteps: "ss",
+      simBacklog: "sb",
       speed: "spd",
       y: "y",
       vy: "vy",
@@ -471,7 +462,6 @@ export function updateHudTelemetry(
     hud.controllers.perf.frame,
     hud.controllers.perf.sim,
     hud.controllers.perf.render,
-    hud.controllers.perf.camera,
   ]) {
     controller.updateDisplay();
   }
@@ -596,7 +586,6 @@ function formatPerfSummary(perfState) {
     `Frame=${perfState.frame}`,
     `Sim=${perfState.sim}`,
     `Render=${perfState.render}`,
-    `Camera=${perfState.camera}`,
     "",
     formatPerfGroup("Physics", perfState.physics),
     "",

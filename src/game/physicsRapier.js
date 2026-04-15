@@ -11,7 +11,8 @@ const COLLISION_GROUP_PROP = 0x0002;
 const COLLISION_GROUP_HELPER = 0x0004;
 const COLLISION_GROUP_VEHICLE = 0x0008;
 const FIXED_DT = 1 / 60;
-const MAX_STEPS_PER_FRAME = 4;
+// Keep simulation real-time under low render FPS; 4 steps caused hard time-dilation.
+const MAX_STEPS_PER_FRAME = 8;
 const MAX_FRAME_DELTA = 0.1;
 const TMP_FORWARD = new THREE.Vector3();
 const TMP_RIGHT = new THREE.Vector3();
@@ -35,6 +36,7 @@ export async function createDrivingSimulation({
   input,
   collisionRoot = null,
   dynamicObjects = [],
+  debugOptions = null,
 }) {
   await RAPIER.init();
 
@@ -62,6 +64,7 @@ export async function createDrivingSimulation({
   const vehicleController = createVehicleController(world, chassis, config);
   const cameraState = createCameraState();
   const debugState = createDebugState();
+  debugState.isolation = debugOptions;
   debugState.staticWorld = staticWorldDebug;
   debugState.staticWorld.dynamicBodyCount = dynamicObjectState.length;
   debugState.staticWorld.dynamicCategorySummary = summarizeDynamicCategories(
@@ -102,6 +105,8 @@ export async function createDrivingSimulation({
         accumulator -= FIXED_DT;
         stepCount += 1;
       }
+      debugState.simSteps = stepCount;
+      debugState.simBacklogMs = accumulator * 1000;
 
       if (stepCount > 0) {
         syncCarRootFromBody(carRoot, chassis, config);
@@ -176,12 +181,14 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
 
   return {
     gravity: 18,
-    massKg:
-      Math.max(
-        Number.parseFloat(car.Mass ?? 980) *
-          Number.parseFloat(car.MassFudgeFactor ?? 1),
-        600,
-      ),
+    // Native runtime consumer path for MassFudgeFactor is not fully confirmed yet.
+    // Using it directly here inverted class pacing (e.g. car_1 slower, heavy pickups faster).
+    // Keep direct mass until full native mass/fudge mapping is recovered.
+    massKg: Math.max(Number.parseFloat(car.Mass ?? 980), 600),
+    // Keep MassFudgeFactor out of rigid-body mass, but preserve it as a
+    // per-car drivetrain scalar. This restores class pacing direction
+    // (light FWD cars up, heavy pickups down) without destabilizing chassis mass.
+    driveForceScale: clamp(pickScalar(car.MassFudgeFactor, 1), 0.75, 1.5),
     bodyHalfExtents: bounds.halfExtents,
     bodyOffset: bounds.offset,
     wheelbase: wheelMetrics.wheelbase,
@@ -280,6 +287,7 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
       reverseRatio: buildReverseRatio(gearbox),
       endRatio: pickScalar(gearbox.EndRatio, 3.7),
       engine: {
+        idleRpm: pickScalar(engine.IdleRpm, 1000),
         peakTorqueRpm: pickScalar(engine.PeakTorqueRpm, 4500),
         peakPowerRpm: pickScalar(engine.PeakPowerRpm, 6000),
         redLineRpm: pickScalar(engine.RedLineRpm, 6500),
@@ -294,6 +302,7 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
       front: frontDifferential,
       rear: rearDifferential,
     },
+    drivenWheelCount: countDrivenWheels(Boolean(body.FrontTraction), body.RearTraction !== false),
   };
 }
 
@@ -978,6 +987,8 @@ function createChassisBody(world, config, translation, rotation) {
 
 function createVehicleController(world, chassis, config) {
   const controller = world.createVehicleController(chassis);
+  // Rapier 0.19 JS API: up axis uses `indexUpAxis` setter, but forward axis
+  // is exposed through a setter property named `setIndexForwardAxis`.
   controller.indexUpAxis = 1;
   controller.setIndexForwardAxis = 2;
 
@@ -1002,14 +1013,18 @@ function createVehicleController(world, chassis, config) {
       wheelIndex,
       wheel.front ? config.massKg * 22 : config.massKg * 24,
     );
-    controller.setWheelFrictionSlip(wheelIndex, wheel.front ? 2.1 : 2.4);
-    controller.setWheelSideFrictionStiffness(wheelIndex, wheel.front ? 2.1 : 1.6);
+    // Rapier raycast vehicle follows Bullet-style wheel tuning ranges.
+    // Values around ~10 are the practical baseline for longitudinal grip;
+    // our previous ~2.x setting caused persistent wheel slip and weak launch.
+    controller.setWheelFrictionSlip(wheelIndex, wheel.front ? 9.5 : 10.5);
+    controller.setWheelSideFrictionStiffness(wheelIndex, wheel.front ? 1.15 : 1.0);
   });
 
   return controller;
 }
 
 function stepVehicle(world, chassis, vehicleController, config, input, debugState) {
+  const isolation = resolveRapierDebugOptions(debugState.isolation);
   const rawThrottle = clamp(input?.throttle ?? 0, 0, 1);
   const rawBrake = clamp(input?.brake ?? 0, 0, 1);
   const rawHandbrake = clamp(input?.handbrake ?? 0, 0, 1);
@@ -1049,12 +1064,19 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     rawHandbrake,
     FIXED_DT * 10,
   );
-  updateSteeringState(debugState, config, rawSteer, rawHandbrake, speedHorizontalNow(speedForwardNow, chassis), FIXED_DT);
+  updateSteeringState(
+    debugState,
+    config,
+    isolation.steering ? rawSteer : 0,
+    isolation.handbrake ? rawHandbrake : 0,
+    speedHorizontalNow(speedForwardNow, chassis),
+    FIXED_DT,
+  );
 
-  const throttle = debugState.throttleAxis;
-  const brake = debugState.brakeAxis;
-  const handbrake = debugState.handbrakeAxis;
-  const steer = debugState.steerState;
+  const throttle = isolation.driveForce ? debugState.throttleAxis : 0;
+  const brake = isolation.braking ? debugState.brakeAxis : 0;
+  const handbrake = isolation.handbrake ? debugState.handbrakeAxis : 0;
+  const steer = isolation.steering ? debugState.steerState : 0;
   const translation = chassis.translation();
   const rotation = chassis.rotation();
   TMP_QUAT.set(rotation.x, rotation.y, rotation.z, rotation.w).normalize();
@@ -1072,7 +1094,25 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     ? rapierVectorToThree(groundHit.normal, TMP_VEC_C).normalize()
     : WORLD_UP;
   const grounded = Boolean(groundHit && groundHit.timeOfImpact <= config.bodyHalfExtents.y + 0.5);
-  updateGearboxState(debugState, config, speedForward, FIXED_DT);
+  if (isolation.gearbox) {
+    updateGearboxState(debugState, config, speedForward, FIXED_DT);
+  } else {
+    const idleRpm = config.engine.idleRpm;
+    const speedRpm = projectEngineRpmFromDriveState(speedForward, 1, config);
+    const freeRevRpm =
+      idleRpm + Math.max(throttle, 0) * (config.engine.peakTorqueRpm - idleRpm);
+    debugState.engineRpm = dampToward(
+      debugState.engineRpm ?? idleRpm,
+      Math.max(idleRpm, speedRpm, freeRevRpm),
+      8,
+      FIXED_DT,
+    );
+    debugState.gear = debugState.reverseLatched ? -1 : 1;
+    debugState.shiftTimer = 0;
+    debugState.shiftFromGear = debugState.gear;
+    debugState.shiftTargetGear = debugState.gear;
+    debugState.clutch = 1;
+  }
 
   if (ENABLE_DIRECT_DRIVE_DEBUG) {
     const targetForwardSpeed = throttle * 14 - brake * 8;
@@ -1120,10 +1160,14 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     config,
     throttle,
   );
-  const frontBrake = brake * config.brakeTorque * config.brakeBalance;
+  const frontBrake = isolation.braking
+    ? brake * config.brakeTorque * config.brakeBalance
+    : 0;
   const rearBrake =
-    brake * config.brakeTorque * (1 - config.brakeBalance) +
-    handbrake * config.handBrakeTorque;
+    (isolation.braking
+      ? brake * config.brakeTorque * (1 - config.brakeBalance)
+      : 0) +
+    (isolation.handbrake ? handbrake * config.handBrakeTorque : 0);
   const frontSteerAngles = computeFrontWheelSteerAngles(steer, config);
 
   config.wheelLayout.forEach((wheel, wheelIndex) => {
@@ -1136,7 +1180,7 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     }
     vehicleController.setWheelSteering(wheelIndex, steerAngle);
     const wheelEngineForce = driven
-      ? computeDriveForceForWheel(wheel, debugState, config, throttle)
+      ? computeDriveForceForWheel(wheel, debugState, config, throttle, isolation)
       : 0;
     vehicleController.setWheelEngineForce(
       wheelIndex,
@@ -1155,29 +1199,54 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     (collider) => collider.parent()?.handle !== chassis.handle,
   );
 
-  const dragForce = linvel
-    .clone()
-    .set(0, 0, 0)
-    .addScaledVector(
-      TMP_FORWARD,
-      -Math.sign(speedForward) * speedForward * speedForward * config.aeroDrag[0] * 0.8,
-    )
-    .addScaledVector(
-      TMP_RIGHT,
-      -Math.sign(speedRight) * speedRight * speedRight * config.aeroDrag[1] * 1.4,
+  if (isolation.aeroDrag || isolation.lateralDrag) {
+    const dragForce = linvel
+      .clone()
+      .set(0, 0, 0)
+      .addScaledVector(
+        TMP_FORWARD,
+        isolation.aeroDrag
+          ? -Math.sign(speedForward) *
+              speedForward *
+              speedForward *
+              config.aeroDrag[0] *
+              0.8
+          : 0,
+      )
+      .addScaledVector(
+        TMP_RIGHT,
+        isolation.lateralDrag
+          ? -Math.sign(speedRight) *
+              speedRight *
+              speedRight *
+              config.aeroDrag[1] *
+              1.4
+          : 0,
+      );
+    chassis.addForce(vectorFromThree(dragForce), true);
+  }
+  if (isolation.downforce) {
+    chassis.addForce(
+      {
+        x: 0,
+        y: -speedHorizontal * speedHorizontal * config.downforceConst * 0.012,
+        z: 0,
+      },
+      true,
     );
-  chassis.addForce(vectorFromThree(dragForce), true);
-  chassis.addForce(
-    { x: 0, y: -speedHorizontal * speedHorizontal * config.downforceConst * 0.012, z: 0 },
-    true,
-  );
+  }
 
   const targetUp = grounded ? surfaceNormal.clone().normalize() : WORLD_UP;
-  const uprightTorque = TMP_UP.clone()
-    .cross(targetUp)
-    .multiplyScalar(config.massKg * (grounded ? 5.5 : 2.5))
-    .add(angvel.multiplyScalar(-config.massKg * 0.22));
-  chassis.addTorque(vectorFromThree(uprightTorque), true);
+  if (isolation.uprightAssist) {
+    const uprightTorque = TMP_UP.clone()
+      .cross(targetUp)
+      .multiplyScalar(config.massKg * (grounded ? 5.5 : 2.5))
+      .add(angvel.multiplyScalar(-config.massKg * 0.22));
+    chassis.addTorque(vectorFromThree(uprightTorque), true);
+  }
+  if (!isolation.gravity) {
+    chassis.addForce({ x: 0, y: config.massKg * config.gravity, z: 0 }, true);
+  }
 
   const wheelContacts = config.wheelLayout.reduce(
     (count, _, wheelIndex) =>
@@ -1208,6 +1277,7 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
   debugState.wheelContacts = wheelContacts;
   debugState.forwardImpulse = forwardImpulse;
   debugState.suspensionForce = suspensionForce;
+  debugState.mode = `rapier-raycast${isolation.gearbox ? "" : "-nogear"}`;
 }
 
 function sampleGround(world, chassis, rayLength) {
@@ -1413,8 +1483,30 @@ function createDebugState() {
     wheelContacts: 0,
     forwardImpulse: 0,
     suspensionForce: 0,
+    simSteps: 0,
+    simBacklogMs: 0,
+    isolation: null,
     chassisPosition: new THREE.Vector3(),
     chassisVelocity: new THREE.Vector3(),
+  };
+}
+
+function resolveRapierDebugOptions(debugOptions) {
+  const source =
+    debugOptions && typeof debugOptions === "object" ? debugOptions : {};
+
+  return {
+    driveForce: source.driveForce !== false,
+    gearbox: source.gearbox !== false,
+    steering: source.steering !== false,
+    braking: source.braking !== false,
+    handbrake: source.handbrake !== false,
+    differentialCurve: source.differentialCurve !== false,
+    aeroDrag: source.aeroDrag !== false,
+    lateralDrag: source.lateralDrag !== false,
+    downforce: source.downforce !== false,
+    uprightAssist: source.uprightAssist !== false,
+    gravity: source.gravity !== false,
   };
 }
 
@@ -1651,31 +1743,94 @@ function updateGearboxState(debugState, config, speedForward, dt) {
   debugState.gear = clamp(debugState.gear <= 0 ? 1 : debugState.gear, 1, ratios.length);
   debugState.clutch = 1;
   const currentBand = config.shiftBands[debugState.gear - 1] ?? null;
-  const throttleOpen = (debugState.throttleAxis ?? 0) > 0.12;
+  const engineRpmNow = debugState.engineRpm ?? idleRpm;
 
-  if (throttleOpen && speedKph <= 12 && debugState.gear > 1) {
-    startShift(debugState, 1, config, "down");
-    return;
-  }
-
+  // Guard against "stuck at redline in current gear" behavior:
+  // when driver holds throttle and RPM is near redline, upshift regardless of
+  // speed-band recommendation. This matches expected FO2 auto-box feel where
+  // RPM limit is the dominant shift trigger under acceleration.
   if (
-    currentBand &&
-    (debugState.upshiftCooldown ?? 0) <= 0 &&
+    throttleMagnitude > 0.35 &&
     debugState.gear < ratios.length &&
-    throttleOpen &&
-    speedKph >= currentBand.upshiftKph
+    (debugState.upshiftCooldown ?? 0) <= 0 &&
+    engineRpmNow >= config.engine.redLineRpm * 0.965
   ) {
     startShift(debugState, debugState.gear + 1, config, "up");
     return;
   }
 
+  // Safety guard for the "stuck in high gear after coasting" symptom.
+  // Native logic relies on runtime threshold arrays (+0x9c/+0xa0) built by
+  // internal gearbox prep. Until that full prep path is mirrored, enforce a
+  // conservative low-speed downshift when current gear is clearly out-of-band.
   if (
     currentBand &&
-    (debugState.downshiftCooldown ?? 0) <= 0 &&
     debugState.gear > 1 &&
-    speedKph <= currentBand.downshiftKph
+    (debugState.downshiftCooldown ?? 0) <= 0 &&
+    speedKph < Math.max((currentBand.downshiftKph ?? 0) - 2, 4) &&
+    (throttleMagnitude < 0.2 || speedKph < 28)
   ) {
     startShift(debugState, debugState.gear - 1, config, "down");
+    return;
+  }
+
+  let recommendedGear = getRecommendedGearNativeLike(
+    debugState,
+    config,
+    speedForward,
+  );
+  const throttleOpen = (debugState.throttleAxis ?? 0) > 0.18;
+  const currentProjectedRpm = projectEngineRpmFromDriveState(
+    speedForward,
+    debugState.gear,
+    config,
+  );
+  const minDriveRpm = Math.max(
+    config.engine.idleRpm * 1.32,
+    config.engine.peakTorqueRpm * 0.52,
+  );
+
+  // Prevent "stuck in tall gear" behavior after coasting:
+  // if speed/RPM falls below usable drive band, force a lower recommended gear.
+  if ((debugState.gear ?? 0) > 1 && currentProjectedRpm < minDriveRpm) {
+    let kickdownTarget = clamp(debugState.gear, 1, ratios.length);
+
+    while (kickdownTarget > 1) {
+      const lowerGear = kickdownTarget - 1;
+      const lowerProjectedRpm = projectEngineRpmFromDriveState(
+        speedForward,
+        lowerGear,
+        config,
+      );
+
+      kickdownTarget = lowerGear;
+
+      if (lowerProjectedRpm >= minDriveRpm || lowerGear === 1) {
+        break;
+      }
+    }
+
+    recommendedGear = Math.min(recommendedGear, kickdownTarget);
+
+    if (throttleOpen) {
+      // Driver-demand kickdown should not be blocked by stale cooldown.
+      debugState.downshiftCooldown = 0;
+    }
+  }
+
+  if (
+    recommendedGear > debugState.gear &&
+    (debugState.upshiftCooldown ?? 0) <= 0
+  ) {
+    startShift(debugState, recommendedGear, config, "up");
+    return;
+  }
+
+  if (
+    recommendedGear < debugState.gear &&
+    ((debugState.downshiftCooldown ?? 0) <= 0 || throttleOpen)
+  ) {
+    startShift(debugState, recommendedGear, config, "down");
   }
 }
 
@@ -1721,11 +1876,15 @@ function computeEngineDriveForceTotal(debugState, config, throttle) {
     config.gearbox.endRatio *
     Math.max(debugState.clutch ?? 1, 0.2) *
     (debugState.gear < 0 ? -1 : 1);
+  const drivenWheelCount = Math.max(config.drivenWheelCount ?? 2, 1);
 
-  return -(axleTorque / Math.max(wheelRadius, 0.1));
+  return -(
+    ((axleTorque / drivenWheelCount) / Math.max(wheelRadius, 0.1)) *
+    Math.max(config.driveForceScale ?? 1, 0.1)
+  );
 }
 
-function computeDriveForceForWheel(wheel, debugState, config, throttle) {
+function computeDriveForceForWheel(wheel, debugState, config, throttle, isolation) {
   const driven =
     (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
 
@@ -1756,22 +1915,113 @@ function computeDriveForceForWheel(wheel, debugState, config, throttle) {
   const differential = wheel.front
     ? config.differentials.front
     : config.differentials.rear;
-  const torqueScale = sampleCurve(
-    differential?.throttleCurve,
-    throttleMagnitude,
+  const throttleCurveScale = isolation.differentialCurve
+    ? sampleCurve(differential?.throttleCurve, throttleMagnitude)
+    : 1;
+  // Do not treat throttle curves as a hard torque multiplier in the Rapier port.
+  // Using them directly heavily underpowered front-drive cars versus FO2 behavior.
+  const effectiveThrottleScale = THREE.MathUtils.lerp(1, throttleCurveScale, 0.25);
+  const clutchScale = clamp(Math.abs(debugState.clutch ?? 1), 0, 1);
+  const controlScale = clamp(
+    Math.min(
+      Math.max(effectiveThrottleScale, 0),
+      Math.max(clutchScale, 0),
+    ),
+    0,
+    1,
   );
+  // Native drivetrain stage (0x00441090) applies a nonlinear scalar:
+  // s = c*0.3 + c^3*0.7 before differential torque split.
+  const nonlinearTorqueScale =
+    controlScale * 0.3 + controlScale * controlScale * controlScale * 0.7;
   const maxTorque = pickScalar(differential?.MaxTorque, 5500);
+  const drivenWheelCount = Math.max(config.drivenWheelCount ?? 2, 1);
   const wheelTorque =
-    engineTorque *
+    (engineTorque *
       gearRatio *
       config.gearbox.endRatio *
-      Math.max(debugState.clutch ?? 1, 0.2) *
+      nonlinearTorqueScale *
       (debugState.gear < 0 ? -1 : 1) *
-      handbrakeDriveScale *
-      (0.35 + torqueScale * 0.65);
+      handbrakeDriveScale) /
+    drivenWheelCount;
   const clampedTorque = clamp(wheelTorque, -maxTorque, maxTorque);
   const wheelRadius = Math.max(wheel.tireRadius ?? 0.34, 0.1);
-  return -(clampedTorque / wheelRadius);
+  return -(
+    (clampedTorque / wheelRadius) * Math.max(config.driveForceScale ?? 1, 0.1)
+  );
+}
+
+function getRecommendedGearNativeLike(debugState, config, speedForward) {
+  const maxGear = config.gearbox.ratios.length;
+  if (maxGear <= 0) {
+    return 1;
+  }
+
+  const projectedForward = speedForward;
+  const nonNegativeForward = Math.max(projectedForward, 0);
+  const drivenLinearSpeed = averageDrivenWheelLinearSpeed(config);
+  let selectedSpeed = nonNegativeForward;
+
+  if (
+    nonNegativeForward < drivenLinearSpeed &&
+    drivenLinearSpeed < nonNegativeForward * 1.15
+  ) {
+    selectedSpeed = drivenLinearSpeed;
+  }
+
+  const speedKph = selectedSpeed * 3.6;
+  let gear = debugState.gear ?? 1;
+
+  if (gear === -1) {
+    gear = 1;
+  } else if (gear === 1) {
+    if (
+      Math.abs(projectedForward) < 1.5 &&
+      (debugState.engineRpm ?? config.engine.idleRpm) < config.engine.idleRpm * 1.12
+    ) {
+      return 0;
+    }
+  } else if (gear === 0) {
+    if ((debugState.engineRpm ?? config.engine.idleRpm) <= config.engine.idleRpm * 1.12) {
+      return 0;
+    }
+    return 1;
+  }
+
+  gear = clamp(gear, 1, maxGear);
+
+  if (gear > 1) {
+    while (gear > 1) {
+      const currentBand = config.shiftBands[gear - 1] ?? null;
+      const nextBand = config.shiftBands[gear] ?? null;
+      const currentDown = currentBand?.downshiftKph ?? 0;
+      const nextDown = nextBand?.downshiftKph ?? Number.POSITIVE_INFINITY;
+
+      if (
+        (gear !== maxGear && nextDown < speedKph) ||
+        currentDown - 10 < speedKph
+      ) {
+        break;
+      }
+
+      gear -= 1;
+    }
+  }
+
+  if (gear < maxGear) {
+    while (gear < maxGear) {
+      const currentBand = config.shiftBands[gear - 1] ?? null;
+      const upshiftKph = currentBand?.upshiftKph ?? Number.POSITIVE_INFINITY;
+
+      if (speedKph < upshiftKph) {
+        return gear;
+      }
+
+      gear += 1;
+    }
+  }
+
+  return gear;
 }
 
 function getCurrentGearRatio(debugState, config) {
@@ -1882,6 +2132,20 @@ function averageDrivenWheelRadius(config) {
   }
 
   return count > 0 ? totalRadius / count : 0.34;
+}
+
+function countDrivenWheels(frontTraction, rearTraction) {
+  let count = 0;
+
+  if (frontTraction) {
+    count += 2;
+  }
+
+  if (rearTraction) {
+    count += 2;
+  }
+
+  return Math.max(count, 2);
 }
 
 function averageDrivenWheelRadiusFromLayout(wheelLayout, frontTraction, rearTraction) {

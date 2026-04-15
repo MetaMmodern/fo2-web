@@ -66,6 +66,29 @@ const runtimeDebug = {
   autoPauseAfterLoad: false,
   collisionFramesVisible: false,
   renderGeometryVisible: true,
+  physicsIsolation: {
+    driveForce: true,
+    gearbox: true,
+    steering: true,
+    braking: true,
+    handbrake: true,
+    differentialCurve: true,
+    aeroDrag: true,
+    lateralDrag: true,
+    downforce: true,
+    uprightAssist: true,
+    gravity: true,
+  },
+  physicsAllOn() {
+    Object.keys(runtimeDebug.physicsIsolation).forEach((key) => {
+      runtimeDebug.physicsIsolation[key] = true;
+    });
+  },
+  physicsAllOff() {
+    Object.keys(runtimeDebug.physicsIsolation).forEach((key) => {
+      runtimeDebug.physicsIsolation[key] = false;
+    });
+  },
   togglePause() {
     runtimeDebug.paused = !runtimeDebug.paused;
   },
@@ -331,6 +354,8 @@ function formatPhysicsDebug(debugState) {
     `wc=${debugState.wheelContacts ?? 0}`,
     `imp=${Number.isFinite(debugState.forwardImpulse) ? debugState.forwardImpulse.toFixed(0) : "--"}`,
     `sus=${Number.isFinite(debugState.suspensionForce) ? debugState.suspensionForce.toFixed(0) : "--"}`,
+    `ss=${Number.isFinite(debugState.simSteps) ? debugState.simSteps : "--"}`,
+    `sb=${Number.isFinite(debugState.simBacklogMs) ? debugState.simBacklogMs.toFixed(1) : "--"}`,
     `spd=${debugState.speedHorizontal.toFixed(2)}`,
     `y=${pos.y.toFixed(2)}`,
     `vy=${vel.y.toFixed(2)}`,
@@ -605,6 +630,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       input: drivingInput,
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
       dynamicObjects: sceneState.dynamicObjects,
+      debugOptions: runtimeDebug.physicsIsolation,
     });
     if (runtimeDebug.autoPauseAfterLoad) {
       runtimeDebug.paused = true;
@@ -634,6 +660,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       input: drivingInput,
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
       dynamicObjects: sceneState.dynamicObjects,
+      debugOptions: runtimeDebug.physicsIsolation,
     });
     if (runtimeDebug.autoPauseAfterLoad) {
       runtimeDebug.paused = true;

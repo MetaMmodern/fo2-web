@@ -46,3 +46,15 @@ Purpose: record the drivetrain parity issue found while calibrating Rapier autob
 - It does, however, remove two structurally wrong inputs from the current Rapier wrapper:
   - mesh-derived wheel radius
   - torque-only high-RPM engine shaping
+
+## Model Sweep Cross-Check (2026-04-14)
+
+Using all Amateur race cars (`car_1`, `3`, `4`, `5`, `7`, `10`, `16`, `19`, `24`, `26`, `33`):
+
+- extracted gearbox + engine + tire data produce plausible native-style per-gear redline speed ladders
+- no data-path anomaly was found that singles out `car_1` as a broken source asset
+- placeholder wheel markers in car model logs are present across all cars and vary by model as expected
+
+Conclusion:
+
+- the remaining `car_1` under-acceleration in the web port is most likely a runtime drivetrain/force-transfer parity gap, not missing or wrong source car files.
