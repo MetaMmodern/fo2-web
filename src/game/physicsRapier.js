@@ -198,6 +198,10 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
     peakTorque: Math.max(Number.parseFloat(engine.PeakTorque ?? 210), 120),
     brakeTorque: Math.max(Number.parseFloat(body.BrakeTorque ?? 5200), 3200),
     handBrakeTorque: Math.max(Number.parseFloat(body.HandBrakeTorque ?? 5200), 3200),
+    // DB brake torques are native units; Rapier wheel controller expects much smaller
+    // practical magnitudes. Convert once here to avoid instant lock/stop behavior.
+    brakeTorqueScale: 0.07,
+    handBrakeTorqueScale: 0.055,
     brakeBalance: clamp(pickScalar(body.BrakeBalance, 0.6), 0.1, 0.9),
     tireTurnAngleInDeg: Math.max(Number.parseFloat(body.TireTurnAngleIn ?? 36), 20),
     tireTurnAngleOutDeg: Math.max(Number.parseFloat(body.TireTurnAngleOut ?? body.TireTurnAngleIn ?? 38), 20),
@@ -207,6 +211,8 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
       Sensitivity: pickScalar(steering.Sensitivity, 0.5),
       MinAnalogSpeed: pickScalar(steering.MinAnalogSpeed, 0.1),
       MaxAnalogSpeed: pickScalar(steering.MaxAnalogSpeed, 2),
+      MinAtDelta: pickScalar(steering.MinAtDelta, 1),
+      MaxAtDelta: pickScalar(steering.MaxAtDelta, 2),
       CenteringSpeed: pickScalar(steering.CenteringSpeed, 0.9),
       DigitalThreshold: pickScalar(steering.DigitalThreshold, 0.2),
       MinDigitalSpeed: pickScalar(steering.MinDigitalSpeed, 1),
@@ -1161,14 +1167,18 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     throttle,
   );
   const frontBrake = isolation.braking
-    ? brake * config.brakeTorque * config.brakeBalance
+    ? brake * config.brakeTorque * config.brakeBalance * config.brakeTorqueScale
     : 0;
   const rearBrake =
     (isolation.braking
-      ? brake * config.brakeTorque * (1 - config.brakeBalance)
+      ? brake * config.brakeTorque * (1 - config.brakeBalance) * config.brakeTorqueScale
       : 0) +
-    (isolation.handbrake ? handbrake * config.handBrakeTorque : 0);
+    (isolation.handbrake
+      ? handbrake * config.handBrakeTorque * config.handBrakeTorqueScale
+      : 0);
   const frontSteerAngles = computeFrontWheelSteerAngles(steer, config);
+  debugState.steerLeftDeg = THREE.MathUtils.radToDeg(frontSteerAngles.left);
+  debugState.steerRightDeg = THREE.MathUtils.radToDeg(frontSteerAngles.right);
 
   config.wheelLayout.forEach((wheel, wheelIndex) => {
     const driven =
@@ -1179,6 +1189,23 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
       steerAngle = wheel.side < 0 ? frontSteerAngles.left : frontSteerAngles.right;
     }
     vehicleController.setWheelSteering(wheelIndex, steerAngle);
+    // Promote controllable rotation on handbrake instead of pure hard-stop lock.
+    // Rear lateral grip drops with handbrake and speed so turns can rotate/drift.
+    const handbrakeSpeedBlend = clamp(speedHorizontal * 3.6 / 90, 0, 1);
+    const rearSideGripScale = wheel.front
+      ? 1
+      : THREE.MathUtils.lerp(1, 0.28, handbrake * handbrakeSpeedBlend);
+    const rearLongGripScale = wheel.front
+      ? 1
+      : THREE.MathUtils.lerp(1, 0.45, handbrake * handbrakeSpeedBlend);
+    vehicleController.setWheelSideFrictionStiffness(
+      wheelIndex,
+      (wheel.front ? 1.15 : 1.0) * rearSideGripScale,
+    );
+    vehicleController.setWheelFrictionSlip(
+      wheelIndex,
+      (wheel.front ? 9.5 : 10.5) * rearLongGripScale,
+    );
     const wheelEngineForce = driven
       ? computeDriveForceForWheel(wheel, debugState, config, throttle, isolation)
       : 0;
@@ -1274,6 +1301,7 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
   debugState.speedForward = speedForward;
   debugState.speedRight = speedRight;
   debugState.speedHorizontal = speedHorizontal;
+  debugState.yawRateDeg = THREE.MathUtils.radToDeg(angvel.y);
   debugState.wheelContacts = wheelContacts;
   debugState.forwardImpulse = forwardImpulse;
   debugState.suspensionForce = suspensionForce;
@@ -1341,7 +1369,7 @@ function updateWheelVisuals(config, chassis, vehicleController, debugState, dt) 
 
 function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizontalKph, dt) {
   const steerLimit = computeSteeringLimit(config.steering, horizontalKph);
-  const steerTarget = rawSteer * steerLimit * (rawHandbrake > 0.1 ? 1.1 : 1);
+  const steerTarget = rawSteer * steerLimit * (rawHandbrake > 0.1 ? 1.08 : 1);
   const digitalInput = Math.abs(rawSteer) >= config.steering.DigitalThreshold;
 
   if (Math.abs(rawSteer) < 1e-3) {
@@ -1354,17 +1382,43 @@ function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizon
     const maxSpeed = digitalInput
       ? config.steering.MaxDigitalSpeed
       : config.steering.MaxAnalogSpeed;
+    const deltaMagnitude = clamp(
+      Math.abs(steerTarget - (debugState.steerState ?? 0)),
+      0,
+      1,
+    );
+    const deltaScale = THREE.MathUtils.lerp(
+      config.steering.MinAtDelta,
+      config.steering.MaxAtDelta,
+      deltaMagnitude,
+    );
+    const lowSpeedRateBoost = THREE.MathUtils.lerp(
+      1.45,
+      1,
+      clamp(horizontalKph / 25, 0, 1),
+    );
+    const highSpeedRateCut = THREE.MathUtils.lerp(
+      1,
+      0.28,
+      clamp((horizontalKph - 55) / 95, 0, 1),
+    );
+    const speedRateScale = lowSpeedRateBoost * highSpeedRateCut;
     const rate =
       THREE.MathUtils.lerp(minSpeed, maxSpeed, Math.abs(rawSteer)) *
-      (1 + Math.abs(steerTarget - (debugState.steerState ?? 0)) * 0.35);
+      deltaScale *
+      speedRateScale;
+    const minParkingRate = horizontalKph < 12 ? 4.5 : 0;
     debugState.steerState = moveToward(
       debugState.steerState ?? 0,
       steerTarget,
-      rate * dt,
+      Math.max(rate, minParkingRate) * dt,
     );
   }
 
   debugState.steerState = clamp(debugState.steerState ?? 0, -1, 1);
+  debugState.steerRaw = rawSteer;
+  debugState.steerLimit = steerLimit;
+  debugState.steerTarget = steerTarget;
 }
 
 function computeFrontWheelSteerAngles(steerState, config) {
@@ -1457,6 +1511,11 @@ function createDebugState() {
   return {
     mode: "rapier-raycast",
     steerState: 0,
+    steerRaw: 0,
+    steerLimit: 1,
+    steerTarget: 0,
+    steerLeftDeg: 0,
+    steerRightDeg: 0,
     throttleAxis: 0,
     brakeAxis: 0,
     handbrakeAxis: 0,
@@ -1480,6 +1539,7 @@ function createDebugState() {
     speedForward: 0,
     speedRight: 0,
     speedHorizontal: 0,
+    yawRateDeg: 0,
     wheelContacts: 0,
     forwardImpulse: 0,
     suspensionForce: 0,
@@ -1546,18 +1606,35 @@ function computeSteeringLimit(steeringConfig, horizontalKph) {
   const speedBreaks = steeringConfig.SteeringLimitSpeed ?? [20, 40, 100, 250];
   const limitRates = steeringConfig.SteeringLimitRate ?? [1, 0.8, 0.5, 0.25];
 
-  if (horizontalKph <= speedBreaks[0]) {
-    return limitRates[0];
-  }
+  let limit = limitRates[0];
 
-  for (let index = 1; index < speedBreaks.length; index += 1) {
-    if (horizontalKph <= speedBreaks[index]) {
-      const t = inverseLerp(speedBreaks[index - 1], speedBreaks[index], horizontalKph);
-      return THREE.MathUtils.lerp(limitRates[index - 1], limitRates[index], t);
+  if (horizontalKph <= speedBreaks[0]) {
+    limit = limitRates[0];
+  } else {
+    for (let index = 1; index < speedBreaks.length; index += 1) {
+      if (horizontalKph <= speedBreaks[index]) {
+        const t = inverseLerp(speedBreaks[index - 1], speedBreaks[index], horizontalKph);
+        limit = THREE.MathUtils.lerp(limitRates[index - 1], limitRates[index], t);
+        break;
+      }
+    }
+
+    if (horizontalKph > speedBreaks[speedBreaks.length - 1]) {
+      limit = limitRates[limitRates.length - 1];
     }
   }
 
-  return limitRates[limitRates.length - 1];
+  // Native steering-rack helper cluster adds speed-coupled self-aligning behavior.
+  // Until that full cluster is ported, apply an extra high-speed authority falloff
+  // to avoid unrealistic instant U-turns at motorway speeds.
+  const lowSpeedBoost = THREE.MathUtils.lerp(
+    1.18,
+    1,
+    clamp(horizontalKph / 20, 0, 1),
+  );
+  const highSpeedKph = Math.max(horizontalKph - 45, 0);
+  const rackSpeedFalloff = 1 / (1 + Math.pow(highSpeedKph / 75, 2) * 1.9);
+  return clamp(limit * lowSpeedBoost * rackSpeedFalloff, 0.1, 1);
 }
 
 function inverseLerp(a, b, value) {

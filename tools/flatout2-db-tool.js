@@ -39,6 +39,8 @@ const VALUE_TYPE_NAMES = {
   [DBVALUE.NODE]: "node*",
 };
 
+const FLOAT_FORMAT_SIGNIFICANT_DIGITS = 6;
+
 function getValueTypeSize(type) {
   switch (type) {
     case DBVALUE.CHAR:
@@ -393,7 +395,13 @@ function formatScalar(value) {
   if (Number.isInteger(value)) {
     return String(value);
   }
-  return String(Number(value.toFixed(6)));
+  return formatFloatLikeReference(value);
+}
+
+function formatFloatLikeReference(value) {
+  // Match the C++ extractor's default ostream formatting:
+  // six significant digits with trailing zeros naturally trimmed.
+  return String(Number(value.toPrecision(FLOAT_FORMAT_SIGNIFICANT_DIGITS)));
 }
 
 function inspectNode(db, nodePath) {

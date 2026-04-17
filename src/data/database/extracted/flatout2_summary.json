@@ -1,9 +1,0 @@
-{
-  "inputPath": "/Users/metamodern/Documents/Github/Personal/flatout_oss/src/data/database/flatout2.db",
-  "outputDir": "/Users/metamodern/Documents/Github/Personal/flatout_oss/src/data/database/extracted",
-  "fileSize": 352332,
-  "strings": 3800,
-  "clusters": 537,
-  "environmentBindings": 132,
-  "sceneCandidates": 117
-}
