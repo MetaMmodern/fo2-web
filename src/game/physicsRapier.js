@@ -1339,9 +1339,66 @@ function stepVehicle(
         config.handBrakeTorqueScale *
         surfaceGrip
       : 0);
-  const frontSteerAngles = computeFrontWheelSteerAngles(steer, config);
+  const frontSteerAngles = computeFrontWheelSteerAngles(
+    steer,
+    config,
+    debugState.steerSpeedKph ?? speedKph,
+  );
   debugState.steerLeftDeg = THREE.MathUtils.radToDeg(frontSteerAngles.left);
   debugState.steerRightDeg = THREE.MathUtils.radToDeg(frontSteerAngles.right);
+  const steerAbs = Math.abs(steer);
+  const throttleAbs = Math.abs(throttle);
+  const speedSlipScale = clamp(inverseLerp(28, 160, speedKph), 0, 1);
+  const slipAngleRad = Math.atan2(Math.abs(speedRight), Math.max(Math.abs(speedForward), 0.5));
+  const optimalSlipAngleRad = THREE.MathUtils.degToRad(
+    Math.max(config.tireConfig.optimalSlipAngleDeg ?? 12, 1),
+  );
+  const slipAngleRatio = clamp(
+    slipAngleRad / Math.max(optimalSlipAngleRad, THREE.MathUtils.degToRad(1)),
+    0,
+    4,
+  );
+  const surfaceSlideControl = clamp(readProfileScalar(surfaceDynamics.SlideControl, 0.6), 0, 1.5);
+  const surfaceUnderSteer = Math.max(readProfileScalar(surfaceDynamics.UnderSteer, 0), 0);
+  const surfaceSlideUnderSteer = Math.max(
+    readProfileScalar(surfaceDynamics.SlideUnderSteer, 0),
+    0,
+  );
+  const surfaceAntiSpin = clamp(readProfileScalar(surfaceDynamics.AntiSpin, 0), 0, 1);
+  const slideControlLossScale = THREE.MathUtils.lerp(
+    1.32,
+    0.5,
+    clamp(surfaceSlideControl / 1.2, 0, 1),
+  );
+  // Approximate native tire saturation: sustained steer at speed should push the front
+  // toward understeer/slip, while low-speed throttle+steer can break rear traction.
+  const steerDemand = steerAbs * speedSlipScale;
+  const slipDemand = Math.max(slipAngleRatio - 1, 0);
+  const priorSlipEnergy = clamp(
+    (debugState.slipLatAvg ?? 0) * 1.35 + (debugState.slipLongAvg ?? 0) * 0.55,
+    0,
+    2.5,
+  );
+  const highSpeedSlip = Math.pow(clamp(inverseLerp(60, 180, speedKph), 0, 1), 1.15);
+  const baseSlideLoss =
+    (steerDemand * 1.12 + slipDemand * 0.96 + priorSlipEnergy * 0.52) *
+    (0.55 + 0.45 * steerAbs) *
+    slideControlLossScale;
+  let frontSlideLoss =
+    baseSlideLoss *
+    (1.15 + highSpeedSlip * 0.85 + surfaceUnderSteer * 0.3 + surfaceSlideUnderSteer * 0.4);
+  let rearSlideLoss =
+    baseSlideLoss * (0.9 - highSpeedSlip * 0.25 - surfaceAntiSpin * 0.22);
+  const lowSpeedDonutDemand =
+    clamp(1 - inverseLerp(12, 55, speedKph), 0, 1) * steerAbs * throttleAbs;
+  const donutRearLoss =
+    Math.max(lowSpeedDonutDemand - 0.24, 0) * 1.08 * (1 - surfaceAntiSpin * 0.45);
+  frontSlideLoss += donutRearLoss * 0.25;
+  rearSlideLoss += donutRearLoss;
+  const frontSideSlideScale = clamp(1 - frontSlideLoss, 0.1, 1);
+  const rearSideSlideScale = clamp(1 - rearSlideLoss, 0.06, 1);
+  const frontLongSlideScale = clamp(1 - frontSlideLoss * 0.26, 0.35, 1);
+  const rearLongSlideScale = clamp(1 - rearSlideLoss * 0.32, 0.35, 1);
   let totalWheelEngineForce = 0;
 
   config.wheelLayout.forEach((wheel, wheelIndex) => {
@@ -1360,11 +1417,14 @@ function stepVehicle(
     const rearLongGripScale = wheel.front
       ? 1
       : THREE.MathUtils.lerp(1, 0.45, handbrake * handbrakeSpeedBlend);
+    const sideSlideScale = wheel.front ? frontSideSlideScale : rearSideSlideScale;
+    const longSlideScale = wheel.front ? frontLongSlideScale : rearLongSlideScale;
     vehicleController.setWheelSideFrictionStiffness(
       wheelIndex,
       (wheel.front
         ? config.tireConfig.baseWheelSideStiffnessFront
         : config.tireConfig.baseWheelSideStiffnessRear) *
+        sideSlideScale *
         rearSideGripScale *
         surfaceGrip,
     );
@@ -1373,6 +1433,7 @@ function stepVehicle(
       (wheel.front
         ? config.tireConfig.baseWheelFrictionSlipFront
         : config.tireConfig.baseWheelFrictionSlipRear) *
+        longSlideScale *
         rearLongGripScale *
         surfaceGrip,
     );
@@ -1504,6 +1565,9 @@ function stepVehicle(
   debugState.suspensionForce = suspensionForce;
   debugState.slipLongAvg = longitudinalSlip;
   debugState.slipLatAvg = lateralSlip;
+  debugState.slipAngleDeg = THREE.MathUtils.radToDeg(slipAngleRad);
+  debugState.frontGripScale = frontSideSlideScale;
+  debugState.rearGripScale = rearSideSlideScale;
   debugState.mode = `rapier-raycast${isolation.gearbox ? "" : "-nogear"}`;
   debugState.surfaceType = surfaceType;
   debugState.surfaceGrip = surfaceGrip;
@@ -1560,12 +1624,46 @@ function updateWheelVisuals(config, chassis, vehicleController, debugState, dt) 
       vehicleController.wheelSuspensionLength(wheelIndex) ?? wheel.suspensionRestLength;
     const compression = wheel.suspensionRestLength - suspensionLength;
     wheel.steerAngle = vehicleController.wheelSteering(wheelIndex) ?? 0;
-    // TODO: Rapier vehicle wheel visuals still need an explicit airborne free-spin path.
-    // Current runtime observation: driven wheels should keep spinning in the air under throttle,
-    // but the present prototype does not model that yet.
-    wheel.spinAngle = vehicleController.wheelRotation(wheelIndex) ?? wheel.spinAngle;
-    if (!Number.isFinite(wheel.spinAngle)) {
-      wheel.spinAngle += speed * dt / Math.max(wheel.tireRadius, 0.1);
+    const inContact = vehicleController.wheelIsInContact(wheelIndex);
+    const wheelRotation = vehicleController.wheelRotation(wheelIndex);
+    const driven =
+      (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
+
+    if (inContact && Number.isFinite(wheelRotation)) {
+      const delta = unwrapAngleDelta(wheelRotation - (wheel.currentRotation ?? wheelRotation));
+      wheel.angularVelocity = delta / Math.max(dt, 1e-5);
+      wheel.currentRotation = wheelRotation;
+      wheel.spinAngle = wheelRotation;
+    } else {
+      const wheelRadius = Math.max(wheel.tireRadius ?? 0.34, 0.1);
+      const rollingOmega = speed / wheelRadius;
+      const throttleAbs = Math.abs(debugState.throttleAxis ?? 0);
+      const gearRatio = Math.abs(getCurrentGearRatio(debugState, config) * config.gearbox.endRatio);
+      const clutchScale = Math.max(Math.abs(debugState.clutch ?? 1), 0.25);
+      const engineOmega =
+        (Math.max(debugState.engineRpm ?? config.engine.idleRpm, config.engine.idleRpm) *
+          Math.PI *
+          2) /
+        60;
+      const driveOmega =
+        driven && gearRatio > 1e-3
+          ? (engineOmega / gearRatio) * clutchScale * (0.35 + throttleAbs * 0.65)
+          : 0;
+      const fallbackSign =
+        Math.abs(wheel.angularVelocity ?? 0) > 0.25
+          ? Math.sign(wheel.angularVelocity)
+          : (debugState.gear ?? 0) < 0
+            ? 1
+            : -1;
+      const targetOmega = fallbackSign * Math.max(rollingOmega, driveOmega);
+      const responseRate = inContact ? 16 : throttleAbs > 0.05 ? 9 : 4.5;
+      wheel.angularVelocity = dampToward(
+        wheel.angularVelocity ?? 0,
+        targetOmega,
+        responseRate,
+        dt,
+      );
+      wheel.spinAngle = (wheel.spinAngle ?? 0) + wheel.angularVelocity * dt;
     }
 
     wheel.tire.position.copy(wheel.tireBasePosition);
@@ -1579,13 +1677,95 @@ function updateWheelVisuals(config, chassis, vehicleController, debugState, dt) 
 }
 
 function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizontalKph, dt) {
-  const steerLimit = computeSteeringLimit(config.steering, horizontalKph);
-  const steerTarget = rawSteer * steerLimit * (rawHandbrake > 0.1 ? 1.02 : 1);
+  const speedFilterRate = Math.abs(rawSteer) > 1e-3 ? 8.5 : 5.5;
+  debugState.steerSpeedKph = dampToward(
+    debugState.steerSpeedKph ?? horizontalKph,
+    horizontalKph,
+    speedFilterRate,
+    dt,
+  );
+  const steerKph = debugState.steerSpeedKph;
+  const steerLimit = computeSteeringLimit(config.steering, steerKph);
   const digitalInput = Math.abs(rawSteer) >= config.steering.DigitalThreshold;
-  const speedRate = computeSteeringSpeedRate(config.steering, horizontalKph);
+  const steerSign = Math.sign(rawSteer);
+  if (digitalInput && steerSign !== 0) {
+    if ((debugState.steerHoldSign ?? 0) === steerSign) {
+      debugState.steerHoldTime = (debugState.steerHoldTime ?? 0) + dt;
+    } else {
+      debugState.steerHoldSign = steerSign;
+      debugState.steerHoldTime = 0;
+    }
+  } else {
+    debugState.steerHoldSign = 0;
+    debugState.steerHoldTime = 0;
+  }
+  const holdFactor = clamp(
+    inverseLerp(0.14, 0.7, debugState.steerHoldTime ?? 0),
+    0,
+    1,
+  );
+  const holdSpeedFactor = clamp(inverseLerp(75, 180, steerKph), 0, 1);
+  const highSpeedHoldScale = digitalInput
+    ? THREE.MathUtils.lerp(1, 0.6, holdFactor * holdSpeedFactor)
+    : 1;
+  const highSpeedAuthorityScale = THREE.MathUtils.lerp(
+    1,
+    0.45,
+    Math.pow(clamp(inverseLerp(70, 190, steerKph), 0, 1), 1.2),
+  );
+  const highSpeedDigitalScale =
+    digitalInput
+      ? THREE.MathUtils.lerp(
+          1,
+          0.72,
+          Math.pow(clamp(inverseLerp(85, 185, steerKph), 0, 1), 1.1),
+        )
+      : 1;
+  const slipAuthorityScale = THREE.MathUtils.lerp(
+    1,
+    0.8,
+    clamp((debugState.slipLatAvg ?? 0) * 1.15, 0, 1),
+  );
+  const desiredSteerTarget =
+    rawSteer *
+    steerLimit *
+    (rawHandbrake > 0.1 ? 1.02 : 1) *
+    highSpeedAuthorityScale *
+    highSpeedDigitalScale *
+    highSpeedHoldScale *
+    slipAuthorityScale;
+  const speedRate = computeSteeringSpeedRate(config.steering, steerKph);
+  // Native steering has a rack-side stage (self-aligning torque + speed integration)
+  // after control write. Our Rapier path does not have that subsystem yet, so we proxy
+  // the missing behavior here: slower steer-in and faster recentring as speed rises.
+  const highSpeedEntryScale = THREE.MathUtils.lerp(
+    1,
+    0.2,
+    Math.pow(clamp(inverseLerp(35, 145, horizontalKph), 0, 1), 1.15),
+  );
+  const highSpeedCenterScale = THREE.MathUtils.lerp(
+    1,
+    2.0,
+    Math.pow(clamp(inverseLerp(40, 155, horizontalKph), 0, 1), 1.05),
+  );
+  const targetFilterRate = THREE.MathUtils.lerp(
+    16,
+    4.5,
+    Math.pow(clamp(inverseLerp(30, 150, steerKph), 0, 1), 1.1),
+  );
+  debugState.steerTargetFiltered = dampToward(
+    debugState.steerTargetFiltered ?? desiredSteerTarget,
+    desiredSteerTarget,
+    targetFilterRate,
+    dt,
+  );
+  const steerTarget = debugState.steerTargetFiltered;
 
   if (Math.abs(rawSteer) < 1e-3) {
-    const centeringRate = Math.max(config.steering.CenteringSpeed * speedRate, 0.4);
+    const centeringRate = Math.max(
+      config.steering.CenteringSpeed * speedRate * highSpeedCenterScale,
+      0.4,
+    );
     debugState.steerState = dampToward(debugState.steerState ?? 0, 0, centeringRate, dt);
   } else {
     const minSpeed = digitalInput
@@ -1607,12 +1787,14 @@ function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizon
     const rate =
       THREE.MathUtils.lerp(minSpeed, maxSpeed, Math.abs(rawSteer)) *
       deltaScale *
-      speedRate;
+      speedRate *
+      highSpeedEntryScale;
     const minParkingRate = horizontalKph < 10 ? 2.2 : 0;
+    const nearLimitScale = THREE.MathUtils.lerp(1, 0.72, Math.abs(debugState.steerState ?? 0));
     debugState.steerState = moveToward(
       debugState.steerState ?? 0,
       steerTarget,
-      Math.max(rate, minParkingRate) * dt,
+      Math.max(rate * nearLimitScale, minParkingRate) * dt,
     );
   }
 
@@ -1622,14 +1804,23 @@ function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizon
   debugState.steerTarget = steerTarget;
 }
 
-function computeFrontWheelSteerAngles(steerState, config) {
+function computeFrontWheelSteerAngles(steerState, config, speedKph = 0) {
   const steerAmount = Math.abs(steerState);
   if (steerAmount < 1e-4) {
     return { left: 0, right: 0 };
   }
 
-  const tireTurnIn = THREE.MathUtils.degToRad(config.tireTurnAngleInDeg);
-  const tireTurnOut = THREE.MathUtils.degToRad(config.tireTurnAngleOutDeg);
+  // Rack-level high-speed steering lock reduction:
+  // keep low/medium behavior intact, but cap wheel lock at highway speed.
+  const highSpeedWheelAngleScale = THREE.MathUtils.lerp(
+    1,
+    0.34,
+    Math.pow(clamp(inverseLerp(70, 180, speedKph), 0, 1), 1.18),
+  );
+  const tireTurnIn =
+    THREE.MathUtils.degToRad(config.tireTurnAngleInDeg) * highSpeedWheelAngleScale;
+  const tireTurnOut =
+    THREE.MathUtils.degToRad(config.tireTurnAngleOutDeg) * highSpeedWheelAngleScale;
   const desiredBaseAngle = steerAmount * ((tireTurnIn + tireTurnOut) * 0.5);
   const turnSign = Math.sign(steerState) || 0;
   const tanBase = Math.abs(Math.tan(desiredBaseAngle));
@@ -1713,6 +1904,8 @@ function createDebugState() {
     mode: "rapier-raycast",
     steerState: 0,
     steerRaw: 0,
+    steerHoldSign: 0,
+    steerHoldTime: 0,
     steerLimit: 1,
     steerTarget: 0,
     steerLeftDeg: 0,
@@ -1746,6 +1939,9 @@ function createDebugState() {
     suspensionForce: 0,
     slipLongAvg: 0,
     slipLatAvg: 0,
+    slipAngleDeg: 0,
+    frontGripScale: 1,
+    rearGripScale: 1,
     surfaceType: "tarmac",
     surfaceGrip: 1,
     aeroDragForce: 0,
