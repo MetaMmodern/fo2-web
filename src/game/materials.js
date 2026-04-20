@@ -161,6 +161,7 @@ function createMaterialForName(
       environmentState,
       specularStrength: 0.2,
       specularPower: 16,
+      alphaAsGloss: true,
     });
   }
 
@@ -191,6 +192,7 @@ function createMaterialForName(
       environmentState,
       specularStrength: 0.08,
       specularPower: 10,
+      alphaAsGloss: true,
     });
   }
 
@@ -248,6 +250,7 @@ function createMaterialForName(
       specularStrength: 0,
       specularPower: 12,
       enableSpecular: false,
+      alphaAsGloss: true,
     });
   }
 
@@ -257,11 +260,12 @@ function createMaterialForName(
       map: getTexture("tire"),
       useVertexColors,
       environmentState,
-      transparent: true,
-      alphaTest: 0.12,
+      alphaTest: 0.02,
+      side: THREE.DoubleSide,
       specularStrength: 0.16,
       specularPower: 20,
       enableSpecular: true,
+      alphaAsGloss: true,
     });
   }
 
@@ -286,6 +290,7 @@ function createDynamicVehicleMaterial({
   specularStrength = 0.14,
   specularPower = 16,
   enableSpecular = specularStrength > 0,
+  alphaAsGloss = false,
 }) {
   const material = createVehicleShaderMaterial({
     name,
@@ -324,7 +329,8 @@ function createDynamicVehicleMaterial({
     fragmentShader: buildDynamicVehicleFragmentShader(
       useVertexColors,
       enableSpecular,
-      transparent || alphaTest > 0,
+      transparent,
+      alphaAsGloss,
     ),
   });
   material.userData.textureRefs = map ? [map] : [];
@@ -395,8 +401,9 @@ function createCarWindowMaterial({
       },
       uFresnelBias: { value: 0.25 },
       uFresnelScale: { value: 0.5 },
-      uWindowAlpha: { value: 0.25 },
-      uWindowMinAlpha: { value: 0.08 },
+      // pro_car_window.sha uses a dedicated window-brightness term with
+      // alpha = (1 - fresnel) * brightness.
+      uWindowBrightness: { value: 0.5 },
     },
     transparent: true,
     side: THREE.DoubleSide,
@@ -404,7 +411,7 @@ function createCarWindowMaterial({
     fragmentShader: buildCarWindowFragmentShader(),
   });
   material.depthWrite = false;
-  material.depthTest = false;
+  material.depthTest = true;
   material.userData.textureRefs = [baseMap].filter(Boolean);
   return material;
 }
@@ -452,7 +459,7 @@ function createCarLightMaterial({
     vertexShader: buildVehicleVertexShader(useVertexColors),
     fragmentShader: buildCarLightFragmentShader(
       useVertexColors,
-      transparent || alphaTest > 0,
+      transparent,
     ),
   });
   material.depthWrite = !transparent;
@@ -520,6 +527,7 @@ function buildDynamicVehicleFragmentShader(
   useVertexColors,
   withSpecular,
   preserveTextureAlpha,
+  alphaAsGloss,
 ) {
   return `
     uniform sampler2D uMap;
@@ -554,7 +562,8 @@ function buildDynamicVehicleFragmentShader(
           ? `
       vec3 h = normalize(v + l);
       float spec = pow(max(dot(n, h), 0.0), uSpecularPower) * step(0.0, ndotl);
-      shaded.rgb += uSpecularColor * (uSpecularIntensity * uSunVisibility * spec);`
+      float glossMask = ${alphaAsGloss ? "coverage" : "1.0"};
+      shaded.rgb += uSpecularColor * (uSpecularIntensity * uSunVisibility * spec * glossMask);`
           : ""
       }
       shaded.rgb = min(shaded.rgb, vec3(uMaxOverBrighting));
@@ -604,7 +613,8 @@ function buildCarBodyFragmentShader(useVertexColors, preserveTextureAlpha) {
       vec3 h = normalize(v + l);
       float spec = pow(max(dot(n, h), 0.0), 16.0) * step(0.0, ndotl);
       float fresnel = uFresnelBias + uFresnelScale * pow(1.0 - abs(dot(v, n)), 5.0);
-      float glossMask = coverage * 0.18;
+      // Original FO2 car body path uses base alpha as the gloss/reflectivity mask.
+      float glossMask = coverage;
       vec3 skyReflect = mix(
         uAmbientColor * 0.8,
         uSunColor * (0.25 * uSunIntensity),
@@ -612,8 +622,8 @@ function buildCarBodyFragmentShader(useVertexColors, preserveTextureAlpha) {
       );
       vec3 reflected = skyReflect;
       vec3 specular = uSpecularColor * (uSpecularIntensity * uSunVisibility * spec * glossMask);
-      float reflectionMix = clamp(glossMask * fresnel * 0.18, 0.0, 1.0);
-      vec3 color = mix(litBase + specular, reflected, reflectionMix);
+      float reflectionMix = clamp(glossMask * fresnel, 0.0, 1.0);
+      vec3 color = mix(litBase, reflected, reflectionMix) + specular;
       color = mix(color, color * 0.82, damageBlend * 0.18);
       color = min(color, vec3(uMaxOverBrighting));
       if (uAlphaTest > 0.0 && coverage <= uAlphaTest) discard;
@@ -628,8 +638,7 @@ function buildCarWindowFragmentShader() {
     uniform vec3 uSpecularColor;
     uniform float uFresnelBias;
     uniform float uFresnelScale;
-    uniform float uWindowAlpha;
-    uniform float uWindowMinAlpha;
+    uniform float uWindowBrightness;
     uniform float uAlphaTest;
     varying vec2 vUv;
     varying vec3 vWorldNormal;
@@ -648,11 +657,7 @@ function buildCarWindowFragmentShader() {
         reflectMix
       );
       vec3 color = reflectionColor * clamp(fresnel, 0.0, 1.0);
-      float alpha = clamp(
-        max(uWindowMinAlpha, (1.0 - fresnel) * uWindowAlpha) * baseSample.a,
-        0.0,
-        0.92
-      );
+      float alpha = clamp((1.0 - fresnel) * uWindowBrightness, 0.0, 0.92);
       if (alpha <= uAlphaTest) discard;
       gl_FragColor = vec4(color, alpha);
     }

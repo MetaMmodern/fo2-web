@@ -1,7 +1,7 @@
 import {
   carCatalog,
   defaultSelection as generatedDefaultSelection,
-  trackCatalog,
+  trackCatalog as generatedTrackCatalog,
 } from "./generated/runtimeAssetCatalog";
 import { getDrivingDbConfigByCarId } from "./drivingConfigCatalog";
 import sharedLightsGlowUrl from "url:../data/cars/shared/lights_glow.png";
@@ -17,6 +17,28 @@ import car19LightsConfigUrl from "url:../data/cars/car_19/lights.ini";
 import car24LightsConfigUrl from "url:../data/cars/car_24/lights.ini";
 import car26LightsConfigUrl from "url:../data/cars/car_26/lights.ini";
 import car33LightsConfigUrl from "url:../data/cars/car_33/lights.ini";
+
+const webtestEnvironmentSource =
+  generatedTrackCatalog.find((track) => track.id === "garagetest/garagetest1/a") ??
+  generatedTrackCatalog[0] ??
+  null;
+const webtestTrack = {
+  id: "webtest",
+  label: "webtest",
+  familyId: "webtest",
+  trackId: "webtest",
+  variantId: "a",
+  synthetic: "webtest",
+  model: null,
+  log: null,
+  collisionModel: null,
+  collisionMeta: null,
+  startPoints: null,
+  lightmap: null,
+  trackTextures: {},
+  environment: webtestEnvironmentSource?.environment ?? null,
+};
+const trackCatalog = [webtestTrack, ...generatedTrackCatalog];
 
 const carsById = new Map(carCatalog.map((car) => [car.id, car]));
 const tracksById = new Map(trackCatalog.map((track) => [track.id, track]));
@@ -41,6 +63,7 @@ const legacyTireTextureIds = [
 ];
 const startupCar = carCatalog.find((car) => car.id === "car_7") ?? carCatalog[0] ?? null;
 const startupTrack =
+  trackCatalog.find((track) => track.id === "webtest") ??
   trackCatalog.find((track) => track.id === "garagetest/garagetest1/a") ??
   trackCatalog[0] ??
   null;

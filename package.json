@@ -8,7 +8,8 @@
     "inspect:w32": "node tools/flatout-w32-tool.js",
     "analyze:vegetation": "node tools/analyze-track-vegetation.js",
     "db:extract": "node tools/flatout2-db-tool.js extract src/data/database/flatout2.db",
-    "db:inspect": "node tools/flatout2-db-tool.js inspect src/data/database/flatout2.db"
+    "db:inspect": "node tools/flatout2-db-tool.js inspect src/data/database/flatout2.db",
+    "physics:bench": "node tools/rapier-parity-bench.mjs"
   },
   "keywords": [],
   "author": "",

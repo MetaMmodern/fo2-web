@@ -1,5 +1,6 @@
 import "./styles.css";
 import * as THREE from "three";
+import Stats from "three/examples/jsm/libs/stats.module.js";
 
 import {
   buildVehicleAssetUrls,
@@ -37,6 +38,7 @@ import { loadTrack, placeVehicleOnTrack } from "./game/track";
 import { loadVehicle } from "./game/vehicle";
 
 const { scene, camera, renderer, controls } = createSceneApp();
+const stats = createStatsPanel();
 const drivingInput = createDrivingInput();
 const drivingDebug = {
   enabled: true,
@@ -269,6 +271,7 @@ animate();
 
 function animate() {
   requestAnimationFrame(animate);
+  stats.begin();
   const frameStart = performance.now();
   const measuredDeltaSeconds = Math.min(frameClock.getDelta(), 0.1);
   const deltaSeconds = runtimeDebug.paused ? 0 : measuredDeltaSeconds;
@@ -333,6 +336,17 @@ function animate() {
     renderMs,
     totalMs,
   });
+  stats.end();
+}
+
+function createStatsPanel() {
+  const panel = new Stats();
+  panel.dom.style.position = "fixed";
+  panel.dom.style.left = "0";
+  panel.dom.style.top = "0";
+  panel.dom.style.zIndex = "10000";
+  document.body.appendChild(panel.dom);
+  return panel;
 }
 
 function formatPhysicsDebug(debugState) {
@@ -358,10 +372,16 @@ function formatPhysicsDebug(debugState) {
     `sr=${Number.isFinite(debugState.steerRightDeg) ? debugState.steerRightDeg.toFixed(1) : "--"}`,
     `yr=${Number.isFinite(debugState.yawRateDeg) ? debugState.yawRateDeg.toFixed(1) : "--"}`,
     `lat=${Number.isFinite(debugState.speedRight) ? debugState.speedRight.toFixed(2) : "--"}`,
+    `surf=${debugState.surfaceType ?? "--"}`,
+    `grip=${Number.isFinite(debugState.surfaceGrip) ? debugState.surfaceGrip.toFixed(2) : "--"}`,
     `drv=${debugState.engineForce.toFixed(0)}`,
     `wc=${debugState.wheelContacts ?? 0}`,
     `imp=${Number.isFinite(debugState.forwardImpulse) ? debugState.forwardImpulse.toFixed(0) : "--"}`,
     `sus=${Number.isFinite(debugState.suspensionForce) ? debugState.suspensionForce.toFixed(0) : "--"}`,
+    `slpL=${Number.isFinite(debugState.slipLongAvg) ? debugState.slipLongAvg.toFixed(2) : "--"}`,
+    `slpT=${Number.isFinite(debugState.slipLatAvg) ? debugState.slipLatAvg.toFixed(2) : "--"}`,
+    `aero=${Number.isFinite(debugState.aeroDragForce) ? debugState.aeroDragForce.toFixed(0) : "--"}`,
+    `roll=${Number.isFinite(debugState.rollingResistanceDrag) ? debugState.rollingResistanceDrag.toFixed(0) : "--"}`,
     `ss=${Number.isFinite(debugState.simSteps) ? debugState.simSteps : "--"}`,
     `sb=${Number.isFinite(debugState.simBacklogMs) ? debugState.simBacklogMs.toFixed(1) : "--"}`,
     `spd=${debugState.speedHorizontal.toFixed(2)}`,
@@ -638,6 +658,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       input: drivingInput,
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
       dynamicObjects: sceneState.dynamicObjects,
+      trackFloorSampler: sceneState.sceneSampler,
       debugOptions: runtimeDebug.physicsIsolation,
     });
     if (runtimeDebug.autoPauseAfterLoad) {
@@ -668,6 +689,7 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       input: drivingInput,
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
       dynamicObjects: sceneState.dynamicObjects,
+      trackFloorSampler: sceneState.sceneSampler,
       debugOptions: runtimeDebug.physicsIsolation,
     });
     if (runtimeDebug.autoPauseAfterLoad) {

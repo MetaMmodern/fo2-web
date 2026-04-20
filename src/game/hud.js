@@ -180,25 +180,48 @@ export function createHud(
       }
       isolationFolder
         .add(runtimeDebug.physicsIsolation, "driveForce")
-        .name("Drive force");
-      isolationFolder.add(runtimeDebug.physicsIsolation, "gearbox").name("Gearbox");
-      isolationFolder.add(runtimeDebug.physicsIsolation, "steering").name("Steering");
-      isolationFolder.add(runtimeDebug.physicsIsolation, "braking").name("Braking");
+        .name("Drive force")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "gearbox")
+        .name("Gearbox")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "steering")
+        .name("Steering")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "braking")
+        .name("Braking")
+        .listen();
       isolationFolder
         .add(runtimeDebug.physicsIsolation, "handbrake")
-        .name("Handbrake");
+        .name("Handbrake")
+        .listen();
       isolationFolder
         .add(runtimeDebug.physicsIsolation, "differentialCurve")
-        .name("Diff curve");
-      isolationFolder.add(runtimeDebug.physicsIsolation, "aeroDrag").name("Aero drag");
+        .name("Diff curve")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "aeroDrag")
+        .name("Aero drag")
+        .listen();
       isolationFolder
         .add(runtimeDebug.physicsIsolation, "lateralDrag")
-        .name("Lateral drag");
-      isolationFolder.add(runtimeDebug.physicsIsolation, "downforce").name("Downforce");
+        .name("Lateral drag")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "downforce")
+        .name("Downforce")
+        .listen();
       isolationFolder
         .add(runtimeDebug.physicsIsolation, "uprightAssist")
-        .name("Upright assist");
-      isolationFolder.add(runtimeDebug.physicsIsolation, "gravity").name("Gravity");
+        .name("Upright assist")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "gravity")
+        .name("Gravity")
+        .listen();
     }
   } else {
     addInfoBlock(runtimeFolder, [

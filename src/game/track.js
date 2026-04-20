@@ -10,6 +10,9 @@ const FORWARD = new THREE.Vector3();
 const raycastOrigin = new THREE.Vector3();
 const worldNormal = new THREE.Vector3();
 const defaultWheelSpawnLift = 0.35;
+const WEBTEST_TRACK_ID = "webtest";
+const WEBTEST_TRACK_SIZE = 1200;
+const WEBTEST_GRID_DIVISIONS = 480;
 
 export async function loadTrack(
   assetUrls,
@@ -17,6 +20,10 @@ export async function loadTrack(
   renderer,
   environmentState = null,
 ) {
+  if (isWebtestTrack(assetUrls)) {
+    return loadWebtestTrack(scene);
+  }
+
   const [trackRoot, trackMaterialInfo, startPoints, collisionAsset] = await Promise.all([
     loadGltf(assetUrls.model, assetUrls.trackTextures),
     loadTrackMaterialInfo(assetUrls.log),
@@ -63,6 +70,100 @@ export async function loadTrack(
     ),
     sceneSampler: createTrackFloorSampler(trackRoot),
   };
+}
+
+function isWebtestTrack(assetUrls) {
+  return assetUrls?.id === WEBTEST_TRACK_ID || assetUrls?.synthetic === WEBTEST_TRACK_ID;
+}
+
+function loadWebtestTrack(scene) {
+  const { trackRoot, collisionRoot, startPoints } = createWebtestTrackRoots();
+  prepareCollisionDebugVisuals(collisionRoot);
+  collisionRoot.updateWorldMatrix(true, true);
+  scene.add(trackRoot);
+
+  return {
+    trackRoot,
+    startPoints,
+    collisionAsset: {
+      root: collisionRoot,
+      meta: null,
+    },
+    dynamicObjects: [],
+    contactSampler: createTrackFloorSampler(collisionRoot, { includeInvisible: true }),
+    sceneSampler: createTrackFloorSampler(trackRoot),
+  };
+}
+
+function createWebtestTrackRoots() {
+  const trackRoot = new THREE.Group();
+  trackRoot.name = "webtest_track_root";
+
+  const renderPlane = new THREE.Mesh(
+    buildWebtestGroundGeometry(),
+    new THREE.MeshStandardMaterial({
+      name: "tarmac_webtest",
+      color: 0xd2d2d2,
+      roughness: 1,
+      metalness: 0,
+    }),
+  );
+  renderPlane.name = "webtest_ground_render";
+  renderPlane.receiveShadow = true;
+  trackRoot.add(renderPlane);
+
+  const grid = new THREE.GridHelper(
+    WEBTEST_TRACK_SIZE,
+    WEBTEST_GRID_DIVISIONS,
+    0x000000,
+    0x000000,
+  );
+  grid.name = "webtest_grid";
+  grid.position.y = 0.02;
+  if (Array.isArray(grid.material)) {
+    grid.material.forEach((material) => {
+      material.transparent = true;
+      material.opacity = 0.75;
+    });
+  } else if (grid.material) {
+    grid.material.transparent = true;
+    grid.material.opacity = 0.75;
+  }
+  trackRoot.add(grid);
+
+  const collisionRoot = new THREE.Group();
+  collisionRoot.name = "webtest_collision_root";
+  const collisionPlane = new THREE.Mesh(
+    buildWebtestGroundGeometry(),
+    new THREE.MeshBasicMaterial({
+      name: "tarmac_webtest",
+      color: 0x00e5a8,
+    }),
+  );
+  collisionPlane.name = "webtest_ground_collision";
+  collisionRoot.add(collisionPlane);
+
+  const startPoints = [
+    {
+      position: new THREE.Vector3(0, 0, 0),
+      basisX: new THREE.Vector3(1, 0, 0),
+      basisY: new THREE.Vector3(0, 1, 0),
+      basisZ: new THREE.Vector3(0, 0, 1),
+      quaternion: new THREE.Quaternion(),
+    },
+  ];
+
+  return {
+    trackRoot,
+    collisionRoot,
+    startPoints,
+  };
+}
+
+function buildWebtestGroundGeometry() {
+  const geometry = new THREE.PlaneGeometry(WEBTEST_TRACK_SIZE, WEBTEST_TRACK_SIZE, 1, 1);
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
 }
 
 export function placeVehicleOnTrack(

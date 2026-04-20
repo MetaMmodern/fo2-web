@@ -20,7 +20,6 @@ export async function loadVehicle(
 
   prepareMaterials(carRoot);
   prepareMaterials(tireRoot);
-  hideWheelhubMeshes(carRoot);
   hideCrashMeshes(carRoot);
   addHoodUnderside(carRoot);
   attachTires(carRoot, tireRoot);
@@ -162,14 +161,6 @@ function attachTires(carRoot, tireRoot) {
     tireClone.userData.basePosition = anchor.position.clone();
     tireClone.userData.baseQuaternion = tireClone.quaternion.clone();
     carRoot.add(tireClone);
-  });
-}
-
-function hideWheelhubMeshes(carRoot) {
-  carRoot.traverse((obj) => {
-    if (obj.isMesh && obj.name.startsWith("wheelhub_")) {
-      obj.visible = false;
-    }
   });
 }
 

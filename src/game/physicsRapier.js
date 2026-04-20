@@ -11,6 +11,7 @@ const COLLISION_GROUP_PROP = 0x0002;
 const COLLISION_GROUP_HELPER = 0x0004;
 const COLLISION_GROUP_VEHICLE = 0x0008;
 const FIXED_DT = 1 / 60;
+const DEFAULT_GRAVITY = 18;
 // Keep simulation real-time under low render FPS; 4 steps caused hard time-dilation.
 const MAX_STEPS_PER_FRAME = 8;
 const MAX_FRAME_DELTA = 0.1;
@@ -28,6 +29,7 @@ const TMP_MAT = new THREE.Matrix4();
 const TMP_MAT_B = new THREE.Matrix4();
 const ENABLE_STATIC_WORLD_COLLISION = true;
 const ENABLE_DIRECT_DRIVE_DEBUG = false;
+const DB_PROFILE_INDEX = 0;
 
 export async function createDrivingSimulation({
   carId,
@@ -36,6 +38,7 @@ export async function createDrivingSimulation({
   input,
   collisionRoot = null,
   dynamicObjects = [],
+  trackFloorSampler = null,
   debugOptions = null,
 }) {
   await RAPIER.init();
@@ -94,7 +97,15 @@ export async function createDrivingSimulation({
       let stepCount = 0;
 
       while (accumulator >= FIXED_DT && stepCount < MAX_STEPS_PER_FRAME) {
-        stepVehicle(world, chassis, vehicleController, config, input, debugState);
+        stepVehicle(
+          world,
+          chassis,
+          vehicleController,
+          config,
+          input,
+          debugState,
+          trackFloorSampler,
+        );
         activateImpactedDynamicObjects(
           world,
           dynamicObjectState,
@@ -160,8 +171,11 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
   const localTireDynamics = rawConfig.localTireDynamics ?? {};
   const bounds = resolveBodyBounds(bodyCollision, carRoot);
   const wheelMetrics = resolveWheelLayout(carRoot);
-  const frontTireRadius = Math.max(Number.parseFloat(tires.FrontRadius ?? 0.34), 0.1);
-  const rearTireRadius = Math.max(Number.parseFloat(tires.RearRadius ?? tires.FrontRadius ?? 0.34), 0.1);
+  const frontTireRadius = Math.max(readProfileScalar(tires.FrontRadius, 0.34), 0.1);
+  const rearTireRadius = Math.max(
+    readProfileScalar(tires.RearRadius, frontTireRadius),
+    0.1,
+  );
   const wheelLayout = buildWheelVisualLayout(carRoot, suspension, {
     frontTireRadius,
     rearTireRadius,
@@ -178,125 +192,207 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
     rawConfig.differentials,
     rawConfig.differentials?.defaultRear ?? defaultDifferential,
   );
+  const centerOfMass = readVec3(car.CenterOfMass, [0, 0.1, 0.05]);
+  const centerOfDownforce = readVec3(car.CenterOfDownforce, [0, 0.45, 0]);
+  const aeroDragLoc = readVec3(body.AeroDragLoc, [0, 0, -0.2]);
+  const tireFrontXFriction = readVec2(tires.XFriction, [1, 0]);
+  const tireFrontZFriction = readVec2(tires.ZFriction, [1, 0]);
+  const tireFrontRadius = Math.max(readProfileScalar(tires.FrontRadius, 0.34), 0.1);
+  const tireRearRadius = Math.max(readProfileScalar(tires.RearRadius, tireFrontRadius), 0.1);
+  // Local tire INI uses gameplay-scale values (e.g. RollingResistance=0.5, InducedDragCoeff=1.0),
+  // while runtime tire dynamics consume physical-scale coefficients (~0.005 / ~0.15).
+  // Map local values as multipliers around their native baselines instead of reading them literally.
+  const localRollingResistance = readProfileScalar(
+    rawConfig.localTireDynamics?.RollingResistance ?? tires.RollingResistance,
+    0.5,
+  );
+  const localInducedDrag = readProfileScalar(
+    rawConfig.localTireDynamics?.InducedDragCoeff ?? tires.InducedDrag,
+    1,
+  );
+  const tireRollingResistance =
+    0.005 * clamp(localRollingResistance / 0.5, 0.2, 3.5);
+  const tireInducedDragCoeff =
+    0.15 * clamp(localInducedDrag / 1, 0.2, 3.5);
+  const surfaceDynamics = rawConfig.surfaceDynamics ?? {};
+  const massKg = Math.max(readProfileScalar(car.Mass, 980), 600);
+  const brakeTorque = Math.max(readProfileScalar(body.BrakeTorque, 5200), 1200);
+  const handBrakeTorque = Math.max(readProfileScalar(body.HandBrakeTorque, 5200), 1200);
+  const brakeRadius = Math.max((tireFrontRadius + tireRearRadius) * 0.5, 0.1);
+  const brakeTorqueToOneGScale = (massKg * DEFAULT_GRAVITY * brakeRadius) / (4 * brakeTorque);
+  const handBrakeTorqueToOneGScale =
+    (massKg * DEFAULT_GRAVITY * brakeRadius) / (4 * handBrakeTorque);
+  const steeringLimitRates = readVec4(steering.SteeringLimitRate, [1, 0.8, 0.5, 0.25]);
+  const steeringLimitSpeeds = readVec4(steering.SteeringLimitSpeed, [20, 40, 100, 250]);
+  const steeringSpeedRates = readVec4(steering.SteeringSpeedRate, [2, 2, 2, 2]);
+  const numGears = Math.max(Math.round(readProfileScalar(gearbox.NumGears, 0)), 0);
+  const gearRatiosLimited = numGears > 0 ? gearRatios.slice(0, numGears) : gearRatios;
+  const frontLongGrip = clamp(tireFrontZFriction[0], 0.35, 3);
+  const frontLatGrip = clamp(tireFrontXFriction[0], 0.35, 3);
+  const rearLongGrip = clamp(readProfileScalar(tires.ZFriction, frontLongGrip), 0.35, 3);
+  const rearLatGrip = clamp(readProfileScalar(tires.XFriction, frontLatGrip), 0.35, 3);
+  const baseWheelFrictionSlipFront = clamp(frontLongGrip * 6.5, 2.4, 18);
+  const baseWheelFrictionSlipRear = clamp(rearLongGrip * 6.5, 2.4, 18);
+  const baseWheelSideStiffnessFront = clamp(frontLatGrip * 0.85, 0.35, 2.4);
+  const baseWheelSideStiffnessRear = clamp(rearLatGrip * 0.85, 0.35, 2.4);
 
   return {
-    gravity: 18,
+    gravity: DEFAULT_GRAVITY,
     // Native runtime consumer path for MassFudgeFactor is not fully confirmed yet.
     // Using it directly here inverted class pacing (e.g. car_1 slower, heavy pickups faster).
     // Keep direct mass until full native mass/fudge mapping is recovered.
-    massKg: Math.max(Number.parseFloat(car.Mass ?? 980), 600),
+    massKg,
     // Keep MassFudgeFactor out of rigid-body mass, but preserve it as a
     // per-car drivetrain scalar. This restores class pacing direction
     // (light FWD cars up, heavy pickups down) without destabilizing chassis mass.
-    driveForceScale: clamp(pickScalar(car.MassFudgeFactor, 1), 0.75, 1.5),
+    driveForceScale: clamp(readProfileScalar(car.MassFudgeFactor, 1), 0.6, 1.6),
     bodyHalfExtents: bounds.halfExtents,
     bodyOffset: bounds.offset,
     wheelbase: wheelMetrics.wheelbase,
     trackWidth: wheelMetrics.trackWidth,
     frontTraction: Boolean(body.FrontTraction),
     rearTraction: body.RearTraction !== false,
-    peakTorque: Math.max(Number.parseFloat(engine.PeakTorque ?? 210), 120),
-    brakeTorque: Math.max(Number.parseFloat(body.BrakeTorque ?? 5200), 3200),
-    handBrakeTorque: Math.max(Number.parseFloat(body.HandBrakeTorque ?? 5200), 3200),
-    // DB brake torques are native units; Rapier wheel controller expects much smaller
-    // practical magnitudes. Convert once here to avoid instant lock/stop behavior.
-    brakeTorqueScale: 0.07,
-    handBrakeTorqueScale: 0.055,
-    brakeBalance: clamp(pickScalar(body.BrakeBalance, 0.6), 0.1, 0.9),
-    tireTurnAngleInDeg: Math.max(Number.parseFloat(body.TireTurnAngleIn ?? 36), 20),
-    tireTurnAngleOutDeg: Math.max(Number.parseFloat(body.TireTurnAngleOut ?? body.TireTurnAngleIn ?? 38), 20),
-    downforceConst: Math.max(Number.parseFloat(body.DownforceConst ?? 2), 0.5),
-    aeroDrag: pickVec2(body.AeroDrag, [0.3, 0.3]),
+    peakTorque: Math.max(readProfileScalar(engine.PeakTorque, 210), 120),
+    brakeTorque,
+    handBrakeTorque,
+    brakeTorqueScale: clamp(brakeTorqueToOneGScale, 0.02, 0.55),
+    handBrakeTorqueScale: clamp(handBrakeTorqueToOneGScale, 0.02, 0.55),
+    brakeBalance: clamp(readProfileScalar(body.BrakeBalance, 0.6), 0.1, 0.9),
+    tireTurnAngleInDeg: Math.max(readProfileScalar(body.TireTurnAngleIn, 36), 20),
+    tireTurnAngleOutDeg: Math.max(
+      readProfileScalar(body.TireTurnAngleOut, readProfileScalar(body.TireTurnAngleIn, 36)),
+      20,
+    ),
+    downforceConst: Math.max(readProfileScalar(body.DownforceConst, 2), 0.5),
+    centerOfDownforce: new THREE.Vector3(
+      centerOfDownforce[0],
+      centerOfDownforce[1],
+      -centerOfDownforce[2],
+    ),
+    aeroDrag: readVec2(body.AeroDrag, [0.3, 0.3]),
+    aeroDragLoc: new THREE.Vector3(aeroDragLoc[0], aeroDragLoc[1], -aeroDragLoc[2]),
+    centerOfMass: new THREE.Vector3(centerOfMass[0], centerOfMass[1], -centerOfMass[2]),
     steering: {
-      Sensitivity: pickScalar(steering.Sensitivity, 0.5),
-      MinAnalogSpeed: pickScalar(steering.MinAnalogSpeed, 0.1),
-      MaxAnalogSpeed: pickScalar(steering.MaxAnalogSpeed, 2),
-      MinAtDelta: pickScalar(steering.MinAtDelta, 1),
-      MaxAtDelta: pickScalar(steering.MaxAtDelta, 2),
-      CenteringSpeed: pickScalar(steering.CenteringSpeed, 0.9),
-      DigitalThreshold: pickScalar(steering.DigitalThreshold, 0.2),
-      MinDigitalSpeed: pickScalar(steering.MinDigitalSpeed, 1),
-      MaxDigitalSpeed: pickScalar(steering.MaxDigitalSpeed, 2.5),
-      SteeringLimitRate: pickVec4(steering.SteeringLimitRate, [1, 0.8, 0.5, 0.25]),
-      SteeringLimitSpeed: pickVec4(steering.SteeringLimitSpeed, [20, 40, 100, 250]),
+      Sensitivity: readProfileScalar(steering.Sensitivity, 0.5),
+      MinAnalogSpeed: readProfileScalar(steering.MinAnalogSpeed, 0.1),
+      MaxAnalogSpeed: readProfileScalar(steering.MaxAnalogSpeed, 2),
+      MinAtDelta: readProfileScalar(steering.MinAtDelta, 1),
+      MaxAtDelta: readProfileScalar(steering.MaxAtDelta, 2),
+      CenteringSpeed: readProfileScalar(steering.CenteringSpeed, 0.9),
+      DigitalThreshold: readProfileScalar(steering.DigitalThreshold, 0.2),
+      MinDigitalSpeed: readProfileScalar(steering.MinDigitalSpeed, 1),
+      MaxDigitalSpeed: readProfileScalar(steering.MaxDigitalSpeed, 2.5),
+      SteeringLimitRate: steeringLimitRates,
+      SteeringLimitSpeed: steeringLimitSpeeds,
+      SteeringSpeedRate: steeringSpeedRates,
     },
     frontSuspension: {
       defaultCompression: Math.max(
-        Number.parseFloat(suspension.FrontDefaultCompression ?? 0.08),
+        readProfileScalar(suspension.FrontDefaultCompression, 0.08),
         0,
       ),
       restLength: Math.max(
-        Number.parseFloat(suspension.FrontRestLength ?? 0.24) -
-          Number.parseFloat(suspension.FrontDefaultCompression ?? 0.08),
+        readProfileScalar(suspension.FrontRestLength, 0.24) -
+          readProfileScalar(suspension.FrontDefaultCompression, 0.08),
         0.08,
       ),
-      maxTravel: Math.max(Number.parseFloat(suspension.FrontMaxLength ?? 0.65), 0.12),
-      stiffness: Math.max(Number.parseFloat(suspension.FrontZStiffness ?? 18), 14),
-      compression: Math.max(Number.parseFloat(suspension.FrontBumpDamp ?? 2.4), 1.4),
-      relaxation: Math.max(Number.parseFloat(suspension.FrontReboundDamp ?? 3.2), 1.8),
+      maxTravel: Math.max(readProfileScalar(suspension.FrontMaxLength, 0.65), 0.12),
+      stiffness: Math.max(readProfileScalar(suspension.FrontZStiffness, 18), 6),
+      compression: Math.max(readProfileScalar(suspension.FrontBumpDamp, 2.4), 0.5),
+      relaxation: Math.max(readProfileScalar(suspension.FrontReboundDamp, 3.2), 0.5),
     },
     rearSuspension: {
       defaultCompression: Math.max(
-        Number.parseFloat(suspension.RearDefaultCompression ?? 0.1),
+        readProfileScalar(suspension.RearDefaultCompression, 0.1),
         0,
       ),
       restLength: Math.max(
-        Number.parseFloat(suspension.RearRestLength ?? 0.26) -
-          Number.parseFloat(suspension.RearDefaultCompression ?? 0.1),
+        readProfileScalar(suspension.RearRestLength, 0.26) -
+          readProfileScalar(suspension.RearDefaultCompression, 0.1),
         0.08,
       ),
-      maxTravel: Math.max(Number.parseFloat(suspension.RearMaxLength ?? 0.65), 0.12),
-      stiffness: Math.max(Number.parseFloat(suspension.RearZStiffness ?? 20), 14),
-      compression: Math.max(Number.parseFloat(suspension.RearBumpDamp ?? 2.2), 1.4),
-      relaxation: Math.max(Number.parseFloat(suspension.RearReboundDamp ?? 3), 1.8),
+      maxTravel: Math.max(readProfileScalar(suspension.RearMaxLength, 0.65), 0.12),
+      stiffness: Math.max(readProfileScalar(suspension.RearZStiffness, 20), 6),
+      compression: Math.max(readProfileScalar(suspension.RearBumpDamp, 2.2), 0.5),
+      relaxation: Math.max(readProfileScalar(suspension.RearReboundDamp, 3), 0.5),
     },
     wheelLayout,
     frontTireRadius,
     rearTireRadius,
     visualRideHeight: computeVisualRideHeight(bounds, wheelLayout),
     tireConfig: {
-      rollingResistance: pickScalar(localTireDynamics.RollingResistance, 0.5),
-      inducedDragCoeff: pickScalar(localTireDynamics.InducedDragCoeff, 1),
+      rollingResistance: tireRollingResistance,
+      inducedDragCoeff: tireInducedDragCoeff,
+      frontXFriction: frontLatGrip,
+      frontZFriction: frontLongGrip,
+      rearXFriction: rearLatGrip,
+      rearZFriction: rearLongGrip,
+      baseWheelFrictionSlipFront,
+      baseWheelFrictionSlipRear,
+      baseWheelSideStiffnessFront,
+      baseWheelSideStiffnessRear,
+      frontMass: Math.max(readProfileScalar(tires.FrontMass, 25), 1),
+      rearMass: Math.max(readProfileScalar(tires.RearMass, 25), 1),
+      optimalSlipRatio: clamp(readProfileScalar(tires.OptimalSlipRatio, 0.15), 0.02, 0.5),
+      optimalSlipAngleDeg: clamp(readProfileScalar(tires.OptimalSlipAngle, 12), 1, 35),
+      pneumaticTrail: Math.max(
+        readProfileScalar(
+          rawConfig.localTireDynamics?.PneumaticTrail ?? tires.PneumaticTrail,
+          0.08,
+        ),
+        0,
+      ),
+      pneumaticOffset: clamp(
+        readProfileScalar(
+          rawConfig.localTireDynamics?.PneumaticOffset ?? tires.PneumaticOffset,
+          0.5,
+        ),
+        0,
+        2,
+      ),
     },
+    surfaceDynamics,
     engine: {
-      idleRpm: pickScalar(engine.IdleRpm, 1000),
-      peakTorqueRpm: pickScalar(engine.PeakTorqueRpm, 4500),
-      peakTorque: pickScalar(engine.PeakTorque, 210),
-      peakPowerRpm: pickScalar(engine.PeakPowerRpm, 6000),
-      peakPower: pickScalar(engine.PeakPower, 120),
-      redLineRpm: pickScalar(engine.RedLineRpm, 6500),
-      zeroPowerRpm: pickScalar(engine.ZeroPowerRpm, 600),
-      inertia: pickScalar(engine.InertiaEngine, 0.15),
-      friction: pickScalar(engine.EngineFriction, 0.015),
+      idleRpm: readProfileScalar(engine.IdleRpm, 1000),
+      peakTorqueRpm: readProfileScalar(engine.PeakTorqueRpm, 4500),
+      peakTorque: readProfileScalar(engine.PeakTorque, 210),
+      peakPowerRpm: readProfileScalar(engine.PeakPowerRpm, 6000),
+      peakPower: readProfileScalar(engine.PeakPower, 120),
+      redLineRpm: readProfileScalar(engine.RedLineRpm, 6500),
+      zeroPowerRpm: readProfileScalar(engine.ZeroPowerRpm, 600),
+      inertia: readProfileScalar(engine.InertiaEngine, 0.15),
+      friction: readProfileScalar(engine.EngineFriction, 0.015),
+      rpmLimit: readProfileScalar(engine.RpmLimit, readProfileScalar(engine.RedLineRpm, 6500)),
       launchShiftRpm: Math.max(
-        pickScalar(engine.PeakTorqueRpm, 4500),
-        pickScalar(engine.IdleRpm, 1000) + 1200,
+        readProfileScalar(engine.PeakTorqueRpm, 4500),
+        readProfileScalar(engine.IdleRpm, 1000) + 1200,
       ),
       launchTargetRpm: Math.min(
-        pickScalar(engine.RedLineRpm, 6500) * 0.94,
+        readProfileScalar(engine.RedLineRpm, 6500) * 0.94,
         Math.max(
-          pickScalar(engine.PeakTorqueRpm, 4500) + 300,
-          pickScalar(engine.IdleRpm, 1000) + 1600,
+          readProfileScalar(engine.PeakTorqueRpm, 4500) + 300,
+          readProfileScalar(engine.IdleRpm, 1000) + 1600,
         ),
       ),
     },
     gearbox: {
-      ratios: gearRatios,
+      ratios: gearRatiosLimited,
       reverseRatio: buildReverseRatio(gearbox),
-      endRatio: pickScalar(gearbox.EndRatio, 3.7),
-      clutchEngageTime: pickScalar(gearbox.ClutchEngageTime, 0.1),
-      clutchReleaseTime: pickScalar(gearbox.ClutchReleaseTime, 0.1),
-      clutchTorque: pickScalar(gearbox.ClutchTorque, 280),
+      endRatio: readProfileScalar(gearbox.EndRatio, 3.7),
+      clutchEngageTime: readProfileScalar(gearbox.ClutchEngageTime, 0.1),
+      clutchReleaseTime: readProfileScalar(gearbox.ClutchReleaseTime, 0.1),
+      clutchTorque: readProfileScalar(gearbox.ClutchTorque, 280),
+      numGears: numGears || gearRatiosLimited.length,
     },
     shiftBands: buildShiftBands({
-      gearRatios,
+      gearRatios: gearRatiosLimited,
       reverseRatio: buildReverseRatio(gearbox),
-      endRatio: pickScalar(gearbox.EndRatio, 3.7),
+      endRatio: readProfileScalar(gearbox.EndRatio, 3.7),
       engine: {
-        idleRpm: pickScalar(engine.IdleRpm, 1000),
-        peakTorqueRpm: pickScalar(engine.PeakTorqueRpm, 4500),
-        peakPowerRpm: pickScalar(engine.PeakPowerRpm, 6000),
-        redLineRpm: pickScalar(engine.RedLineRpm, 6500),
+        idleRpm: readProfileScalar(engine.IdleRpm, 1000),
+        peakTorqueRpm: readProfileScalar(engine.PeakTorqueRpm, 4500),
+        peakPowerRpm: readProfileScalar(engine.PeakPowerRpm, 6000),
+        redLineRpm: readProfileScalar(engine.RedLineRpm, 6500),
       },
       drivenWheelRadius: averageDrivenWheelRadiusFromLayout(
         wheelLayout,
@@ -918,7 +1014,7 @@ function createChassisBody(world, config, translation, rotation) {
     config.bodyHalfExtents.y,
     config.bodyHalfExtents.z,
   )
-    .setFriction(0.08)
+    .setFriction(0.01)
     .setRestitution(0)
     .setContactSkin(0.02)
     .setCollisionGroups(
@@ -929,14 +1025,15 @@ function createChassisBody(world, config, translation, rotation) {
     )
     .setDensity(0);
   world.createCollider(colliderDesc, body);
+  const inertia = computeApproximateChassisInertia(config.massKg, config.bodyHalfExtents);
   body.setAdditionalMassProperties(
     config.massKg,
-    { x: 0, y: -config.bodyHalfExtents.y * 0.35, z: 0 },
     {
-      x: config.massKg * 1.4,
-      y: config.massKg * 1.8,
-      z: config.massKg * 1.4,
+      x: config.centerOfMass.x,
+      y: -Math.abs(config.centerOfMass.y),
+      z: config.centerOfMass.z,
     },
+    inertia,
     { x: 0, y: 0, z: 0, w: 1 },
     true,
   );
@@ -993,10 +1090,20 @@ function createChassisBody(world, config, translation, rotation) {
 
 function createVehicleController(world, chassis, config) {
   const controller = world.createVehicleController(chassis);
-  // Rapier 0.19 JS API: up axis uses `indexUpAxis` setter, but forward axis
-  // is exposed through a setter property named `setIndexForwardAxis`.
-  controller.indexUpAxis = 1;
-  controller.setIndexForwardAxis = 2;
+  // Configure vehicle axes using whichever Rapier JS binding shape is present.
+  // Some builds expose methods, others expose writable properties.
+  if (typeof controller.setIndexUpAxis === "function") {
+    controller.setIndexUpAxis(1);
+  } else {
+    tryAssignControllerProperty(controller, "setIndexUpAxis", 1) ||
+      tryAssignControllerProperty(controller, "indexUpAxis", 1);
+  }
+  if (typeof controller.setIndexForwardAxis === "function") {
+    controller.setIndexForwardAxis(2);
+  } else {
+    tryAssignControllerProperty(controller, "setIndexForwardAxis", 2) ||
+      tryAssignControllerProperty(controller, "indexForwardAxis", 2);
+  }
 
   config.wheelLayout.forEach((wheel, wheelIndex) => {
     const suspension = wheel.front ? config.frontSuspension : config.rearSuspension;
@@ -1022,14 +1129,41 @@ function createVehicleController(world, chassis, config) {
     // Rapier raycast vehicle follows Bullet-style wheel tuning ranges.
     // Values around ~10 are the practical baseline for longitudinal grip;
     // our previous ~2.x setting caused persistent wheel slip and weak launch.
-    controller.setWheelFrictionSlip(wheelIndex, wheel.front ? 9.5 : 10.5);
-    controller.setWheelSideFrictionStiffness(wheelIndex, wheel.front ? 1.15 : 1.0);
+    controller.setWheelFrictionSlip(
+      wheelIndex,
+      wheel.front
+        ? config.tireConfig.baseWheelFrictionSlipFront
+        : config.tireConfig.baseWheelFrictionSlipRear,
+    );
+    controller.setWheelSideFrictionStiffness(
+      wheelIndex,
+      wheel.front
+        ? config.tireConfig.baseWheelSideStiffnessFront
+        : config.tireConfig.baseWheelSideStiffnessRear,
+    );
   });
 
   return controller;
 }
 
-function stepVehicle(world, chassis, vehicleController, config, input, debugState) {
+function tryAssignControllerProperty(controller, key, value) {
+  try {
+    controller[key] = value;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function stepVehicle(
+  world,
+  chassis,
+  vehicleController,
+  config,
+  input,
+  debugState,
+  trackFloorSampler = null,
+) {
   const isolation = resolveRapierDebugOptions(debugState.isolation);
   const rawThrottle = clamp(input?.throttle ?? 0, 0, 1);
   const rawBrake = clamp(input?.brake ?? 0, 0, 1);
@@ -1095,13 +1229,31 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
   const speedForward = linvel.dot(TMP_FORWARD);
   const speedRight = linvel.dot(TMP_RIGHT);
   const speedHorizontal = horizontalSpeed(linvel);
+  const speedKph = speedHorizontal * 3.6;
+  const surfaceType = sampleSurfaceType(trackFloorSampler, translation);
+  const surfaceDynamics = resolveSurfaceDynamics(config.surfaceDynamics, surfaceType);
+  const surfaceGrip = computeSurfaceGrip(surfaceDynamics);
+  const surfaceRollingResistanceScale = Math.max(
+    readProfileScalar(surfaceDynamics.RollingResistance, 0.005) / 0.005,
+    0.35,
+  );
+  const surfaceInducedDragScale = Math.max(
+    readProfileScalar(surfaceDynamics.InducedDragCoeff, 0.15) / 0.15,
+    0.35,
+  );
   const groundHit = sampleGround(world, chassis, config.bodyHalfExtents.y + 0.9);
   const surfaceNormal = groundHit
     ? rapierVectorToThree(groundHit.normal, TMP_VEC_C).normalize()
     : WORLD_UP;
   const grounded = Boolean(groundHit && groundHit.timeOfImpact <= config.bodyHalfExtents.y + 0.5);
   if (isolation.gearbox) {
-    updateGearboxState(debugState, config, speedForward, FIXED_DT);
+    updateGearboxState(
+      debugState,
+      config,
+      speedForward,
+      rawThrottle,
+      FIXED_DT,
+    );
   } else {
     const idleRpm = config.engine.idleRpm;
     const speedRpm = projectEngineRpmFromDriveState(speedForward, 1, config);
@@ -1167,18 +1319,30 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     throttle,
   );
   const frontBrake = isolation.braking
-    ? brake * config.brakeTorque * config.brakeBalance * config.brakeTorqueScale
+    ? brake *
+      config.brakeTorque *
+      config.brakeBalance *
+      config.brakeTorqueScale *
+      surfaceGrip
     : 0;
   const rearBrake =
     (isolation.braking
-      ? brake * config.brakeTorque * (1 - config.brakeBalance) * config.brakeTorqueScale
+      ? brake *
+        config.brakeTorque *
+        (1 - config.brakeBalance) *
+        config.brakeTorqueScale *
+        surfaceGrip
       : 0) +
     (isolation.handbrake
-      ? handbrake * config.handBrakeTorque * config.handBrakeTorqueScale
+      ? handbrake *
+        config.handBrakeTorque *
+        config.handBrakeTorqueScale *
+        surfaceGrip
       : 0);
   const frontSteerAngles = computeFrontWheelSteerAngles(steer, config);
   debugState.steerLeftDeg = THREE.MathUtils.radToDeg(frontSteerAngles.left);
   debugState.steerRightDeg = THREE.MathUtils.radToDeg(frontSteerAngles.right);
+  let totalWheelEngineForce = 0;
 
   config.wheelLayout.forEach((wheel, wheelIndex) => {
     const driven =
@@ -1189,9 +1353,7 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
       steerAngle = wheel.side < 0 ? frontSteerAngles.left : frontSteerAngles.right;
     }
     vehicleController.setWheelSteering(wheelIndex, steerAngle);
-    // Promote controllable rotation on handbrake instead of pure hard-stop lock.
-    // Rear lateral grip drops with handbrake and speed so turns can rotate/drift.
-    const handbrakeSpeedBlend = clamp(speedHorizontal * 3.6 / 90, 0, 1);
+    const handbrakeSpeedBlend = clamp(speedKph / 90, 0, 1);
     const rearSideGripScale = wheel.front
       ? 1
       : THREE.MathUtils.lerp(1, 0.28, handbrake * handbrakeSpeedBlend);
@@ -1200,11 +1362,19 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
       : THREE.MathUtils.lerp(1, 0.45, handbrake * handbrakeSpeedBlend);
     vehicleController.setWheelSideFrictionStiffness(
       wheelIndex,
-      (wheel.front ? 1.15 : 1.0) * rearSideGripScale,
+      (wheel.front
+        ? config.tireConfig.baseWheelSideStiffnessFront
+        : config.tireConfig.baseWheelSideStiffnessRear) *
+        rearSideGripScale *
+        surfaceGrip,
     );
     vehicleController.setWheelFrictionSlip(
       wheelIndex,
-      (wheel.front ? 9.5 : 10.5) * rearLongGripScale,
+      (wheel.front
+        ? config.tireConfig.baseWheelFrictionSlipFront
+        : config.tireConfig.baseWheelFrictionSlipRear) *
+        rearLongGripScale *
+        surfaceGrip,
     );
     const wheelEngineForce = driven
       ? computeDriveForceForWheel(wheel, debugState, config, throttle, isolation)
@@ -1213,6 +1383,7 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
       wheelIndex,
       wheelEngineForce,
     );
+    totalWheelEngineForce += wheelEngineForce;
     vehicleController.setWheelBrake(
       wheelIndex,
       wheel.front ? frontBrake : rearBrake,
@@ -1227,8 +1398,9 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
   );
 
   if (isolation.aeroDrag || isolation.lateralDrag) {
-    const dragForce = linvel
-      .clone()
+    // Keep drag force centered on COM in raycast mode. Applying lateral/longitudinal
+    // drag at an offset point injects artificial yaw torque and causes spin/hop loops.
+    const dragForce = TMP_VEC_B
       .set(0, 0, 0)
       .addScaledVector(
         TMP_FORWARD,
@@ -1237,6 +1409,7 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
               speedForward *
               speedForward *
               config.aeroDrag[0] *
+              surfaceInducedDragScale *
               0.8
           : 0,
       )
@@ -1247,29 +1420,51 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
               speedRight *
               speedRight *
               config.aeroDrag[1] *
+              surfaceInducedDragScale *
               1.4
           : 0,
       );
     chassis.addForce(vectorFromThree(dragForce), true);
   }
+  if (isolation.aeroDrag) {
+    const rollingResistanceForce =
+      config.massKg *
+      config.gravity *
+      config.tireConfig.rollingResistance *
+      surfaceRollingResistanceScale *
+      (1 + config.tireConfig.inducedDragCoeff * clamp(speedKph / 240, 0, 1));
+    if (rollingResistanceForce > 0.01 && speedHorizontal > 0.1) {
+      const rollingDrag = TMP_FORWARD
+        .clone()
+        .multiplyScalar(-Math.sign(speedForward) * rollingResistanceForce);
+      chassis.addForce(vectorFromThree(rollingDrag), true);
+    }
+  }
   if (isolation.downforce) {
-    chassis.addForce(
-      {
-        x: 0,
-        y: -speedHorizontal * speedHorizontal * config.downforceConst * 0.012,
-        z: 0,
-      },
-      true,
-    );
+    const downforce = {
+      x: 0,
+      y: -speedHorizontal * speedHorizontal * config.downforceConst * 0.012,
+      z: 0,
+    };
+    chassis.addForce(downforce, true);
   }
 
-  const targetUp = grounded ? surfaceNormal.clone().normalize() : WORLD_UP;
   if (isolation.uprightAssist) {
-    const uprightTorque = TMP_UP.clone()
-      .cross(targetUp)
-      .multiplyScalar(config.massKg * (grounded ? 5.5 : 2.5))
-      .add(angvel.multiplyScalar(-config.massKg * 0.22));
-    chassis.addTorque(vectorFromThree(uprightTorque), true);
+    // Grounded: do not inject any upright torque. Applying corrective torque while
+    // tires are loaded can produce speed-direction banking artifacts on flat ground.
+    // Airborne: pull the chassis back toward world-up and damp roll/pitch spin.
+    if (!grounded) {
+      const uprightError = TMP_VEC_D.copy(TMP_UP).cross(WORLD_UP);
+      const angularDamping = new THREE.Vector3(
+        -angvel.x * config.massKg * 0.3,
+        0,
+        -angvel.z * config.massKg * 0.3,
+      );
+      const uprightTorque = uprightError
+        .multiplyScalar(config.massKg * 2.0)
+        .add(angularDamping);
+      chassis.addTorque(vectorFromThree(uprightTorque), true);
+    }
   }
   if (!isolation.gravity) {
     chassis.addForce({ x: 0, y: config.massKg * config.gravity, z: 0 }, true);
@@ -1289,6 +1484,8 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
     0,
   );
   updateDrivenWheelState(config, vehicleController, FIXED_DT);
+  const longitudinalSlip = computeAverageLongitudinalSlip(config, speedForward);
+  const lateralSlip = computeLateralSlip(speedRight, speedHorizontal);
 
   debugState.grounded = grounded;
   debugState.groundToi = groundHit?.timeOfImpact ?? null;
@@ -1296,7 +1493,7 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
   debugState.brake = rawBrake;
   debugState.handbrake = rawHandbrake;
   debugState.steer = rawSteer;
-  debugState.engineForce = engineForceTotal;
+  debugState.engineForce = totalWheelEngineForce || engineForceTotal;
   debugState.brakeForce = frontBrake + rearBrake;
   debugState.speedForward = speedForward;
   debugState.speedRight = speedRight;
@@ -1305,7 +1502,21 @@ function stepVehicle(world, chassis, vehicleController, config, input, debugStat
   debugState.wheelContacts = wheelContacts;
   debugState.forwardImpulse = forwardImpulse;
   debugState.suspensionForce = suspensionForce;
+  debugState.slipLongAvg = longitudinalSlip;
+  debugState.slipLatAvg = lateralSlip;
   debugState.mode = `rapier-raycast${isolation.gearbox ? "" : "-nogear"}`;
+  debugState.surfaceType = surfaceType;
+  debugState.surfaceGrip = surfaceGrip;
+  debugState.rollingResistanceDrag =
+    config.massKg *
+    config.gravity *
+    config.tireConfig.rollingResistance *
+    surfaceRollingResistanceScale;
+  debugState.aeroDragForce =
+    (isolation.aeroDrag
+      ? Math.abs(speedForward * speedForward * config.aeroDrag[0]) +
+        Math.abs(speedRight * speedRight * config.aeroDrag[1])
+      : 0) * surfaceInducedDragScale;
 }
 
 function sampleGround(world, chassis, rayLength) {
@@ -1369,11 +1580,12 @@ function updateWheelVisuals(config, chassis, vehicleController, debugState, dt) 
 
 function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizontalKph, dt) {
   const steerLimit = computeSteeringLimit(config.steering, horizontalKph);
-  const steerTarget = rawSteer * steerLimit * (rawHandbrake > 0.1 ? 1.08 : 1);
+  const steerTarget = rawSteer * steerLimit * (rawHandbrake > 0.1 ? 1.02 : 1);
   const digitalInput = Math.abs(rawSteer) >= config.steering.DigitalThreshold;
+  const speedRate = computeSteeringSpeedRate(config.steering, horizontalKph);
 
   if (Math.abs(rawSteer) < 1e-3) {
-    const centeringRate = Math.max(config.steering.CenteringSpeed * 6, 1);
+    const centeringRate = Math.max(config.steering.CenteringSpeed * speedRate, 0.4);
     debugState.steerState = dampToward(debugState.steerState ?? 0, 0, centeringRate, dt);
   } else {
     const minSpeed = digitalInput
@@ -1392,22 +1604,11 @@ function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizon
       config.steering.MaxAtDelta,
       deltaMagnitude,
     );
-    const lowSpeedRateBoost = THREE.MathUtils.lerp(
-      1.45,
-      1,
-      clamp(horizontalKph / 25, 0, 1),
-    );
-    const highSpeedRateCut = THREE.MathUtils.lerp(
-      1,
-      0.28,
-      clamp((horizontalKph - 55) / 95, 0, 1),
-    );
-    const speedRateScale = lowSpeedRateBoost * highSpeedRateCut;
     const rate =
       THREE.MathUtils.lerp(minSpeed, maxSpeed, Math.abs(rawSteer)) *
       deltaScale *
-      speedRateScale;
-    const minParkingRate = horizontalKph < 12 ? 4.5 : 0;
+      speedRate;
+    const minParkingRate = horizontalKph < 10 ? 2.2 : 0;
     debugState.steerState = moveToward(
       debugState.steerState ?? 0,
       steerTarget,
@@ -1543,6 +1744,12 @@ function createDebugState() {
     wheelContacts: 0,
     forwardImpulse: 0,
     suspensionForce: 0,
+    slipLongAvg: 0,
+    slipLatAvg: 0,
+    surfaceType: "tarmac",
+    surfaceGrip: 1,
+    aeroDragForce: 0,
+    rollingResistanceDrag: 0,
     simSteps: 0,
     simBacklogMs: 0,
     isolation: null,
@@ -1605,36 +1812,29 @@ function dampToward(current, target, rate, dt) {
 function computeSteeringLimit(steeringConfig, horizontalKph) {
   const speedBreaks = steeringConfig.SteeringLimitSpeed ?? [20, 40, 100, 250];
   const limitRates = steeringConfig.SteeringLimitRate ?? [1, 0.8, 0.5, 0.25];
+  return clamp(interpolateRateBySpeed(horizontalKph, speedBreaks, limitRates), 0.1, 1);
+}
 
-  let limit = limitRates[0];
+function computeSteeringSpeedRate(steeringConfig, horizontalKph) {
+  const speedBreaks = steeringConfig.SteeringLimitSpeed ?? [20, 40, 100, 250];
+  const speedRates = steeringConfig.SteeringSpeedRate ?? [2, 2, 2, 2];
+  return clamp(interpolateRateBySpeed(horizontalKph, speedBreaks, speedRates), 0.1, 8);
+}
 
-  if (horizontalKph <= speedBreaks[0]) {
-    limit = limitRates[0];
-  } else {
-    for (let index = 1; index < speedBreaks.length; index += 1) {
-      if (horizontalKph <= speedBreaks[index]) {
-        const t = inverseLerp(speedBreaks[index - 1], speedBreaks[index], horizontalKph);
-        limit = THREE.MathUtils.lerp(limitRates[index - 1], limitRates[index], t);
-        break;
-      }
-    }
-
-    if (horizontalKph > speedBreaks[speedBreaks.length - 1]) {
-      limit = limitRates[limitRates.length - 1];
+function interpolateRateBySpeed(speed, breakpoints, rates) {
+  if (!Array.isArray(breakpoints) || !Array.isArray(rates) || rates.length === 0) {
+    return 1;
+  }
+  if (speed <= breakpoints[0]) {
+    return rates[0];
+  }
+  for (let index = 1; index < Math.min(breakpoints.length, rates.length); index += 1) {
+    if (speed <= breakpoints[index]) {
+      const t = inverseLerp(breakpoints[index - 1], breakpoints[index], speed);
+      return THREE.MathUtils.lerp(rates[index - 1], rates[index], t);
     }
   }
-
-  // Native steering-rack helper cluster adds speed-coupled self-aligning behavior.
-  // Until that full cluster is ported, apply an extra high-speed authority falloff
-  // to avoid unrealistic instant U-turns at motorway speeds.
-  const lowSpeedBoost = THREE.MathUtils.lerp(
-    1.18,
-    1,
-    clamp(horizontalKph / 20, 0, 1),
-  );
-  const highSpeedKph = Math.max(horizontalKph - 45, 0);
-  const rackSpeedFalloff = 1 / (1 + Math.pow(highSpeedKph / 75, 2) * 1.9);
-  return clamp(limit * lowSpeedBoost * rackSpeedFalloff, 0.1, 1);
+  return rates[Math.min(rates.length, breakpoints.length) - 1];
 }
 
 function inverseLerp(a, b, value) {
@@ -1674,6 +1874,111 @@ function pickVec4(value, fallback) {
   return fallback;
 }
 
+function readProfileScalar(value, fallback, profileIndex = DB_PROFILE_INDEX) {
+  if (Array.isArray(value)) {
+    const selected = value[profileIndex];
+    if (Number.isFinite(selected)) {
+      return selected;
+    }
+    const first = value[0];
+    return Number.isFinite(first) ? first : fallback;
+  }
+
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function readVec2(value, fallback, profileIndex = DB_PROFILE_INDEX) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  return [
+    readProfileScalar(value[0], fallback[0], profileIndex),
+    readProfileScalar(value[1], fallback[1], profileIndex),
+  ];
+}
+
+function readVec3(value, fallback, profileIndex = DB_PROFILE_INDEX) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  return [
+    readProfileScalar(value[0], fallback[0], profileIndex),
+    readProfileScalar(value[1], fallback[1], profileIndex),
+    readProfileScalar(value[2], fallback[2], profileIndex),
+  ];
+}
+
+function readVec4(value, fallback, profileIndex = DB_PROFILE_INDEX) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  return [
+    readProfileScalar(value[0], fallback[0], profileIndex),
+    readProfileScalar(value[1], fallback[1], profileIndex),
+    readProfileScalar(value[2], fallback[2], profileIndex),
+    readProfileScalar(value[3], fallback[3], profileIndex),
+  ];
+}
+
+function sampleSurfaceType(trackFloorSampler, translation) {
+  if (!trackFloorSampler?.sample) {
+    return "tarmac";
+  }
+  const hit = trackFloorSampler.sample(
+    TMP_VEC_D.set(translation.x, translation.y, translation.z),
+    {
+      rayHeight: 8,
+      rayDistance: 24,
+      minUpDot: -0.4,
+    },
+  );
+  return hit?.surfaceType ?? "tarmac";
+}
+
+function resolveSurfaceDynamics(surfaceDynamics, surfaceType) {
+  switch (surfaceType) {
+    case "tarmac":
+      return surfaceDynamics?.tarmac ?? {};
+    case "gravel":
+      return surfaceDynamics?.gravel ?? {};
+    case "sand":
+      return surfaceDynamics?.sand ?? {};
+    case "hazard":
+      return surfaceDynamics?.hazard ?? {};
+    case "grass":
+    case "dirt":
+    case "forest":
+      return surfaceDynamics?.forest ?? surfaceDynamics?.tarmac ?? {};
+    case "snow":
+      return surfaceDynamics?.snow ?? surfaceDynamics?.tarmac ?? {};
+    case "ice":
+      return surfaceDynamics?.ice ?? surfaceDynamics?.tarmac ?? {};
+    default:
+      return surfaceDynamics?.tarmac ?? {};
+  }
+}
+
+function computeSurfaceGrip(surfaceDynamics) {
+  const xGrip = readProfileScalar(surfaceDynamics?.XFriction, 1.15);
+  const zGrip = readProfileScalar(surfaceDynamics?.ZFriction, 1.15);
+  const boost = readProfileScalar(surfaceDynamics?.FrictionBoost, 0);
+  return clamp(((xGrip + zGrip) * 0.5) + boost, 0.3, 2.2);
+}
+
+function computeApproximateChassisInertia(mass, halfExtents) {
+  const w = halfExtents.x * 2;
+  const h = halfExtents.y * 2;
+  const d = halfExtents.z * 2;
+  const ix = (mass / 12) * (h * h + d * d);
+  const iy = (mass / 12) * (w * w + d * d);
+  const iz = (mass / 12) * (w * w + h * h);
+  return {
+    x: Math.max(ix, mass * 0.4),
+    y: Math.max(iy, mass * 0.4),
+    z: Math.max(iz, mass * 0.4),
+  };
+}
+
 function speedHorizontalNow(speedForwardNow, chassis) {
   const vel = chassis.linvel();
   return Math.hypot(vel.x, vel.z) * 3.6;
@@ -1681,10 +1986,14 @@ function speedHorizontalNow(speedForwardNow, chassis) {
 
 function buildGearRatios(gearbox) {
   const ratios = [];
+  const maxGears = Math.max(
+    Math.round(readProfileScalar(gearbox?.NumGears, 6)),
+    0,
+  );
 
-  for (let gearIndex = 1; gearIndex <= 6; gearIndex += 1) {
+  for (let gearIndex = 1; gearIndex <= Math.min(maxGears || 6, 6); gearIndex += 1) {
     const gearValue = gearbox[`Gear${gearIndex}`];
-    const ratio = Array.isArray(gearValue) ? gearValue[0] : 0;
+    const ratio = readProfileScalar(gearValue, 0);
 
     if (Number.isFinite(ratio) && Math.abs(ratio) > 1e-3) {
       ratios.push(ratio);
@@ -1695,8 +2004,7 @@ function buildGearRatios(gearbox) {
 }
 
 function buildReverseRatio(gearbox) {
-  const reverse = gearbox.GearR;
-  return Array.isArray(reverse) ? reverse[0] : -4.1;
+  return readProfileScalar(gearbox.GearR, -4.1);
 }
 
 function resolveDifferential(nodePath, differentials, fallback) {
@@ -1723,54 +2031,58 @@ function resolveDifferential(nodePath, differentials, fallback) {
   return fallback;
 }
 
-function updateGearboxState(debugState, config, speedForward, dt) {
+function updateGearboxState(debugState, config, speedForward, rawThrottle, dt) {
   debugState.upshiftCooldown = Math.max((debugState.upshiftCooldown ?? 0) - dt, 0);
   debugState.downshiftCooldown = Math.max((debugState.downshiftCooldown ?? 0) - dt, 0);
   const idleRpm = config.engine.idleRpm;
+  const rpmCeil = Math.max(config.engine.redLineRpm * 1.03, idleRpm + 800);
   const speedKph = Math.abs(speedForward) * 3.6;
-  const throttleMagnitude = Math.abs(debugState.throttleAxis ?? 0);
-  let rpmTarget = idleRpm;
-
-  if ((debugState.gear ?? 0) === 0 && speedKph <= 6) {
-    rpmTarget =
-      idleRpm +
-      throttleMagnitude * (config.engine.launchTargetRpm - idleRpm);
-  } else {
-    const targetRpmFromDriveState = projectEngineRpmFromDriveState(
-      speedForward,
-      debugState.gear,
-      config,
-    );
-    const launchFreeRevTarget =
-      idleRpm + throttleMagnitude * (config.engine.launchTargetRpm - idleRpm);
-    const couplingBlend =
-      clamp(speedKph / 28, 0, 1) * clamp(debugState.clutch ?? 1, 0.2, 1);
-    rpmTarget = Math.max(
-      idleRpm,
-      THREE.MathUtils.lerp(launchFreeRevTarget, targetRpmFromDriveState, couplingBlend),
-    );
-  }
-
-  debugState.engineRpm = dampToward(
-    debugState.engineRpm ?? idleRpm,
-    rpmTarget,
-    8,
-    dt,
+  const throttleMagnitude = Math.max(
+    Math.abs(debugState.throttleAxis ?? 0),
+    Math.abs(rawThrottle ?? 0),
   );
-
-  if (debugState.reverseLatched) {
-    debugState.gear = -1;
-    debugState.shiftTimer = 0;
-    debugState.clutch = 1;
-    return;
-  }
-
   const ratios = config.gearbox.ratios;
 
   if (ratios.length === 0) {
     debugState.gear = 1;
     debugState.clutch = 1;
+    debugState.engineRpm = idleRpm;
     return;
+  }
+
+  if (debugState.reverseLatched) {
+    debugState.gear = -1;
+    debugState.shiftTimer = 0;
+    debugState.clutch = 1;
+    const reverseTargetRpm = projectEngineRpmFromDriveState(
+      speedForward,
+      -1,
+      config,
+    );
+    debugState.engineRpm = dampToward(
+      debugState.engineRpm ?? idleRpm,
+      Math.max(idleRpm, reverseTargetRpm),
+      7,
+      dt,
+    );
+    debugState.engineRpm = clamp(debugState.engineRpm, idleRpm, rpmCeil);
+    return;
+  }
+
+  if ((debugState.gear ?? 0) <= 0) {
+    debugState.gear = 0;
+  }
+
+  if (
+    speedKph <= 1.2 &&
+    throttleMagnitude < 0.1 &&
+    (debugState.gear ?? 0) > 0 &&
+    (debugState.shiftTimer ?? 0) <= 0
+  ) {
+    debugState.gear = 0;
+    debugState.shiftFromGear = 0;
+    debugState.shiftTargetGear = 0;
+    debugState.clutch = 1;
   }
 
   if ((debugState.shiftTimer ?? 0) > 0) {
@@ -1782,132 +2094,75 @@ function updateGearboxState(debugState, config, speedForward, dt) {
       0.2,
       1,
     );
-
     if (debugState.shiftTimer === 0) {
       debugState.gear = debugState.shiftTargetGear;
       debugState.clutch = 1;
     }
-
-    return;
-  }
-
-  if (
-    speedKph <= 1.5 &&
-    throttleMagnitude < 0.08 &&
-    (debugState.gear ?? 0) > 0
-  ) {
-    debugState.gear = 0;
-    debugState.shiftFromGear = 0;
-    debugState.shiftTargetGear = 0;
-    debugState.clutch = 1;
-    return;
-  }
-
-  if ((debugState.gear ?? 0) === 0) {
-    debugState.clutch = 0.2;
-
+  } else if ((debugState.gear ?? 0) === 0) {
+    debugState.clutch = 0.25;
     if (
-      throttleMagnitude > 0.12 &&
+      throttleMagnitude > 0.08 &&
       speedKph <= 6 &&
       (debugState.engineRpm ?? idleRpm) >= config.engine.launchShiftRpm
     ) {
       startShift(debugState, 1, config, "up");
     }
+  } else {
+    debugState.gear = clamp(debugState.gear, 1, ratios.length);
+    debugState.clutch = 1;
+  }
 
+  const currentGear = debugState.gear ?? 0;
+  const coupledRpm =
+    currentGear !== 0
+      ? projectEngineRpmFromDriveState(speedForward, currentGear, config)
+      : idleRpm +
+        throttleMagnitude * (config.engine.launchTargetRpm - idleRpm);
+  const launchFreeRevRpm =
+    idleRpm + throttleMagnitude * (config.engine.launchTargetRpm - idleRpm);
+  const launchSlipBlend = clamp(
+    inverseLerp(14, 0.6, speedKph),
+    0,
+    1,
+  );
+  const launchRpmTarget =
+    currentGear === 1 && throttleMagnitude > 0.08
+      ? THREE.MathUtils.lerp(coupledRpm, Math.max(coupledRpm, launchFreeRevRpm), launchSlipBlend)
+      : coupledRpm;
+
+  debugState.engineRpm = dampToward(
+    debugState.engineRpm ?? idleRpm,
+    Math.max(idleRpm, launchRpmTarget),
+    8,
+    dt,
+  );
+  debugState.engineRpm = clamp(debugState.engineRpm, idleRpm, rpmCeil);
+
+  if ((debugState.shiftTimer ?? 0) > 0 || currentGear <= 0) {
     return;
   }
 
-  debugState.gear = clamp(debugState.gear <= 0 ? 1 : debugState.gear, 1, ratios.length);
-  debugState.clutch = 1;
-  const currentBand = config.shiftBands[debugState.gear - 1] ?? null;
   const engineRpmNow = debugState.engineRpm ?? idleRpm;
+  const redlineTarget = config.engine.redLineRpm * 0.97;
+  const downshiftThreshold = Math.max(idleRpm * 1.45, config.engine.peakTorqueRpm * 0.57);
 
-  // Guard against "stuck at redline in current gear" behavior:
-  // when driver holds throttle and RPM is near redline, upshift regardless of
-  // speed-band recommendation. This matches expected FO2 auto-box feel where
-  // RPM limit is the dominant shift trigger under acceleration.
   if (
-    throttleMagnitude > 0.35 &&
-    debugState.gear < ratios.length &&
+    currentGear < ratios.length &&
     (debugState.upshiftCooldown ?? 0) <= 0 &&
-    engineRpmNow >= config.engine.redLineRpm * 0.965
+    throttleMagnitude > 0.16 &&
+    engineRpmNow >= redlineTarget
   ) {
-    startShift(debugState, debugState.gear + 1, config, "up");
+    startShift(debugState, currentGear + 1, config, "up");
     return;
   }
 
-  // Safety guard for the "stuck in high gear after coasting" symptom.
-  // Native logic relies on runtime threshold arrays (+0x9c/+0xa0) built by
-  // internal gearbox prep. Until that full prep path is mirrored, enforce a
-  // conservative low-speed downshift when current gear is clearly out-of-band.
   if (
-    currentBand &&
-    debugState.gear > 1 &&
+    currentGear > 1 &&
     (debugState.downshiftCooldown ?? 0) <= 0 &&
-    speedKph < Math.max((currentBand.downshiftKph ?? 0) - 2, 4) &&
-    (throttleMagnitude < 0.2 || speedKph < 28)
+    (engineRpmNow < downshiftThreshold ||
+      speedKph < (config.shiftBands[currentGear - 1]?.downshiftKph ?? 0))
   ) {
-    startShift(debugState, debugState.gear - 1, config, "down");
-    return;
-  }
-
-  let recommendedGear = getRecommendedGearNativeLike(
-    debugState,
-    config,
-    speedForward,
-  );
-  const throttleOpen = (debugState.throttleAxis ?? 0) > 0.18;
-  const currentProjectedRpm = projectEngineRpmFromDriveState(
-    speedForward,
-    debugState.gear,
-    config,
-  );
-  const minDriveRpm = Math.max(
-    config.engine.idleRpm * 1.32,
-    config.engine.peakTorqueRpm * 0.52,
-  );
-
-  // Prevent "stuck in tall gear" behavior after coasting:
-  // if speed/RPM falls below usable drive band, force a lower recommended gear.
-  if ((debugState.gear ?? 0) > 1 && currentProjectedRpm < minDriveRpm) {
-    let kickdownTarget = clamp(debugState.gear, 1, ratios.length);
-
-    while (kickdownTarget > 1) {
-      const lowerGear = kickdownTarget - 1;
-      const lowerProjectedRpm = projectEngineRpmFromDriveState(
-        speedForward,
-        lowerGear,
-        config,
-      );
-
-      kickdownTarget = lowerGear;
-
-      if (lowerProjectedRpm >= minDriveRpm || lowerGear === 1) {
-        break;
-      }
-    }
-
-    recommendedGear = Math.min(recommendedGear, kickdownTarget);
-
-    if (throttleOpen) {
-      // Driver-demand kickdown should not be blocked by stale cooldown.
-      debugState.downshiftCooldown = 0;
-    }
-  }
-
-  if (
-    recommendedGear > debugState.gear &&
-    (debugState.upshiftCooldown ?? 0) <= 0
-  ) {
-    startShift(debugState, recommendedGear, config, "up");
-    return;
-  }
-
-  if (
-    recommendedGear < debugState.gear &&
-    ((debugState.downshiftCooldown ?? 0) <= 0 || throttleOpen)
-  ) {
-    startShift(debugState, recommendedGear, config, "down");
+    startShift(debugState, currentGear - 1, config, "down");
   }
 }
 
@@ -1922,10 +2177,7 @@ function startShift(debugState, nextGear, config, direction = "up") {
     Math.max(config.gearbox.clutchEngageTime, 0.05) +
     Math.max(config.gearbox.clutchReleaseTime, 0.05);
   debugState.clutch = 0.2;
-  const cooldown =
-    direction === "down"
-      ? Math.max(debugState.shiftTimer, 0.35)
-      : Math.max(debugState.shiftTimer, 0.75);
+  const cooldown = Math.max(debugState.shiftTimer + 0.08, 0.1);
   if (direction === "down") {
     debugState.downshiftCooldown = cooldown;
   } else {
@@ -1947,17 +2199,28 @@ function computeEngineDriveForceTotal(debugState, config, throttle) {
     sampleEngineTorque(config.engine, debugState.engineRpm) * throttleMagnitude;
   const gearRatio = getCurrentGearRatio(debugState, config);
   const wheelRadius = averageDrivenWheelRadius(config);
+  const clutchTorqueCap = Math.max(config.gearbox.clutchTorque ?? 280, 120);
+  const transmissionTorque = Math.min(engineTorque, clutchTorqueCap);
   const axleTorque =
-    engineTorque *
+    transmissionTorque *
     gearRatio *
     config.gearbox.endRatio *
     Math.max(debugState.clutch ?? 1, 0.2) *
     (debugState.gear < 0 ? -1 : 1);
   const drivenWheelCount = Math.max(config.drivenWheelCount ?? 2, 1);
+  const speedKph = Math.abs(debugState.speedHorizontal ?? 0) * 3.6;
+  // FO2 drivetrain values do not map 1:1 to Rapier's wheelEngineForce unit.
+  // Apply a calibrated low-speed conversion boost and taper it out with speed.
+  const rapierForceScale = THREE.MathUtils.lerp(
+    2.1,
+    1.0,
+    clamp(speedKph / 120, 0, 1),
+  );
 
   return -(
     ((axleTorque / drivenWheelCount) / Math.max(wheelRadius, 0.1)) *
-    Math.max(config.driveForceScale ?? 1, 0.1)
+    Math.max(config.driveForceScale ?? 1, 0.1) *
+    rapierForceScale
   );
 }
 
@@ -1986,8 +2249,27 @@ function computeDriveForceForWheel(wheel, debugState, config, throttle, isolatio
           THREE.MathUtils.clamp(debugState.handbrakeAxis ?? 0, 0, 1),
         )
       : 1;
+  const speedKph = Math.abs(debugState.speedHorizontal ?? 0) * 3.6;
+  const reverseKinematicLimitKph = rpmToKph(
+    config.engine.redLineRpm * 0.98,
+    Math.abs(config.gearbox.reverseRatio),
+    config.gearbox.endRatio,
+    Math.max(wheel.tireRadius ?? 0.34, 0.1),
+  );
+  const reverseThrottleScale =
+    debugState.gear < 0
+      ? clamp(
+          1 - Math.pow(clamp(speedKph / Math.max(reverseKinematicLimitKph, 1), 0, 1), 3.2),
+          0,
+          1,
+        )
+      : 1;
   const engineTorque =
-    sampleEngineTorque(config.engine, debugState.engineRpm) * throttleMagnitude;
+    sampleEngineTorque(config.engine, debugState.engineRpm) *
+    throttleMagnitude *
+    reverseThrottleScale;
+  const clutchTorqueCap = Math.max(config.gearbox.clutchTorque ?? 280, 120);
+  const transmissionTorque = Math.min(engineTorque, clutchTorqueCap);
   const gearRatio = getCurrentGearRatio(debugState, config);
   const differential = wheel.front
     ? config.differentials.front
@@ -1995,9 +2277,12 @@ function computeDriveForceForWheel(wheel, debugState, config, throttle, isolatio
   const throttleCurveScale = isolation.differentialCurve
     ? sampleCurve(differential?.throttleCurve, throttleMagnitude)
     : 1;
-  // Do not treat throttle curves as a hard torque multiplier in the Rapier port.
-  // Using them directly heavily underpowered front-drive cars versus FO2 behavior.
-  const effectiveThrottleScale = THREE.MathUtils.lerp(1, throttleCurveScale, 0.25);
+  const speedNorm = clamp((Math.abs(debugState.speedHorizontal ?? 0) * 3.6) / 260, 0, 1);
+  const speedCurveScale = isolation.differentialCurve
+    ? sampleCurve(differential?.speedCurve, speedNorm)
+    : 0;
+  const effectiveThrottleScale = clamp(0.4 + throttleCurveScale * 0.6, 0.15, 1.05);
+  const differentialSpeedFactor = clamp(1 - speedCurveScale * 0.35, 0.6, 1.1);
   const clutchScale = clamp(Math.abs(debugState.clutch ?? 1), 0, 1);
   const controlScale = clamp(
     Math.min(
@@ -2011,20 +2296,35 @@ function computeDriveForceForWheel(wheel, debugState, config, throttle, isolatio
   // s = c*0.3 + c^3*0.7 before differential torque split.
   const nonlinearTorqueScale =
     controlScale * 0.3 + controlScale * controlScale * controlScale * 0.7;
-  const maxTorque = pickScalar(differential?.MaxTorque, 5500);
+  // Differential MaxTorque in FO2 data is in drivetrain domain. Apply it before
+  // gear multiplication (same domain as engine/clutch torque), not as wheel-force cap.
+  const differentialTorqueCap = Math.max(pickScalar(differential?.MaxTorque, 5500), 120);
+  const limitedTransmissionTorque = Math.min(
+    transmissionTorque,
+    differentialTorqueCap,
+  );
   const drivenWheelCount = Math.max(config.drivenWheelCount ?? 2, 1);
   const wheelTorque =
-    (engineTorque *
+    (limitedTransmissionTorque *
       gearRatio *
       config.gearbox.endRatio *
+      differentialSpeedFactor *
       nonlinearTorqueScale *
       (debugState.gear < 0 ? -1 : 1) *
       handbrakeDriveScale) /
     drivenWheelCount;
-  const clampedTorque = clamp(wheelTorque, -maxTorque, maxTorque);
   const wheelRadius = Math.max(wheel.tireRadius ?? 0.34, 0.1);
+  // FO2 drivetrain values do not map 1:1 to Rapier's wheelEngineForce unit.
+  // Apply a calibrated low-speed conversion boost and taper it out with speed.
+  const rapierForceScale = THREE.MathUtils.lerp(
+    2.1,
+    1.0,
+    clamp(speedKph / 120, 0, 1),
+  );
   return -(
-    (clampedTorque / wheelRadius) * Math.max(config.driveForceScale ?? 1, 0.1)
+    (wheelTorque / wheelRadius) *
+    Math.max(config.driveForceScale ?? 1, 0.1) *
+    rapierForceScale
   );
 }
 
@@ -2190,6 +2490,35 @@ function averageDrivenWheelLinearSpeed(config) {
   }
 
   return count > 0 ? totalSpeed / count : 0;
+}
+
+function computeAverageLongitudinalSlip(config, speedForward) {
+  let totalSlip = 0;
+  let count = 0;
+  const referenceSpeed = Math.max(Math.abs(speedForward), 0.5);
+
+  for (const wheel of config.wheelLayout) {
+    const driven =
+      (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
+
+    if (!driven) {
+      continue;
+    }
+
+    const wheelLinearSpeed =
+      Math.abs(wheel.angularVelocity ?? 0) * Math.max(wheel.tireRadius ?? 0.34, 0.1);
+    totalSlip += Math.abs(wheelLinearSpeed - Math.abs(speedForward)) / referenceSpeed;
+    count += 1;
+  }
+
+  return count > 0 ? totalSlip / count : 0;
+}
+
+function computeLateralSlip(speedRight, speedHorizontal) {
+  if (!Number.isFinite(speedRight) || !Number.isFinite(speedHorizontal)) {
+    return 0;
+  }
+  return Math.abs(speedRight) / Math.max(speedHorizontal, 0.5);
 }
 
 function averageDrivenWheelRadius(config) {
