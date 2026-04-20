@@ -30,6 +30,7 @@ const TMP_MAT_B = new THREE.Matrix4();
 const ENABLE_STATIC_WORLD_COLLISION = true;
 const ENABLE_DIRECT_DRIVE_DEBUG = false;
 const DB_PROFILE_INDEX = 0;
+const BRAKE_DISTANCE_TARGET_METERS = 450;
 
 export async function createDrivingSimulation({
   carId,
@@ -1230,6 +1231,14 @@ function stepVehicle(
   const speedRight = linvel.dot(TMP_RIGHT);
   const speedHorizontal = horizontalSpeed(linvel);
   const speedKph = speedHorizontal * 3.6;
+  const prevSpeedForward = Number.isFinite(debugState.prevSpeedForward)
+    ? debugState.prevSpeedForward
+    : speedForward;
+  const prevSpeedRight = Number.isFinite(debugState.prevSpeedRight)
+    ? debugState.prevSpeedRight
+    : speedRight;
+  const longitudinalAccel = clamp((speedForward - prevSpeedForward) / FIXED_DT, -45, 45);
+  const lateralAccel = clamp((speedRight - prevSpeedRight) / FIXED_DT, -45, 45);
   const surfaceType = sampleSurfaceType(trackFloorSampler, translation);
   const surfaceDynamics = resolveSurfaceDynamics(config.surfaceDynamics, surfaceType);
   const surfaceGrip = computeSurfaceGrip(surfaceDynamics);
@@ -1308,6 +1317,8 @@ function stepVehicle(
     debugState.speedForward = linvel.dot(TMP_FORWARD);
     debugState.speedRight = linvel.dot(TMP_RIGHT);
     debugState.speedHorizontal = horizontalSpeed(linvel);
+    debugState.prevSpeedForward = debugState.speedForward;
+    debugState.prevSpeedRight = debugState.speedRight;
     return;
   }
 
@@ -1318,12 +1329,74 @@ function stepVehicle(
     config,
     throttle,
   );
+  // Native path (`Vehicle_ComputeBrakeAndHandbrakeWheelTorques`) stages wheel brake
+  // torque from brake/handbrake plus clutch and low-speed steering context.
+  // In Rapier we approximate that staging with dynamic scaling to avoid unrealistically
+  // short high-speed stops and abrupt lock behavior.
+  const clutchBrakeScale = THREE.MathUtils.lerp(
+    0.86,
+    1,
+    clamp(Math.abs(debugState.clutch ?? 1), 0, 1),
+  );
+  const brakeDistanceMeters = BRAKE_DISTANCE_TARGET_METERS;
+  const brakeDistanceScale = computeBrakeDistanceScale(brakeDistanceMeters);
+  const highSpeedBrakeScale = THREE.MathUtils.lerp(
+    0.26,
+    1,
+    Math.pow(clamp(inverseLerp(170, 12, speedKph), 0, 1), 0.96),
+  );
+  const lowSpeedSettleBrakeScale = THREE.MathUtils.lerp(
+    0.62,
+    1,
+    clamp(inverseLerp(3, 28, speedKph), 0, 1),
+  );
+  const lowSpeedSteerBrakeScale = THREE.MathUtils.lerp(
+    1,
+    0.82,
+    clamp(inverseLerp(0, 40, speedKph), 0, 1) * Math.abs(steer),
+  );
+  const slipBrakeScale = THREE.MathUtils.lerp(
+    1,
+    0.72,
+    clamp(
+      (debugState.slipLongAvg ?? 0) * 0.8 + (debugState.slipLatAvg ?? 0) * 0.45,
+      0,
+      1.2,
+    ),
+  );
+  const surfaceBrakeScale = clamp(
+    THREE.MathUtils.lerp(
+      0.84,
+      1.08,
+      clamp(readProfileScalar(surfaceDynamics.SlideControl, 0.6) / 1.2, 0, 1),
+    ) *
+      (1 - clamp(readProfileScalar(surfaceDynamics.UnderSteer, 0), 0, 1.5) * 0.06),
+    0.72,
+    1.1,
+  );
+  const brakeSurfaceGrip = clamp(surfaceGrip, 0.55, 1.04);
+  const brakeCalibration = 0.42;
+  const footBrakeScale =
+    highSpeedBrakeScale *
+    lowSpeedSettleBrakeScale *
+    lowSpeedSteerBrakeScale *
+    clutchBrakeScale *
+    slipBrakeScale *
+    surfaceBrakeScale *
+    brakeCalibration *
+    brakeDistanceScale;
+  const handbrakeScale = THREE.MathUtils.lerp(
+    1,
+    0.7,
+    clamp(inverseLerp(65, 170, speedKph), 0, 1),
+  ) * brakeDistanceScale;
   const frontBrake = isolation.braking
     ? brake *
       config.brakeTorque *
       config.brakeBalance *
       config.brakeTorqueScale *
-      surfaceGrip
+      brakeSurfaceGrip *
+      footBrakeScale
     : 0;
   const rearBrake =
     (isolation.braking
@@ -1331,13 +1404,15 @@ function stepVehicle(
         config.brakeTorque *
         (1 - config.brakeBalance) *
         config.brakeTorqueScale *
-        surfaceGrip
+        brakeSurfaceGrip *
+        footBrakeScale
       : 0) +
     (isolation.handbrake
       ? handbrake *
         config.handBrakeTorque *
         config.handBrakeTorqueScale *
-        surfaceGrip
+        brakeSurfaceGrip *
+        handbrakeScale
       : 0);
   const frontSteerAngles = computeFrontWheelSteerAngles(
     steer,
@@ -1509,6 +1584,46 @@ function stepVehicle(
     };
     chassis.addForce(downforce, true);
   }
+  if (grounded) {
+    const inertiaSpeedScale = THREE.MathUtils.lerp(
+      0.24,
+      0.72,
+      clamp(inverseLerp(10, 150, speedKph), 0, 1),
+    );
+    const comHeight = Math.max(Math.abs(config.centerOfMass.y), 0.08);
+    const rollLeverArm = comHeight * 0.62;
+    const pitchLeverArm = comHeight * 0.78;
+    const inputPitchBiasAccel =
+      (Math.max(throttle, 0) - Math.max(brake, 0) - handbrake * 0.2) *
+      1.7;
+    const effectiveLatAccel = lateralAccel;
+    const effectiveLongAccel = longitudinalAccel + inputPitchBiasAccel;
+    const rollRate = angvel.dot(TMP_FORWARD);
+    const pitchRate = angvel.dot(TMP_RIGHT);
+    const rollTorque = clamp(
+      -effectiveLatAccel * config.massKg * rollLeverArm * 0.32 * inertiaSpeedScale -
+        rollRate * config.massKg * 0.2,
+      -3200,
+      3200,
+    );
+    const pitchTorque = clamp(
+      effectiveLongAccel * config.massKg * pitchLeverArm * 0.4 * inertiaSpeedScale -
+        pitchRate * config.massKg * 0.22,
+      -3600,
+      3600,
+    );
+    if (Math.abs(rollTorque) + Math.abs(pitchTorque) > 5) {
+      TMP_VEC_D.set(0, 0, 0)
+        .addScaledVector(TMP_FORWARD, rollTorque)
+        .addScaledVector(TMP_RIGHT, pitchTorque);
+      chassis.addTorque(vectorFromThree(TMP_VEC_D), true);
+    }
+    debugState.inertiaRollTorque = rollTorque;
+    debugState.inertiaPitchTorque = pitchTorque;
+  } else {
+    debugState.inertiaRollTorque = 0;
+    debugState.inertiaPitchTorque = 0;
+  }
 
   if (isolation.uprightAssist) {
     // Grounded: do not inject any upright torque. Applying corrective torque while
@@ -1529,6 +1644,32 @@ function stepVehicle(
   }
   if (!isolation.gravity) {
     chassis.addForce({ x: 0, y: config.massKg * config.gravity, z: 0 }, true);
+  }
+  if (
+    isolation.braking &&
+    brake > 0.2 &&
+    Math.abs(throttle) < 0.05 &&
+    speedHorizontal < 1.2
+  ) {
+    const settleLinvel = chassis.linvel();
+    const settleFactor = speedHorizontal < 0.35 ? 0 : 0.35;
+    chassis.setLinvel(
+      {
+        x: settleLinvel.x * settleFactor,
+        y: settleLinvel.y,
+        z: settleLinvel.z * settleFactor,
+      },
+      true,
+    );
+    const settleAngvel = chassis.angvel();
+    chassis.setAngvel(
+      {
+        x: settleAngvel.x * 0.35,
+        y: settleAngvel.y * 0.55,
+        z: settleAngvel.z * 0.35,
+      },
+      true,
+    );
   }
 
   const wheelContacts = config.wheelLayout.reduce(
@@ -1581,6 +1722,10 @@ function stepVehicle(
       ? Math.abs(speedForward * speedForward * config.aeroDrag[0]) +
         Math.abs(speedRight * speedRight * config.aeroDrag[1])
       : 0) * surfaceInducedDragScale;
+  debugState.brakeDistanceMeters = brakeDistanceMeters;
+  debugState.brakeDistanceScale = brakeDistanceScale;
+  debugState.prevSpeedForward = speedForward;
+  debugState.prevSpeedRight = speedRight;
 }
 
 function sampleGround(world, chassis, rayLength) {
@@ -1942,6 +2087,8 @@ function createDebugState() {
     slipAngleDeg: 0,
     frontGripScale: 1,
     rearGripScale: 1,
+    inertiaRollTorque: 0,
+    inertiaPitchTorque: 0,
     surfaceType: "tarmac",
     surfaceGrip: 1,
     aeroDragForce: 0,
@@ -2039,6 +2186,21 @@ function inverseLerp(a, b, value) {
   }
 
   return clamp((value - a) / (b - a), 0, 1);
+}
+
+function computeBrakeDistanceScale(targetDistanceMeters) {
+  const target = clamp(targetDistanceMeters, 0, 1000);
+  // 60m is the "neutral" tuning point. Larger target distance weakens brake force
+  // nonlinearly so extreme values (e.g. 1000m) become obviously noticeable.
+  const neutralDistance = 60;
+  if (target <= 1e-3) {
+    return 2.5;
+  }
+  return clamp(
+    Math.pow(neutralDistance / target, 1.22),
+    0.005,
+    2.5,
+  );
 }
 
 function pickScalar(value, fallback) {
@@ -2341,12 +2503,22 @@ function updateGearboxState(debugState, config, speedForward, rawThrottle, dt) {
   const engineRpmNow = debugState.engineRpm ?? idleRpm;
   const redlineTarget = config.engine.redLineRpm * 0.97;
   const downshiftThreshold = Math.max(idleRpm * 1.45, config.engine.peakTorqueRpm * 0.57);
+  const speedBandUpshiftKph = config.shiftBands[currentGear - 1]?.upshiftKph ?? Number.POSITIVE_INFINITY;
 
   if (
     currentGear < ratios.length &&
     (debugState.upshiftCooldown ?? 0) <= 0 &&
     throttleMagnitude > 0.16 &&
     engineRpmNow >= redlineTarget
+  ) {
+    startShift(debugState, currentGear + 1, config, "up");
+    return;
+  }
+  if (
+    currentGear < ratios.length &&
+    (debugState.upshiftCooldown ?? 0) <= 0 &&
+    throttleMagnitude > 0.28 &&
+    speedKph >= speedBandUpshiftKph * 1.02
   ) {
     startShift(debugState, currentGear + 1, config, "up");
     return;
