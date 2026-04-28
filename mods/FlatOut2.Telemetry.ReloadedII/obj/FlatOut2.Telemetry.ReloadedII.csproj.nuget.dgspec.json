@@ -1,0 +1,175 @@
+{
+  "format": 1,
+  "restore": {
+    "D:\\flatout_oss\\mods\\FlatOut2.Telemetry.ReloadedII\\FlatOut2.Telemetry.ReloadedII.csproj": {}
+  },
+  "projects": {
+    "D:\\flatout_oss\\mods\\FlatOut2.Telemetry.ReloadedII\\FlatOut2.Telemetry.ReloadedII.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "D:\\flatout_oss\\mods\\FlatOut2.Telemetry.ReloadedII\\FlatOut2.Telemetry.ReloadedII.csproj",
+        "projectName": "FlatOut2.Telemetry.ReloadedII",
+        "projectPath": "D:\\flatout_oss\\mods\\FlatOut2.Telemetry.ReloadedII\\FlatOut2.Telemetry.ReloadedII.csproj",
+        "packagesPath": "D:\\flatout_oss\\.dotnet_cli\\.nuget\\packages\\",
+        "outputPath": "D:\\flatout_oss\\mods\\FlatOut2.Telemetry.ReloadedII\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\just me\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0-windows"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0-windows7.0": {
+            "targetAlias": "net8.0-windows",
+            "projectReferences": {
+              "D:\\flatout_oss\\reference\\FlatOut2.SDK-main\\FlatOut2.SDK\\FlatOut2.SDK.csproj": {
+                "projectPath": "D:\\flatout_oss\\reference\\FlatOut2.SDK-main\\FlatOut2.SDK\\FlatOut2.SDK.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0-windows7.0": {
+          "targetAlias": "net8.0-windows",
+          "dependencies": {
+            "Reloaded.Mod.Interfaces": {
+              "include": "Compile, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "target": "Package",
+              "version": "[2.4.0, )"
+            },
+            "Reloaded.SharedLib.Hooks": {
+              "target": "Package",
+              "version": "[1.9.0, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.420/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "D:\\flatout_oss\\reference\\FlatOut2.SDK-main\\FlatOut2.SDK\\FlatOut2.SDK.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "D:\\flatout_oss\\reference\\FlatOut2.SDK-main\\FlatOut2.SDK\\FlatOut2.SDK.csproj",
+        "projectName": "FlatOut2.SDK",
+        "projectPath": "D:\\flatout_oss\\reference\\FlatOut2.SDK-main\\FlatOut2.SDK\\FlatOut2.SDK.csproj",
+        "packagesPath": "D:\\flatout_oss\\.dotnet_cli\\.nuget\\packages\\",
+        "outputPath": "D:\\flatout_oss\\reference\\FlatOut2.SDK-main\\FlatOut2.SDK\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\just me\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net7.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net7.0": {
+            "targetAlias": "net7.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net7.0": {
+          "targetAlias": "net7.0",
+          "dependencies": {
+            "Microsoft.NET.ILLink.Analyzers": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[7.0.100-1.23401.1, )",
+              "autoReferenced": true
+            },
+            "Microsoft.NET.ILLink.Tasks": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[7.0.100-1.23401.1, )",
+              "autoReferenced": true
+            },
+            "Reloaded.Hooks.Definitions": {
+              "target": "Package",
+              "version": "[1.11.0, )"
+            },
+            "Reloaded.Memory": {
+              "target": "Package",
+              "version": "[9.3.2, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[7.0.20, 7.0.20]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[7.0.20, 7.0.20]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[7.0.20, 7.0.20]"
+            }
+          ],
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.420\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

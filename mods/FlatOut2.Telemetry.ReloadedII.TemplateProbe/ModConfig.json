@@ -1,0 +1,21 @@
+{
+  "ModId": "FlatOut2.Telemetry.ReloadedII.TemplateProbe",
+  "ModName": "FlatOut 2 Telemetry Probe",
+  "ModAuthor": "Codex",
+  "ModVersion": "1.0.0",
+  "ModDescription": "Description",
+  "ModDll": "FlatOut2.Telemetry.ReloadedII.TemplateProbe.dll",
+  "ModIcon": "Preview.png",
+  "ModR2RManagedDll32": "x86/FlatOut2.Telemetry.ReloadedII.TemplateProbe.dll",
+  "ModR2RManagedDll64": "x64/FlatOut2.Telemetry.ReloadedII.TemplateProbe.dll",
+  "ModNativeDll32": "",
+  "ModNativeDll64": "",
+  "IsLibrary": false,
+  "ReleaseMetadataFileName": "FlatOut2.Telemetry.ReloadedII.TemplateProbe.ReleaseMetadata.json",
+  "PluginData": {},
+  "IsUniversalMod": false,
+  "ModDependencies": [ "reloaded.sharedlib.hooks" ],
+  "OptionalDependencies": [],
+  "SupportedAppId": [],
+  "ProjectUrl": ""
+}

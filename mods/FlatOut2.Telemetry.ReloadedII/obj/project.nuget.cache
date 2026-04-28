@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "0Zs/1dzd6oc=",
+  "success": true,
+  "projectFilePath": "D:\\flatout_oss\\mods\\FlatOut2.Telemetry.ReloadedII\\FlatOut2.Telemetry.ReloadedII.csproj",
+  "expectedPackageFiles": [
+    "D:\\flatout_oss\\.dotnet_cli\\.nuget\\packages\\reloaded.hooks.definitions\\1.11.0\\reloaded.hooks.definitions.1.11.0.nupkg.sha512",
+    "D:\\flatout_oss\\.dotnet_cli\\.nuget\\packages\\reloaded.memory\\9.3.2\\reloaded.memory.9.3.2.nupkg.sha512",
+    "D:\\flatout_oss\\.dotnet_cli\\.nuget\\packages\\reloaded.mod.interfaces\\2.4.0\\reloaded.mod.interfaces.2.4.0.nupkg.sha512",
+    "D:\\flatout_oss\\.dotnet_cli\\.nuget\\packages\\reloaded.sharedlib.hooks\\1.9.0\\reloaded.sharedlib.hooks.1.9.0.nupkg.sha512"
+  ],
+  "logs": []
+}

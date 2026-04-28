@@ -10,6 +10,7 @@ export function createHud(
     onSkinChange,
     cameraDebug = null,
     runtimeDebug = null,
+    telemetryRecorder = null,
   },
   container = document.body,
 ) {
@@ -148,6 +149,42 @@ export function createHud(
     .name("Speed")
     .listen();
   setReadonlyController(speedController);
+  if (telemetryRecorder) {
+    const recorderFolder = telemetryFolder.addFolder("Recorder");
+    setReadonlyController(
+      recorderFolder
+        .add(telemetryRecorder.state, "status")
+        .name("Status")
+        .listen(),
+    );
+    setReadonlyController(
+      recorderFolder
+        .add(telemetryRecorder.state, "sampleCount")
+        .name("Samples")
+        .listen(),
+    );
+    setReadonlyController(
+      recorderFolder
+        .add(telemetryRecorder.state, "filename")
+        .name("File")
+        .listen(),
+    );
+    setReadonlyController(
+      recorderFolder
+        .add(telemetryRecorder.state, "simAttached")
+        .name("Sim attached")
+        .listen(),
+    );
+    setReadonlyController(
+      recorderFolder
+        .add(telemetryRecorder.state, "simLiveFrames")
+        .name("Sim live frames")
+        .listen(),
+    );
+    recorderFolder.add(telemetryRecorder, "record").name("Record");
+    recorderFolder.add(telemetryRecorder, "stop").name("Stop + download");
+    recorderFolder.add(telemetryRecorder, "discard").name("Discard");
+  }
 
   if (runtimeDebug) {
     runtimeFolder.add(runtimeDebug, "paused").name("Paused").listen();

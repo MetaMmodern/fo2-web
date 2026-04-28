@@ -125,6 +125,7 @@ Source of truth notes:
 - `FUN_0042c650` @ `0x0042c650` — Main vehicle simulation entry traced here; clears step accumulators, resolves wheel contact state, then runs 100 fixed `0.01` substeps.
 - `FUN_00429640` @ `0x00429640` — Chassis/drag/steering propagation stage within each vehicle substep.
 - `FUN_00429be0` @ `0x00429be0` — Main wheel/tire force and yaw-torque accumulation stage within each substep.
+  - Confirmed 2026-04-26 telemetry anchors: per-wheel runtime blocks start at `vehicle + 0x0a00` with stride `0x03a0`; contact flag is `wheel + 0x334`, contact pointer is `wheel + 0x348`, and the validated vertical-load/unload proxy is `wheel + 0x330`.
 - `FUN_00441ae0` @ `0x00441ae0` — Wheel steer-angle clamp stage after car-level steer input is computed.
   - Confirmed 2026-04-14: applies a second rack-side dynamic steer cap from live vehicle/runtime fields at `+0x300/+0x304/+0x370/+0x374`; final wheel steer is not determined by player input shaping alone.
 - `FUN_00441f10` @ `0x00441f10` — Auto gear-selection helper based on projected forward speed and runtime threshold arrays at gearbox `+0x9c/+0xa0`; includes explicit reverse/neutral/launch cases.
@@ -177,6 +178,23 @@ Source of truth notes:
 - `SpeedLimit` is currently only confirmed in `Car_ReadHandling` and `SetCarStats`, not in the traced runtime simulation path, so do not assume it is an in-race hard speed cap.
 - The native game distinguishes floor/body/ray/camera collision concepts; those should not be collapsed into one generic mesh-contact rule in the long term.
 
+### Track / Dynamic-Object collision anchors
+
+- `DynamicObject_InitializeFromLua` @ `0x00590fd0` — Data-driven dynamic object bootstrap; reads `Mass`, `Restitution`, `CollisionSound`, `WakeupVelocity`, `ReactivationVelocity`, `DamageThreshold`, `AeroDragForce`, `BonusType`, `Category`, `Inertia`, `ExplosionForce`, `DestroyFx`, `EmitterFx`, and optional `RotateX/Y/Z`.
+- `DynamicObject_InstantiateLinkedProxyByName` @ `0x00597320` — Instantiates linked runtime proxy/effect objects from the global object-template table and links them under the parent dynamic object.
+- `DynamicObject_RegisterIntoEnvironmentActivationLists` @ `0x00565c40` — Registers dynamic objects into environment activation bookkeeping.
+- `DynamicObject_RegisterIntoEnvironmentLiveSet` @ `0x00565d50` — Registers dynamic objects into the environment live-set / linked-list bookkeeping when they transition live.
+- `StuntWorld_InitializeDynamicPropsAndRagdollMap` @ `0x004839b0` — Separate stunt-prop bootstrap and name-map path; confirms prop-side runtime state is not folded into static track collision.
+- `"%sgeometry/track_bvh.gen"` @ `0x0067bcdc` — Stable string anchor for authored static-track BVH content.
+- `"geometry/track_cdb2.gen"` @ `0x0067bca8` — Stable string anchor for authored collision-side companion data.
+- `"%sgeometry/track_geom.w32"` @ `0x0067cef0` — Stable string anchor for authored track geometry content.
+
+### Track / Dynamic-Object practical implications
+
+- The shipped track content is split across authored geometry (`track_geom.w32`) and authored collision-side files (`track_bvh.gen`, `track_cdb2.gen`); this is not a single undifferentiated render mesh path.
+- Dynamic roadside props are a separate runtime subsystem with activation-list and live-set bookkeeping, not just extra triangles appended to the static collision world.
+- Porting implication: do not eagerly instantiate the full authored prop roster as globally live physics objects at load time on heavy tracks like City; that collapses a staged native lifecycle into an always-live runtime cost.
+
 ---
 
 ## Camera System
@@ -201,6 +219,16 @@ Source of truth notes:
 - `CameraManager_RegisterStuntTrackerConfig` @ `0x004db660` — Registers `Data.Camera.StuntCameraTracker`.
 - `CameraManager_RegisterGoalCameraConfig` @ `0x004d9100` — Registers `Data.Camera.GoalCameraBasketball`, `GoalCameraTargets`, and `GoalCameraLocations`.
 - `CameraManager_RegisterGoalCameraDelayConfig` @ `0x0047e120` — Registers `Data.Camera.GoalCameraDelay`.
+
+### Live runtime pointers
+
+- `g_pCameraManager_008e8424` @ `0x008e8424` — Confirmed live gameplay camera-manager global. `UpdateCamera` advances tracker state through this root, and race render/audio code resolves active view cameras from its entry array at `manager+0x4`.
+- `RenderRace` @ `0x00479200` — Pulls the live race camera from the manager entry list. For the first local view it reads `*(int *)(*(int *)g_pCameraManager_008e8424->field1_0x4 + 4) + 0x20`, then passes that camera-node block into race rendering and audio-listener setup.
+- `FUN_004721c0` @ `0x004721c0` — Race audio/listener helper that reads the same active camera-node block as `RenderRace`; confirms camera forward at `cameraNode+0x60` and position at `cameraNode+0x70`.
+- Active race camera family is recoverable from the manager entry's `+0x4` tracker-object vtable. Confirmed family signatures: car `PTR_LAB_006743d8`, fixed-head `PTR_GoalCameraClipOwnerE_Destructor_00674098`, stunt `PTR_GoalCameraClipFrameInterval_Destructor_006748cc`, goal `PTR_LAB_006744e4`, crash `JMPTABLE_CrashCameraTracker_00674340`.
+- `GoalCameraTracker_GoalViewCamera_Update` @ `0x004d9840` confirms runtime camera object fields: `+0x10` active profile/script object, `+0x14` player, `+0x18` source camera node, `+0x1c` target camera node, `+0x20` owned output camera node, `+0x351` dirty/update flag, `+0x360` runtime seconds, `+0x370` active clip instance.
+- `GoalCameraTracker_GoalViewCamera_SelectActiveClip` @ `0x004d9a60` selects active profiles from area-specific manager lists or from the player camera profile pointer list at `player+0x10..player+0x14`, then stores the chosen profile at `this+0x10`.
+- `GoalCameraTracker_GoalViewCamera_InstantiateActiveClip` @ `0x004d9cf0` calls the active profile vtable `+0x10` constructor, stores the created clip at `this+0x370`, and applies it into `this+0x20` using source/target nodes from `this+0x18/+0x1c`.
 
 ### Key strings / config keys
 

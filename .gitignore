@@ -3,6 +3,8 @@ node_modules
 .parcel-cache
 dist
 .DS_Store
+._*
 *.log
 reference/**
 src/data/database/flatout2.db extracted/**
+.dotnet_cli

@@ -34,6 +34,7 @@ import {
   createSceneApp,
   loadVehicleCameraConfig,
 } from "./game/scene";
+import { createTelemetryRecorder } from "./game/telemetryRecorder";
 import { loadTrack, placeVehicleOnTrack } from "./game/track";
 import { loadVehicle } from "./game/vehicle";
 
@@ -103,12 +104,25 @@ const runtimeDebug = {
     setRenderGeometryVisibility(runtimeDebug.renderGeometryVisible);
   },
 };
+const selection = { ...defaultSelection };
+const telemetryRecorder = createTelemetryRecorder({
+  getContext: () => ({
+    camera,
+    input: drivingInput,
+    runtimeDebug,
+    sceneState,
+    selection,
+    track: getTrackById(selection.trackId),
+    car: getCarById(selection.carId),
+  }),
+});
 const hud = createHud({
   tracks: trackCatalog,
   cars: carCatalog,
-  selection: { ...defaultSelection },
+  selection: { ...selection },
   cameraDebug,
   runtimeDebug,
+  telemetryRecorder,
   onTrackChange(trackId) {
     applySelection({ trackId });
   },
@@ -129,7 +143,6 @@ let colorFilterPass = createColorFilterPass(renderer, {
 });
 colorFilterPass.applyWeatherProfile(initialTrack.environment.weatherProfile);
 
-const selection = { ...defaultSelection };
 const sceneState = {
   trackRoot: null,
   collisionAsset: null,
@@ -252,6 +265,9 @@ if (typeof window !== "undefined") {
     get frameTrace() {
       return frameTrace;
     },
+    get telemetryRecorder() {
+      return telemetryRecorder;
+    },
     showCollisionDebug(show = true) {
       setCollisionFrameVisibility(show);
     },
@@ -324,6 +340,21 @@ function animate() {
     worldDebug: formatWorldDebug(
       sceneState.drivingSimulation?.getDebugState?.() ?? null,
     ),
+  });
+  telemetryRecorder.capture({
+    debugState: sceneState.drivingSimulation?.getDebugState?.() ?? null,
+    inputSnapshot: drivingInput.snapshot(),
+    inputVersion: drivingInput.version,
+    deltaSeconds,
+    measuredDeltaSeconds,
+    simMs,
+    chaseMs,
+    environmentMs,
+    sunMs,
+    lightsMs,
+    controlsMs,
+    renderMs,
+    totalMs,
   });
   recordFrameTrace({
     deltaSeconds,

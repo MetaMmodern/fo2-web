@@ -1,0 +1,13 @@
+{
+  "ModId": "flatout2.telemetry.runtime",
+  "ModName": "FlatOut 2 Telemetry",
+  "ModAuthor": "YOUR_NAME",
+  "ModVersion": "0.1.0",
+  "ModDescription": "Runtime telemetry logger for FlatOut 2 using Reloaded-II and FlatOut2.SDK.",
+  "SupportedAppId": [
+    "flatout2"
+  ],
+  "ModDependencies": [
+    "reloaded.sharedlib.hooks"
+  ]
+}

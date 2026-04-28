@@ -1,0 +1,101 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "FlatOut2.Telemetry.ReloadedII/1.0.0": {
+        "dependencies": {
+          "FlatOut2.SDK": "1.0.0",
+          "Reloaded.Mod.Interfaces": "2.4.0",
+          "Reloaded.SharedLib.Hooks": "1.9.0"
+        },
+        "runtime": {
+          "FlatOut2.Telemetry.ReloadedII.dll": {}
+        }
+      },
+      "Reloaded.Hooks.Definitions/1.11.0": {
+        "runtime": {
+          "lib/net6.0/Reloaded.Hooks.Definitions.dll": {
+            "assemblyVersion": "1.11.0.0",
+            "fileVersion": "1.11.0.0"
+          }
+        }
+      },
+      "Reloaded.Memory/9.3.2": {
+        "runtime": {
+          "lib/net8.0/Reloaded.Memory.dll": {
+            "assemblyVersion": "9.3.2.0",
+            "fileVersion": "9.3.2.0"
+          }
+        }
+      },
+      "Reloaded.Mod.Interfaces/2.4.0": {},
+      "Reloaded.SharedLib.Hooks/1.9.0": {
+        "dependencies": {
+          "Reloaded.Hooks.Definitions": "1.11.0"
+        },
+        "runtime": {
+          "lib/netstandard2.0/Reloaded.Hooks.ReloadedII.Interfaces.dll": {
+            "assemblyVersion": "1.9.0.0",
+            "fileVersion": "1.9.0.0"
+          }
+        }
+      },
+      "FlatOut2.SDK/1.0.0": {
+        "dependencies": {
+          "Reloaded.Hooks.Definitions": "1.11.0",
+          "Reloaded.Memory": "9.3.2"
+        },
+        "runtime": {
+          "FlatOut2.SDK.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "FlatOut2.Telemetry.ReloadedII/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Reloaded.Hooks.Definitions/1.11.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-/z0AwcCvVTQHlQ9SMMMBqKEIrm5t/yBFPylySW2Rnr7uRGV9jGfoACFe79KZKF976dhtkyy2xl0HIXz5hRUkng==",
+      "path": "reloaded.hooks.definitions/1.11.0",
+      "hashPath": "reloaded.hooks.definitions.1.11.0.nupkg.sha512"
+    },
+    "Reloaded.Memory/9.3.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-WF4AAzzvLqYzIhoWsILfB10A+blkQZ9VyQ/OYYxsUsYxxUj7lzYbcLpMQQ1ONnCdWHlIbFWO4Cq1DmKvWdP23g==",
+      "path": "reloaded.memory/9.3.2",
+      "hashPath": "reloaded.memory.9.3.2.nupkg.sha512"
+    },
+    "Reloaded.Mod.Interfaces/2.4.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-HKQu7M0MyToKU4NK5Ula29MXSNeHz01ZzMK9BWD+xqJCITemAPdMW+w60Swln3ceGCU/ZooFSKtn4I8rcSA9AQ==",
+      "path": "reloaded.mod.interfaces/2.4.0",
+      "hashPath": "reloaded.mod.interfaces.2.4.0.nupkg.sha512"
+    },
+    "Reloaded.SharedLib.Hooks/1.9.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-AEDTDhCnYxJGuLrdZCZPoiqrdl/lW4XwA6bb5dntOvkyw4RBBm/gqoNlHS7RJS7k+kt36ES+UFZAtBeyusYtgw==",
+      "path": "reloaded.sharedlib.hooks/1.9.0",
+      "hashPath": "reloaded.sharedlib.hooks.1.9.0.nupkg.sha512"
+    },
+    "FlatOut2.SDK/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

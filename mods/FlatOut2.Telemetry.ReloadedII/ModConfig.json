@@ -1,0 +1,25 @@
+{
+  "ModId": "flatout2.telemetry.runtime",
+  "ModName": "FlatOut 2 Telemetry",
+  "ModAuthor": "Codex",
+  "ModVersion": "0.1.0",
+  "ModDescription": "Runtime telemetry logger for FlatOut 2 using Reloaded-II and FlatOut2.SDK.",
+  "ModDll": "FlatOut2.Telemetry.ReloadedII.dll",
+  "ModIcon": "",
+  "ModR2RManagedDll32": "",
+  "ModR2RManagedDll64": "",
+  "ModNativeDll32": "",
+  "ModNativeDll64": "",
+  "IsLibrary": false,
+  "ReleaseMetadataFileName": "FlatOut2.Telemetry.ReloadedII.ReleaseMetadata.json",
+  "PluginData": {},
+  "IsUniversalMod": false,
+  "ModDependencies": [
+    "reloaded.sharedlib.hooks"
+  ],
+  "OptionalDependencies": [],
+  "SupportedAppId": [
+    "flatout2"
+  ],
+  "ProjectUrl": ""
+}

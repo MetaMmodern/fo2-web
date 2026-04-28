@@ -9,7 +9,10 @@
     "analyze:vegetation": "node tools/analyze-track-vegetation.js",
     "db:extract": "node tools/flatout2-db-tool.js extract src/data/database/flatout2.db",
     "db:inspect": "node tools/flatout2-db-tool.js inspect src/data/database/flatout2.db",
-    "physics:bench": "node tools/rapier-parity-bench.mjs"
+    "physics:bench": "node tools/rapier-parity-bench.mjs",
+    "physics:tilt": "node tools/rapier-tilt-repro.mjs",
+    "telemetry:headless": "node tools/telemetry-headless-run.mjs",
+    "telemetry:compare": "node tools/telemetry-drift-twitch-report.mjs"
   },
   "keywords": [],
   "author": "",

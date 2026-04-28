@@ -46,6 +46,8 @@ const CHASE_TILT_BLEND = 0.3;
 const CAMERA_COLLISION_BUFFER = 1;
 const MIN_CAMERA_COLLISION_DISTANCE = 0.05;
 const MIN_CAMERA_TARGET_DISTANCE = 0.5;
+const CAMERA_PARITY_CHASE_DISTANCE_SCALE = 1.22;
+const CAMERA_PARITY_CHASE_HEIGHT_OFFSET = 0.32;
 
 export function createSceneApp(container = document.body) {
   const scene = new THREE.Scene();
@@ -754,6 +756,8 @@ function resolveRecoveredChasePose(
       TMP_VECTOR_F.z * desiredPosition.y +
       TMP_VECTOR_C.z * -desiredPosition.z,
   );
+  desiredPosition.multiplyScalar(CAMERA_PARITY_CHASE_DISTANCE_SCALE);
+  desiredPosition.y += CAMERA_PARITY_CHASE_HEIGHT_OFFSET;
 
   if (debugSettings.enableDynamics) {
     desiredPosition.applyAxisAngle(
