@@ -36,10 +36,38 @@ public sealed class Mod : ModBase
     private const int VehicleControlCandidate1DfcOffset = 0x1DFC;
     private const int VehicleAppliedHandbrakeOffset = 0x1E00;
     private const int VehicleAppliedSteerOffset = 0x1E04;
+    private const int VehicleCandidate1De8Offset = 0x1DE8;
+    private const int VehicleCandidate1DecOffset = 0x1DEC;
+    private const int VehicleCandidate1Df0Offset = 0x1DF0;
+    private const int VehicleCandidate1E08Offset = 0x1E08;
+    private const int VehicleCandidate1E0COffset = 0x1E0C;
+    private const int VehicleCandidate1E10Offset = 0x1E10;
+    private const int VehicleCandidate1E14Offset = 0x1E14;
+    private const int VehicleCandidate1E18Offset = 0x1E18;
+    private const int VehicleCandidate1E1COffset = 0x1E1C;
+    private const int VehicleCandidate1E20Offset = 0x1E20;
+    private const int VehicleCandidate1E24Offset = 0x1E24;
+    private const int VehicleCandidate1E28Offset = 0x1E28;
     private const int VehicleFrameDeltaMsOffset = 0x6AD8;
     private const int VehicleFrameDeltaSecondsOffset = 0x6ADC;
+    private const int VehicleGearAppliedOffset = 0x634;
+    private const int VehicleGearRequestedOffset = 0x63C;
+    private const int VehicleNumGearsOffset = 0x64C;
+    private const int VehicleGearShiftStateOffset = 0x638;
+    private const int VehicleGearShiftSyncCandidateOffset = 0x6B0;
+    private const int VehicleGearShiftStateCandidateModeOffset = 0x6B4;
+    private const int VehicleEngineRpmLikeOffset = 0x5D8;
+    private const int VehicleDrivenSpeedScaleOffset = 0x648;
+    private const int VehicleAutoShiftSpeedThresholdOffset = 0x6E4;
+    private const int VehicleGearNode0PtrOffset = 0x0380;
+    private const int VehicleGearNode1PtrOffset = 0x0488;
+    private const int VehicleGearNode2PtrOffset = 0x0590;
+    private const int VehicleWheelRateAggregateCandidateOffset = 0x03A4;
     private const int WheelRuntimeBaseOffset = 0x0A00;
     private const int WheelRuntimeStride = 0x03A0;
+    private const int WheelRateDenominatorConfirmedOffset = 0x030C;
+    private const int WheelRateFromDrivetrainConfirmedOffset = 0x031C;
+    private const int WheelBrakeTorqueConfirmedOffset = 0x0320;
     private const int WheelRotationOrPhaseCandidateOffset = 0x032C;
     private const int WheelContactFlagOffset = 0x0334;
     private const int WheelVerticalLoadCandidateOffset = 0x0330;
@@ -47,11 +75,36 @@ public sealed class Mod : ModBase
     private const int WheelSuspensionLengthCandidateOffset = 0x0084;
     private const int WheelTireForceMultiplierCandidateOffset = 0x0378;
     private const int WheelLoadOrSpinCandidateOffset = 0x0388;
+    private const int WheelCandidate0320Offset = 0x0320;
+    private const int WheelCandidate0324Offset = 0x0324;
+    private const int WheelCandidate0328Offset = 0x0328;
+    private const int WheelCandidate0338Offset = 0x0338;
+    private const int WheelCandidate033COffset = 0x033C;
+    private const int WheelCandidate0340Offset = 0x0340;
+    private const int WheelCandidate0344Offset = 0x0344;
+    private const int WheelCandidate036COffset = 0x036C;
+    private const int WheelCandidate0370Offset = 0x0370;
+    private const int WheelCandidate0374Offset = 0x0374;
+    private const int WheelCandidate037COffset = 0x037C;
+    private const int WheelCandidate0380Offset = 0x0380;
+    private const int WheelCandidate0384Offset = 0x0384;
+    private const int WheelCandidate038COffset = 0x038C;
+    private const int WheelCandidate0390Offset = 0x0390;
+    private const int WheelCandidate0394Offset = 0x0394;
+    private const int WheelCandidate0398Offset = 0x0398;
+    private const int WheelCandidate039COffset = 0x039C;
+    private const int WheelCandidate03A0Offset = 0x03A0;
+    private const int WheelCandidate03A4Offset = 0x03A4;
     private const int ContactSurface44Offset = 0x44;
     private const int ContactSurface48Offset = 0x48;
     private const int ContactSurface4COffset = 0x4C;
     private const int ContactSurface50Offset = 0x50;
     private const int ContactSurface54Offset = 0x54;
+    private static readonly int[] WheelAngularProbeOffsets =
+    {
+        0x0300, 0x0304, 0x0308, 0x030C, 0x0310, 0x0314, 0x0318, 0x031C, 0x0320, 0x0324, 0x0328, 0x032C,
+        0x0330, 0x0334, 0x0338, 0x033C, 0x0340, 0x0344, 0x0348, 0x034C, 0x0350, 0x0354, 0x0358, 0x035C
+    };
     private const uint CarCameraTrackerVtable = 0x006743D8;
     private const uint FixedHeadCameraTrackerVtable = 0x00674098;
     private const uint StuntCameraTrackerVtable = 0x006748CC;
@@ -78,6 +131,12 @@ public sealed class Mod : ModBase
     private volatile bool _isDisposing;
     private volatile bool _samplingSuspended;
     private int _raceEntrySampleCountdown = 0;
+    private readonly float[] _prevWheelSuspensionLength = new float[4];
+    private readonly float[] _prevWheelLoadOrSpin = new float[4];
+    private readonly float[] _prevWheelVerticalLoad = new float[4];
+    private readonly float[] _prevWheelPhase = new float[4];
+    private bool _hasPrevWheelFrame = false;
+    private bool _hasPrevWheelPhaseFrame = false;
 
     public Mod(ModContext context)
     {
@@ -225,6 +284,19 @@ public sealed class Mod : ModBase
         float vehicleFrameDeltaSeconds = 0.0f;
         float speedMagnitude = 0.0f;
         float planarSpeedMagnitude = 0.0f;
+        float origSpeedForward = 0.0f;
+        float origEngineRpmCandidate = 0.0f;
+        float origGearCandidate = 0.0f;
+        float origClutchCandidate = 0.0f;
+        int origGearAppliedConfirmed = 0;
+        int origGearRequestedConfirmed = 0;
+        int origGearShiftStateConfirmed = 0;
+        float origGearShiftStateCandidateSyncFlag = 0.0f;
+        float origGearShiftStateCandidateModeFlag = 0.0f;
+        int origNumGearsConfirmed = 0;
+        float origEngineRpmLikeConfirmed = 0.0f;
+        float origDrivenSpeedScaleConfirmed = 0.0f;
+        float origAutoShiftSpeedThresholdConfirmed = 0.0f;
         float yawRadians = 0.0f;
         float yawDegrees = 0.0f;
         float pitchRadians = 0.0f;
@@ -284,7 +356,15 @@ public sealed class Mod : ModBase
         var wheelTireForceMultiplierCandidates = new float[4];
         var wheelLoadOrSpinCandidates = new float[4];
         var wheelRotationOrPhaseCandidates = new float[4];
+        var wheelOmegaFromPhaseRadPerSec = new float[4];
+        var wheelOmegaFromPhaseRpm = new float[4];
         var wheelVerticalLoadCandidates = new float[4];
+        var wheelKinematicsConfirmed = new float[16];
+        var wheelAngularVelocityProbeCandidates = new float[96];
+        var drivetrainRateProbeCandidates = new float[13];
+        var vehicleCandidateFloats = new float[12];
+        var wheelExtendedCandidates = new float[64];
+        var wheelDerivedCandidates = new float[12];
         TryReadLocalPlayerInputs(ref playerSteer, ref playerThrottle, ref playerBrake);
         TryReadVehicleMotion(
             ref positionX,
@@ -336,7 +416,45 @@ public sealed class Mod : ModBase
             wheelTireForceMultiplierCandidates,
             wheelLoadOrSpinCandidates,
             wheelRotationOrPhaseCandidates,
-            wheelVerticalLoadCandidates);
+            wheelVerticalLoadCandidates,
+            wheelKinematicsConfirmed,
+            wheelAngularVelocityProbeCandidates,
+            drivetrainRateProbeCandidates,
+            vehicleCandidateFloats,
+            wheelExtendedCandidates);
+        ComputeWheelDerivedCandidates(
+            vehicleFrameDeltaSeconds,
+            wheelSuspensionLengthCandidates,
+            wheelLoadOrSpinCandidates,
+            wheelVerticalLoadCandidates,
+            wheelDerivedCandidates);
+        ComputeWheelPhaseOmegaCandidates(
+            vehicleFrameDeltaSeconds,
+            wheelRotationOrPhaseCandidates,
+            wheelOmegaFromPhaseRadPerSec,
+            wheelOmegaFromPhaseRpm);
+        origSpeedForward =
+            (velocityX * forwardX) +
+            (velocityY * forwardY) +
+            (velocityZ * forwardZ);
+        if (vehicleCandidateFloats.Length >= 11)
+        {
+            // Provisional candidates retained for continuity while confirmed
+            // gearbox fields below are validated against runtime behavior.
+            origEngineRpmCandidate = vehicleCandidateFloats[10];
+            origGearCandidate = vehicleCandidateFloats[7];
+            origClutchCandidate = vehicleCandidateFloats[3];
+        }
+        TryReadConfirmedDrivetrainFields(
+            ref origGearAppliedConfirmed,
+            ref origGearRequestedConfirmed,
+            ref origGearShiftStateConfirmed,
+            ref origGearShiftStateCandidateSyncFlag,
+            ref origGearShiftStateCandidateModeFlag,
+            ref origNumGearsConfirmed,
+            ref origEngineRpmLikeConfirmed,
+            ref origDrivenSpeedScaleConfirmed,
+            ref origAutoShiftSpeedThresholdConfirmed);
         TryReadRaceCamera(
             ref cameraPositionX,
             ref cameraPositionY,
@@ -418,6 +536,19 @@ public sealed class Mod : ModBase
             VehicleFrameDeltaSeconds: vehicleFrameDeltaSeconds,
             SpeedMagnitude: speedMagnitude,
             PlanarSpeedMagnitude: planarSpeedMagnitude,
+            OrigSpeedForward: origSpeedForward,
+            OrigEngineRpmCandidate: origEngineRpmCandidate,
+            OrigGearCandidate: origGearCandidate,
+            OrigClutchCandidate: origClutchCandidate,
+            OrigGearAppliedConfirmed: origGearAppliedConfirmed,
+            OrigGearRequestedConfirmed: origGearRequestedConfirmed,
+            OrigGearShiftStateConfirmed: origGearShiftStateConfirmed,
+            OrigGearShiftStateCandidateSyncFlag: origGearShiftStateCandidateSyncFlag,
+            OrigGearShiftStateCandidateModeFlag: origGearShiftStateCandidateModeFlag,
+            OrigNumGearsConfirmed: origNumGearsConfirmed,
+            OrigEngineRpmLikeConfirmed: origEngineRpmLikeConfirmed,
+            OrigDrivenSpeedScaleConfirmed: origDrivenSpeedScaleConfirmed,
+            OrigAutoShiftSpeedThresholdConfirmed: origAutoShiftSpeedThresholdConfirmed,
             YawRadians: yawRadians,
             YawDegrees: yawDegrees,
             PitchRadians: pitchRadians,
@@ -478,7 +609,58 @@ public sealed class Mod : ModBase
             WheelTireForceMultiplierCandidates: wheelTireForceMultiplierCandidates,
             WheelLoadOrSpinCandidates: wheelLoadOrSpinCandidates,
             WheelRotationOrPhaseCandidates: wheelRotationOrPhaseCandidates,
-            WheelVerticalLoadCandidates: wheelVerticalLoadCandidates);
+            WheelOmegaFromPhaseRadPerSec: wheelOmegaFromPhaseRadPerSec,
+            WheelOmegaFromPhaseRpm: wheelOmegaFromPhaseRpm,
+            WheelVerticalLoadCandidates: wheelVerticalLoadCandidates,
+            WheelKinematicsConfirmed: wheelKinematicsConfirmed,
+            WheelAngularVelocityProbeCandidates: wheelAngularVelocityProbeCandidates,
+            DrivetrainRateProbeCandidates: drivetrainRateProbeCandidates,
+            VehicleCandidateFloats: vehicleCandidateFloats,
+            WheelExtendedCandidates: wheelExtendedCandidates,
+            WheelDerivedCandidates: wheelDerivedCandidates);
+    }
+
+    private unsafe void TryReadConfirmedDrivetrainFields(
+        ref int gearApplied,
+        ref int gearRequested,
+        ref int gearShiftState,
+        ref float gearShiftSyncFlagCandidate,
+        ref float gearShiftModeFlagCandidate,
+        ref int numGears,
+        ref float engineRpmLike,
+        ref float drivenSpeedScale,
+        ref float autoShiftSpeedThreshold)
+    {
+        try
+        {
+            var raceInfoPtr = RaceInfo.Instance;
+            if (raceInfoPtr == null)
+                return;
+
+            var raceInfo = *raceInfoPtr;
+            if (raceInfo == null || raceInfo->HostObject == null || raceInfo->HostObject->LocalPlayer == null)
+                return;
+
+            var localPlayer = *raceInfo->HostObject->LocalPlayer;
+            if (localPlayer == null || localPlayer->Car == null)
+                return;
+
+            var vehicle = (Car*)localPlayer->Car;
+            var vehicleBase = (byte*)vehicle;
+            gearApplied = *(int*)(vehicleBase + VehicleGearAppliedOffset);
+            gearRequested = *(int*)(vehicleBase + VehicleGearRequestedOffset);
+            gearShiftState = *(int*)(vehicleBase + VehicleGearShiftStateOffset);
+            gearShiftSyncFlagCandidate = *(float*)(vehicleBase + VehicleGearShiftSyncCandidateOffset);
+            gearShiftModeFlagCandidate = *(float*)(vehicleBase + VehicleGearShiftStateCandidateModeOffset);
+            numGears = *(int*)(vehicleBase + VehicleNumGearsOffset);
+            engineRpmLike = *(float*)(vehicleBase + VehicleEngineRpmLikeOffset);
+            drivenSpeedScale = *(float*)(vehicleBase + VehicleDrivenSpeedScaleOffset);
+            autoShiftSpeedThreshold = *(float*)(vehicleBase + VehicleAutoShiftSpeedThresholdOffset);
+        }
+        catch (Exception ex)
+        {
+            SafeStatus($"Drivetrain read failure: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private unsafe void TryReadLocalPlayerInputs(ref float steer, ref float throttle, ref float brake)
@@ -565,7 +747,12 @@ public sealed class Mod : ModBase
         float[] wheelTireForceMultiplierCandidates,
         float[] wheelLoadOrSpinCandidates,
         float[] wheelRotationOrPhaseCandidates,
-        float[] wheelVerticalLoadCandidates)
+        float[] wheelVerticalLoadCandidates,
+        float[] wheelKinematicsConfirmed,
+        float[] wheelAngularVelocityProbeCandidates,
+        float[] drivetrainRateProbeCandidates,
+        float[] vehicleCandidateFloats,
+        float[] wheelExtendedCandidates)
     {
         try
         {
@@ -614,6 +801,18 @@ public sealed class Mod : ModBase
             vehicleAppliedSteer = *(float*)(vehicleBase + VehicleAppliedSteerOffset);
             vehicleFrameDeltaMs = *(int*)(vehicleBase + VehicleFrameDeltaMsOffset);
             vehicleFrameDeltaSeconds = *(float*)(vehicleBase + VehicleFrameDeltaSecondsOffset);
+            vehicleCandidateFloats[0] = *(float*)(vehicleBase + VehicleCandidate1De8Offset);
+            vehicleCandidateFloats[1] = *(float*)(vehicleBase + VehicleCandidate1DecOffset);
+            vehicleCandidateFloats[2] = *(float*)(vehicleBase + VehicleCandidate1Df0Offset);
+            vehicleCandidateFloats[3] = *(float*)(vehicleBase + VehicleCandidate1E08Offset);
+            vehicleCandidateFloats[4] = *(float*)(vehicleBase + VehicleCandidate1E0COffset);
+            vehicleCandidateFloats[5] = *(float*)(vehicleBase + VehicleCandidate1E10Offset);
+            vehicleCandidateFloats[6] = *(float*)(vehicleBase + VehicleCandidate1E14Offset);
+            vehicleCandidateFloats[7] = *(float*)(vehicleBase + VehicleCandidate1E18Offset);
+            vehicleCandidateFloats[8] = *(float*)(vehicleBase + VehicleCandidate1E1COffset);
+            vehicleCandidateFloats[9] = *(float*)(vehicleBase + VehicleCandidate1E20Offset);
+            vehicleCandidateFloats[10] = *(float*)(vehicleBase + VehicleCandidate1E24Offset);
+            vehicleCandidateFloats[11] = *(float*)(vehicleBase + VehicleCandidate1E28Offset);
 
             speedMagnitude = MathF.Sqrt(
                 (velocityX * velocityX) +
@@ -650,7 +849,12 @@ public sealed class Mod : ModBase
                 wheelTireForceMultiplierCandidates,
                 wheelLoadOrSpinCandidates,
                 wheelRotationOrPhaseCandidates,
-                wheelVerticalLoadCandidates);
+            wheelVerticalLoadCandidates,
+            wheelKinematicsConfirmed,
+            wheelAngularVelocityProbeCandidates,
+            wheelExtendedCandidates);
+
+            TryReadDrivetrainRateProbes((byte*)vehicle, drivetrainRateProbeCandidates);
         }
         catch (Exception ex)
         {
@@ -918,7 +1122,10 @@ public sealed class Mod : ModBase
         float[] tireForceMultiplierCandidates,
         float[] loadOrSpinCandidates,
         float[] rotationOrPhaseCandidates,
-        float[] verticalLoadCandidates)
+        float[] verticalLoadCandidates,
+        float[] wheelKinematicsConfirmed,
+        float[] wheelAngularVelocityProbeCandidates,
+        float[] wheelExtendedCandidates)
     {
         if (vehicle == null)
             return;
@@ -926,7 +1133,7 @@ public sealed class Mod : ModBase
         for (var i = 0; i < 4; i++)
         {
             var wheel = vehicle + WheelRuntimeBaseOffset + (i * WheelRuntimeStride);
-            if (!IsReadable(wheel, WheelLoadOrSpinCandidateOffset + sizeof(float)))
+            if (!IsReadable(wheel, WheelCandidate03A4Offset + sizeof(float)))
                 continue;
 
             contactFlags[i] = *(int*)(wheel + WheelContactFlagOffset);
@@ -937,6 +1144,33 @@ public sealed class Mod : ModBase
             loadOrSpinCandidates[i] = *(float*)(wheel + WheelLoadOrSpinCandidateOffset);
             rotationOrPhaseCandidates[i] = *(float*)(wheel + WheelRotationOrPhaseCandidateOffset);
             verticalLoadCandidates[i] = *(float*)(wheel + WheelVerticalLoadCandidateOffset);
+            var kinematicsBaseIndex = i * 4;
+            wheelKinematicsConfirmed[kinematicsBaseIndex + 0] = *(float*)(wheel + WheelRateDenominatorConfirmedOffset);
+            wheelKinematicsConfirmed[kinematicsBaseIndex + 1] = *(float*)(wheel + WheelRateFromDrivetrainConfirmedOffset);
+            wheelKinematicsConfirmed[kinematicsBaseIndex + 2] = *(float*)(wheel + WheelBrakeTorqueConfirmedOffset);
+            wheelKinematicsConfirmed[kinematicsBaseIndex + 3] = *(float*)(wheel + WheelRotationOrPhaseCandidateOffset);
+            var probeBaseIndex = i * WheelAngularProbeOffsets.Length;
+            for (var probe = 0; probe < WheelAngularProbeOffsets.Length; probe++)
+            {
+                wheelAngularVelocityProbeCandidates[probeBaseIndex + probe] = *(float*)(wheel + WheelAngularProbeOffsets[probe]);
+            }
+            var baseIndex = i * 16;
+            wheelExtendedCandidates[baseIndex + 0] = *(float*)(wheel + WheelCandidate0320Offset);
+            wheelExtendedCandidates[baseIndex + 1] = *(float*)(wheel + WheelCandidate0324Offset);
+            wheelExtendedCandidates[baseIndex + 2] = *(float*)(wheel + WheelCandidate0328Offset);
+            wheelExtendedCandidates[baseIndex + 3] = *(float*)(wheel + WheelCandidate0338Offset);
+            wheelExtendedCandidates[baseIndex + 4] = *(float*)(wheel + WheelCandidate0344Offset);
+            wheelExtendedCandidates[baseIndex + 5] = *(float*)(wheel + WheelCandidate036COffset);
+            wheelExtendedCandidates[baseIndex + 6] = *(float*)(wheel + WheelCandidate0370Offset);
+            wheelExtendedCandidates[baseIndex + 7] = *(float*)(wheel + WheelCandidate0374Offset);
+            wheelExtendedCandidates[baseIndex + 8] = *(float*)(wheel + WheelCandidate037COffset);
+            wheelExtendedCandidates[baseIndex + 9] = *(float*)(wheel + WheelCandidate0380Offset);
+            wheelExtendedCandidates[baseIndex + 10] = *(float*)(wheel + WheelCandidate0384Offset);
+            wheelExtendedCandidates[baseIndex + 11] = *(float*)(wheel + WheelCandidate038COffset);
+            wheelExtendedCandidates[baseIndex + 12] = *(float*)(wheel + WheelCandidate0390Offset);
+            wheelExtendedCandidates[baseIndex + 13] = *(float*)(wheel + WheelCandidate0394Offset);
+            wheelExtendedCandidates[baseIndex + 14] = *(float*)(wheel + WheelCandidate0398Offset);
+            wheelExtendedCandidates[baseIndex + 15] = *(float*)(wheel + WheelCandidate039COffset);
 
             if (!IsReadable(contactPtr, ContactSurface54Offset + sizeof(float)))
                 continue;
@@ -947,6 +1181,116 @@ public sealed class Mod : ModBase
             contactSurface50Candidates[i] = *(float*)(contactPtr + ContactSurface50Offset);
             contactSurface54Candidates[i] = *(float*)(contactPtr + ContactSurface54Offset);
         }
+    }
+
+    private unsafe void TryReadDrivetrainRateProbes(byte* vehicle, float[] drivetrainRateProbeCandidates)
+    {
+        if (vehicle == null || drivetrainRateProbeCandidates == null || drivetrainRateProbeCandidates.Length < 13)
+            return;
+
+        var node0 = *(byte**)(vehicle + VehicleGearNode0PtrOffset);
+        var node1 = *(byte**)(vehicle + VehicleGearNode1PtrOffset);
+        var node2 = *(byte**)(vehicle + VehicleGearNode2PtrOffset);
+
+        drivetrainRateProbeCandidates[0] = node0 != null ? (uint)node0 : 0.0f;
+        drivetrainRateProbeCandidates[1] = node1 != null ? (uint)node1 : 0.0f;
+        drivetrainRateProbeCandidates[2] = node2 != null ? (uint)node2 : 0.0f;
+        drivetrainRateProbeCandidates[3] = *(float*)(vehicle + VehicleWheelRateAggregateCandidateOffset);
+
+        drivetrainRateProbeCandidates[4] = ReadNodeFloat(node0, 0x2C);
+        drivetrainRateProbeCandidates[5] = ReadNodeFloat(node1, 0x2C);
+        drivetrainRateProbeCandidates[6] = ReadNodeFloat(node2, 0x2C);
+        drivetrainRateProbeCandidates[7] = ReadNodeFloat(node0, 0x38);
+        drivetrainRateProbeCandidates[8] = ReadNodeFloat(node1, 0x38);
+        drivetrainRateProbeCandidates[9] = ReadNodeFloat(node2, 0x38);
+        drivetrainRateProbeCandidates[10] = ReadNodeFloat(node0, 0x3C);
+        drivetrainRateProbeCandidates[11] = ReadNodeFloat(node1, 0x3C);
+        drivetrainRateProbeCandidates[12] = ReadNodeFloat(node2, 0x3C);
+    }
+
+    private static unsafe float ReadNodeFloat(byte* node, int offset)
+    {
+        if (!IsReadable(node, offset + sizeof(float)))
+            return 0.0f;
+
+        return *(float*)(node + offset);
+    }
+
+    private void ComputeWheelDerivedCandidates(
+        float vehicleFrameDeltaSeconds,
+        float[] suspensionLengthCandidates,
+        float[] loadOrSpinCandidates,
+        float[] verticalLoadCandidates,
+        float[] wheelDerivedCandidates)
+    {
+        if (wheelDerivedCandidates == null || wheelDerivedCandidates.Length < 12)
+            return;
+
+        var dt = vehicleFrameDeltaSeconds > 1e-5f ? vehicleFrameDeltaSeconds : 0.01f;
+        for (var i = 0; i < 4; i++)
+        {
+            var baseIndex = i * 3;
+            if (_hasPrevWheelFrame)
+            {
+                wheelDerivedCandidates[baseIndex + 0] = (suspensionLengthCandidates[i] - _prevWheelSuspensionLength[i]) / dt;
+                wheelDerivedCandidates[baseIndex + 1] = (loadOrSpinCandidates[i] - _prevWheelLoadOrSpin[i]) / dt;
+                wheelDerivedCandidates[baseIndex + 2] = (verticalLoadCandidates[i] - _prevWheelVerticalLoad[i]) / dt;
+            }
+            else
+            {
+                wheelDerivedCandidates[baseIndex + 0] = 0.0f;
+                wheelDerivedCandidates[baseIndex + 1] = 0.0f;
+                wheelDerivedCandidates[baseIndex + 2] = 0.0f;
+            }
+
+            _prevWheelSuspensionLength[i] = suspensionLengthCandidates[i];
+            _prevWheelLoadOrSpin[i] = loadOrSpinCandidates[i];
+            _prevWheelVerticalLoad[i] = verticalLoadCandidates[i];
+        }
+
+        _hasPrevWheelFrame = true;
+    }
+
+    private void ComputeWheelPhaseOmegaCandidates(
+        float vehicleFrameDeltaSeconds,
+        float[] wheelRotationOrPhaseCandidates,
+        float[] wheelOmegaFromPhaseRadPerSec,
+        float[] wheelOmegaFromPhaseRpm)
+    {
+        if (wheelRotationOrPhaseCandidates == null ||
+            wheelOmegaFromPhaseRadPerSec == null ||
+            wheelOmegaFromPhaseRpm == null ||
+            wheelRotationOrPhaseCandidates.Length < 4 ||
+            wheelOmegaFromPhaseRadPerSec.Length < 4 ||
+            wheelOmegaFromPhaseRpm.Length < 4)
+            return;
+
+        var dt = vehicleFrameDeltaSeconds > 1e-5f ? vehicleFrameDeltaSeconds : 0.01f;
+        const float twoPi = 2.0f * MathF.PI;
+        const float radPerSecToRpm = 60.0f / (2.0f * MathF.PI);
+
+        for (var i = 0; i < 4; i++)
+        {
+            var phase = wheelRotationOrPhaseCandidates[i];
+            var omega = 0.0f;
+
+            if (_hasPrevWheelPhaseFrame)
+            {
+                var delta = phase - _prevWheelPhase[i];
+                if (delta > MathF.PI)
+                    delta -= twoPi;
+                else if (delta < -MathF.PI)
+                    delta += twoPi;
+
+                omega = delta / dt;
+            }
+
+            wheelOmegaFromPhaseRadPerSec[i] = omega;
+            wheelOmegaFromPhaseRpm[i] = omega * radPerSecToRpm;
+            _prevWheelPhase[i] = phase;
+        }
+
+        _hasPrevWheelPhaseFrame = true;
     }
 
     private static unsafe string ReadVtableString(byte* instance)

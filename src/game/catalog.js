@@ -61,7 +61,7 @@ const legacyTireTextureIds = [
   "tire_011",
   "tire_016",
 ];
-const startupCar = carCatalog.find((car) => car.id === "car_1") ?? carCatalog[0] ?? null;
+const startupCar = carCatalog.find((car) => car.id === "car_16") ?? carCatalog[0] ?? null;
 const startupTrack =
   trackCatalog.find((track) => track.id === "webtest") ??
   trackCatalog.find((track) => track.id === "garagetest/garagetest1/a") ??

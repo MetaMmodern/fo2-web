@@ -202,3 +202,50 @@ CSV `phase1_basic.20260426-101810.csv` validated this final pass:
 Implementation implication: Phase 4 is sufficient for comparison logging. Keep
 the remaining wheel fields stable unless a future port-comparison session shows
 a specific missing signal.
+
+## Angular-Velocity Mapping Follow-up (2026-05-01)
+
+Goal: recover a reliable original-game wheel angular velocity signal for
+slip/burnout parity checks.
+
+### Confirmed from decompilation
+
+- `Drivetrain_UpdateWheelRatesAndAutoShift` @ `0x004414f0` writes:
+  - `wheel + 0x31c = param_1 / (wheel + 0x30c)` for all 4 wheels
+  - aggregate wheel-rate-like value at `vehicle + 0x3a4` (`unaff_EBX[0xe9]`)
+    sourced either from gear-node `+0x2c` values or a single node path.
+- `GearNode_AccumulateAngularVelocityAndTorque` @ `0x004416b0` accumulates
+  child-node values into `node + 0x38` and `node + 0x3c`, with scale from
+  `node + 0x20`.
+- `Vehicle_ComputeBrakeAndHandbrakeWheelTorques` @ `0x0042c540` writes
+  per-wheel brake torque to `wheel + 0x320`.
+- `wheel + 0x32c` remains a strong per-wheel rotational phase carrier in live
+  telemetry (continuous wrap-like evolution, clear rear lock signature under
+  handbrake).
+
+### Runtime validation result (straight accel -> handbrake, no steering)
+
+CSV: `phase1_basic.20260501-165934.csv`
+
+- `wheel_i_brake_torque_confirmed_0320`:
+  - front wheels cap around `2000`
+  - rear wheels rise up to `6000` during handbrake
+- `wheel_i_omega_or_phase_candidate_032c`:
+  - rear-wheel phase delta collapses sharply during handbrake lock window
+  - front-wheel phase delta remains high while vehicle is still moving
+- `wheel_i_rate_from_drivetrain_confirmed_031c`:
+  - observed flat `0` in this capture (not usable as direct always-live wheel
+    omega in this path/session)
+
+### Implementation update in telemetry mod
+
+To avoid blind guessing, the logger now captures:
+
+- per-wheel dense probe window `wheel + 0x300..0x35c` (step `+0x4`)
+- drivetrain-node probes tied to the exact decomp path:
+  - vehicle pointers at `+0x380/+0x488/+0x590`
+  - aggregate at `vehicle + 0x3a4`
+  - per-node candidates at `+0x2c/+0x38/+0x3c`
+
+This pass is intended to identify whether FO2 stores a standalone wheel omega
+field or reconstructs effective wheel rate from mixed phase/drivetrain state.

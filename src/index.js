@@ -57,6 +57,7 @@ const drivingDebug = {
 const initialTrack = getTrackById(defaultSelection.trackId);
 const cameraDebug = {
   enableDynamics: true,
+  enableThreeQuarterView: true,
   headingResponseScale: 1,
   positionResponseScale: 1,
   lookResponseScale: 1,
@@ -177,8 +178,17 @@ if (typeof window !== "undefined") {
     renderer,
     controls,
     drivingDebug,
+    input: drivingInput,
+    runtimeDebug,
+    selection,
     get chaseCamera() {
       return sceneState.chaseCamera;
+    },
+    get sceneState() {
+      return sceneState;
+    },
+    get drivingSimulation() {
+      return sceneState.drivingSimulation;
     },
     setDrivingPerfMode(mode) {
       if (mode === "off") {
@@ -267,6 +277,65 @@ if (typeof window !== "undefined") {
     },
     get telemetryRecorder() {
       return telemetryRecorder;
+    },
+    async runSlipSanityCheck() {
+      if (!drivingInput?.debugPress || !sceneState.drivingSimulation?.getDebugState) {
+        return null;
+      }
+
+      const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+      const samples = [];
+      const capture = (label) => {
+        const row = telemetryRecorder.state.lastRow;
+        const debugState = sceneState.drivingSimulation?.getDebugState?.();
+        const sample = {
+          label,
+          t: row?.race_time_seconds ?? null,
+          speedForward: row?.web_speed_forward ?? debugState?.speedForward ?? null,
+          slipLongAvg: row?.web_slip_long_avg ?? debugState?.slipLongAvg ?? null,
+          slipLatAvg: row?.web_slip_lat_avg ?? debugState?.slipLatAvg ?? null,
+          wheel0Slip: row?.web_wheel_0_slip_ratio ?? debugState?.wheels?.[0]?.slipRatio ?? null,
+          wheel2Slip: row?.web_wheel_2_slip_ratio ?? debugState?.wheels?.[2]?.slipRatio ?? null,
+          gear: row?.web_gear ?? debugState?.gear ?? null,
+          steerState: row?.web_steer_state ?? debugState?.steerState ?? null,
+          launchSlipTimer: debugState?.launchSlipTimer ?? null,
+          driftRecoveryTimer: debugState?.driftRecoveryTimer ?? null,
+        };
+        samples.push(sample);
+        return sample;
+      };
+
+      drivingInput.debugClear();
+      drivingInput.debugPress("KeyR");
+      await wait(80);
+      drivingInput.debugRelease("KeyR");
+      await wait(150);
+      telemetryRecorder.discard();
+      telemetryRecorder.record();
+      await wait(50);
+
+      drivingInput.debugPress("KeyW");
+      for (const mark of [100, 200, 300, 500, 800, 1200]) {
+        await wait(mark - (samples.length ? [100, 200, 300, 500, 800, 1200][samples.length - 1] : 0));
+        capture(`launch_${mark}`);
+      }
+
+      drivingInput.debugPress("ArrowLeft");
+      await wait(400);
+      capture("steer_400");
+      drivingInput.debugRelease("ArrowLeft");
+
+      await wait(100);
+      capture("release_100");
+      await wait(150);
+      capture("release_250");
+      await wait(200);
+      capture("release_450");
+
+      drivingInput.debugRelease("KeyW");
+      telemetryRecorder.stop();
+      console.table(samples);
+      return samples;
     },
     showCollisionDebug(show = true) {
       setCollisionFrameVisibility(show);

@@ -31,12 +31,13 @@ const ENABLE_STATIC_WORLD_COLLISION = true;
 const ENABLE_DIRECT_DRIVE_DEBUG = false;
 const DB_PROFILE_INDEX = 0;
 const BRAKE_DISTANCE_TARGET_METERS = 450;
-const DRIVE_FORCE_SCALE_LOW_SPEED = 2.55;
-const DRIVE_FORCE_SCALE_HIGH_SPEED = 1.16;
+const DRIVE_FORCE_SCALE_LOW_SPEED = 1.35;
+const DRIVE_FORCE_SCALE_HIGH_SPEED = 0.82;
 const AERO_DRAG_TUNING_SCALE = 0.68;
 const LATERAL_DRAG_TUNING_SCALE = 0.82;
-const HANDBRAKE_BRAKE_TUNING_SCALE = 0.73;
+const HANDBRAKE_BRAKE_TUNING_SCALE = 0.12;
 const STEER_SLIDE_LOSS_TUNING_SCALE = 0.72;
+const COAST_IDLE_BRAKE_TUNING_SCALE = 0.12;
 const BODY_ROLL_TORQUE_SCALE = 0;
 const BODY_PITCH_TORQUE_SCALE = 0;
 const CHASSIS_GROUND_CLEARANCE = 0.12;
@@ -139,6 +140,7 @@ export async function createDrivingSimulation({
       updateCameraState(cameraState, chassis, carRoot);
       updateDebugState(debugState, chassis, config);
       updateWheelVisuals(config, chassis, vehicleController, debugState, dt, carRoot);
+      syncDebugWheelSlipAggregates(debugState);
     },
     speedKph() {
       return horizontalSpeed(rapierVectorToThree(chassis.linvel(), TMP_VEC)) * 3.6;
@@ -1257,24 +1259,50 @@ function stepVehicle(
 
   const wantsReverse =
     rawBrake > 0.1 && rawThrottle < 0.1 && Math.abs(speedForwardNow) < 1.75;
+  const wantsReverseCounterSlip =
+    rawBrake > 0.45 &&
+    rawThrottle < 0.08 &&
+    speedForwardNow > 0.65 &&
+    speedForwardNow < 5.5 &&
+    rawHandbrake < 0.2;
 
   if (rawThrottle > 0.1) {
     debugState.reverseLatched = false;
-  } else if (wantsReverse) {
+  } else if (wantsReverse || wantsReverseCounterSlip) {
     debugState.reverseLatched = true;
   }
+  const forwardCounterSlipDemand =
+    rawThrottle > 0.28 && speedForwardNow < -0.65 && rawHandbrake < 0.15;
+  const backwardCounterSlipDemand =
+    rawBrake > 0.35 && speedForwardNow > 0.65 && rawHandbrake < 0.15;
 
+  const preLatchReverseSpinTarget = backwardCounterSlipDemand
+    ? -rawBrake *
+      clamp(inverseLerp(20, 0.65, speedForwardNow), 0, 1) *
+      clamp(inverseLerp(0.35, 1, rawBrake), 0, 1)
+    : 0;
+  const throttleAxisTarget = debugState.reverseLatched
+    ? -rawBrake
+    : backwardCounterSlipDemand
+      ? Math.min(rawThrottle, preLatchReverseSpinTarget)
+      : rawThrottle;
   debugState.throttleAxis = moveToward(
     debugState.throttleAxis ?? 0,
-    debugState.reverseLatched ? -rawBrake : rawThrottle,
+    throttleAxisTarget,
     FIXED_DT *
       (debugState.reverseLatched
         ? 7.5
+        : forwardCounterSlipDemand
+          ? 30
+        : backwardCounterSlipDemand
+          ? 24
         : (debugState.throttleAxis ?? 0) < 0 && rawThrottle > 0.2
-          ? 16
-          : rawThrottle > 0.65
-            ? 9
-            : 3.6),
+          ? 18
+        : rawThrottle < 0.08
+          ? 12
+        : rawThrottle > 0.65
+          ? 9
+        : 3.6),
   );
   debugState.brakeAxis = moveToward(
     debugState.brakeAxis ?? 0,
@@ -1286,6 +1314,18 @@ function stepVehicle(
     rawHandbrake,
     FIXED_DT * 10,
   );
+  const priorSpeedKph =
+    Math.abs(debugState.speedHorizontal ?? speedHorizontalNow(speedForwardNow, chassis)) * 3.6;
+  const priorDriftRecoveryDemand =
+    rawHandbrake > 0.08 ||
+    (Math.abs(debugState.steerState ?? rawSteer) > 0.22 && priorSpeedKph > 26) ||
+    (Math.abs(debugState.speedRight ?? 0) > 1.15 && priorSpeedKph > 18) ||
+    (Math.abs(debugState.slipLatAvg ?? 0) > 0.11 && priorSpeedKph > 18);
+  if (priorDriftRecoveryDemand) {
+    debugState.driftRecoveryTimer = 0.55;
+  } else {
+    debugState.driftRecoveryTimer = Math.max((debugState.driftRecoveryTimer ?? 0) - FIXED_DT, 0);
+  }
   updateSteeringState(
     debugState,
     config,
@@ -1308,19 +1348,44 @@ function stepVehicle(
 
   const linvel = rapierVectorToThree(chassis.linvel(), TMP_VEC);
   const angvel = rapierVectorToThree(chassis.angvel(), TMP_VEC_B);
+  const yawRateRadBody = angvel.y;
   const speedForward = linvel.dot(TMP_FORWARD);
   const speedRight = linvel.dot(TMP_RIGHT);
   const speedHorizontal = horizontalSpeed(linvel);
   const speedKph = speedHorizontal * 3.6;
+  const speedLongKph = Math.abs(speedForward) * 3.6;
   const throttleAxisNow = debugState.throttleAxis ?? 0;
   const prevThrottleAxis = debugState.prevThrottleAxis ?? 0;
-  const throttleLaunchEdge = throttleAxisNow > 0.35 && prevThrottleAxis <= 0.12;
+  const throttleLaunchEdge =
+    rawThrottle > 0.65 &&
+    speedLongKph < 14 &&
+    prevThrottleAxis <= 0.12 &&
+    throttleAxisNow > prevThrottleAxis;
   const directionFlipDemand =
-    throttleAxisNow > 0.2 && speedForward < -0.9 && handbrake < 0.15;
-  if ((throttleLaunchEdge && speedKph < 14) || directionFlipDemand) {
-    debugState.launchSlipTimer = 0.45;
+    (throttleAxisNow > 0.18 || rawThrottle > 0.28) && speedForward < -0.65 && handbrake < 0.15;
+  const oppositeDirectionDemand = directionFlipDemand || backwardCounterSlipDemand;
+  if (directionFlipDemand) {
+    debugState.counterSlipDemand = clamp(
+      inverseLerp(0.28, 1, rawThrottle) * inverseLerp(-0.65, -12, speedForward),
+      0,
+      1,
+    );
+    debugState.counterSlipDirection = -1;
+  } else if (backwardCounterSlipDemand) {
+    debugState.counterSlipDemand = clamp(
+      inverseLerp(0.35, 1, rawBrake) * inverseLerp(0.65, 16, speedForward),
+      0,
+      1,
+    );
+    debugState.counterSlipDirection = 1;
   } else {
-    debugState.launchSlipTimer = Math.max((debugState.launchSlipTimer ?? 0) - FIXED_DT, 0);
+    debugState.counterSlipDemand = 0;
+    debugState.counterSlipDirection = 0;
+  }
+  if (throttleLaunchEdge || oppositeDirectionDemand) {
+    debugState.launchSlipTimer = 0.22;
+  } else {
+    debugState.launchSlipTimer = Math.max((debugState.launchSlipTimer ?? 0) - FIXED_DT * 5.2, 0);
   }
   debugState.prevThrottleAxis = throttleAxisNow;
   const prevSpeedForward = Number.isFinite(debugState.prevSpeedForward)
@@ -1331,6 +1396,18 @@ function stepVehicle(
     : speedRight;
   const longitudinalAccel = clamp((speedForward - prevSpeedForward) / FIXED_DT, -45, 45);
   const lateralAccel = clamp((speedRight - prevSpeedRight) / FIXED_DT, -45, 45);
+  debugState.longitudinalAccelFiltered = dampToward(
+    debugState.longitudinalAccelFiltered ?? longitudinalAccel,
+    longitudinalAccel,
+    6.5,
+    FIXED_DT,
+  );
+  debugState.lateralAccelFiltered = dampToward(
+    debugState.lateralAccelFiltered ?? lateralAccel,
+    lateralAccel,
+    7.2,
+    FIXED_DT,
+  );
   const surfaceType = sampleSurfaceType(trackFloorSampler, translation);
   const surfaceDynamics = resolveSurfaceDynamics(config.surfaceDynamics, surfaceType);
   const surfaceGrip = computeSurfaceGrip(surfaceDynamics);
@@ -1478,18 +1555,52 @@ function stepVehicle(
     surfaceBrakeScale *
     brakeCalibration *
     brakeDistanceScale;
-  const handbrakeScale = THREE.MathUtils.lerp(
-    1,
-    0.7,
-    clamp(inverseLerp(65, 170, speedKph), 0, 1),
-  ) * brakeDistanceScale;
+  const handbrakeScale = brakeDistanceScale;
+  const idleRpm = Math.max(config.engine.idleRpm ?? 1000, 700);
+  const coastIdleBrakeDemand =
+    isolation.braking &&
+    Math.abs(throttle) < 0.06 &&
+    brake < 0.05 &&
+    handbrake < 0.05 &&
+    (debugState.counterSlipDirection ?? 0) === 0 &&
+    (debugState.gear ?? 0) > 0
+      ? clamp(
+          inverseLerp(10, 1.2, speedLongKph) *
+            inverseLerp(idleRpm * 1.4, idleRpm * 1.02, debugState.engineRpm ?? idleRpm),
+          0,
+          1,
+        )
+      : 0;
+  const coastCruiseBrakeDemand =
+    isolation.braking &&
+    Math.abs(throttle) < 0.05 &&
+    brake < 0.05 &&
+    handbrake < 0.05 &&
+    (debugState.counterSlipDirection ?? 0) === 0 &&
+    (debugState.gear ?? 0) > 0
+      ? clamp(inverseLerp(90, 10, speedLongKph), 0, 1)
+      : 0;
+  const coastCruiseBrakeTorque =
+    coastCruiseBrakeDemand *
+    config.brakeTorque *
+    config.brakeTorqueScale *
+    brakeSurfaceGrip *
+    0.022;
+  const coastIdleBrakeTorque =
+    coastIdleBrakeDemand *
+    config.brakeTorque *
+    config.brakeTorqueScale *
+    brakeSurfaceGrip *
+    COAST_IDLE_BRAKE_TUNING_SCALE;
   const frontBrake = isolation.braking
     ? brake *
       config.brakeTorque *
       config.brakeBalance *
       config.brakeTorqueScale *
       brakeSurfaceGrip *
-      footBrakeScale
+      footBrakeScale +
+      coastCruiseBrakeTorque * 0.56 +
+      coastIdleBrakeTorque * 0.62
     : 0;
   const rearBrake =
     (isolation.braking
@@ -1500,6 +1611,8 @@ function stepVehicle(
         brakeSurfaceGrip *
         footBrakeScale
       : 0) +
+    coastCruiseBrakeTorque * 0.44 +
+    coastIdleBrakeTorque * 0.38 +
     (isolation.handbrake
       ? handbrake *
         config.handBrakeTorque *
@@ -1508,11 +1621,13 @@ function stepVehicle(
         handbrakeScale *
         HANDBRAKE_BRAKE_TUNING_SCALE
       : 0);
+  const effectiveSteer = steer;
   const frontSteerAngles = computeFrontWheelSteerAngles(
-    steer,
+    effectiveSteer,
     config,
     debugState.steerSpeedKph ?? speedKph,
   );
+  const effectiveSteerAbs = Math.abs(effectiveSteer);
   debugState.steerLeftDeg = THREE.MathUtils.radToDeg(frontSteerAngles.left);
   debugState.steerRightDeg = THREE.MathUtils.radToDeg(frontSteerAngles.right);
   const steerAbs = Math.abs(steer);
@@ -1560,22 +1675,50 @@ function stepVehicle(
   let rearSlideLoss =
     baseSlideLoss * (0.9 - highSpeedSlip * 0.25 - surfaceAntiSpin * 0.22);
   const lowSpeedDonutDemand =
-    clamp(1 - inverseLerp(12, 55, speedKph), 0, 1) * steerAbs * throttleAbs;
+    clamp(1 - inverseLerp(10, 62, speedLongKph), 0, 1) *
+    clamp(inverseLerp(0.4, 1, steerAbs), 0, 1) *
+    clamp(inverseLerp(0.45, 1, throttleAbs), 0, 1);
   const donutRearLoss =
-    Math.max(lowSpeedDonutDemand - 0.24, 0) * 1.08 * (1 - surfaceAntiSpin * 0.45);
+    Math.max(lowSpeedDonutDemand - 0.18, 0) * 1.24 * (1 - surfaceAntiSpin * 0.35);
   const donutRearInfluence = config.rearTraction ? 1 : 0.15;
   const donutFrontInfluence = config.rearTraction ? 0.25 : 0.05;
   frontSlideLoss += donutRearLoss * donutFrontInfluence;
   rearSlideLoss += donutRearLoss * donutRearInfluence;
+  const lowSpeedSlipUnlock = clamp(
+    inverseLerp(0.3, 1, lowSpeedDonutDemand) * inverseLerp(0, 60, speedKph),
+    0,
+    1,
+  );
+  const sustainedDriftSlipDemand = clamp(
+    inverseLerp(0.2, 0.62, Math.abs(debugState.slipLatAvg ?? 0)) *
+      inverseLerp(0.5, 1, steerAbs) *
+      clamp(1 - inverseLerp(18, 90, speedKph), 0, 1),
+    0,
+    1,
+  );
   const frontSideSlideScale = clamp(1 - frontSlideLoss, 0.1, 1);
   const rearSideSlideScale = clamp(1 - rearSlideLoss, 0.06, 1);
-  const frontLongSlideScale = clamp(1 - frontSlideLoss * 0.26, 0.35, 1);
-  const rearLongSlideScale = clamp(1 - rearSlideLoss * 0.32, 0.35, 1);
+  const frontLongSlideScale = clamp(1 - frontSlideLoss * 0.26, 0.28, 1);
+  const rearLongSlideScale = clamp(1 - rearSlideLoss * 0.32, 0.2, 1);
   const driftIntent =
     handbrake > 0.08 ||
     (Math.abs(steer) > 0.22 && speedKph > 28) ||
     (Math.abs(speedRight) > 1.2 && speedKph > 18) ||
     (Math.abs(debugState.slipLatAvg ?? 0) > 0.12 && speedKph > 20);
+  const driftRecoveryNorm = clamp((debugState.driftRecoveryTimer ?? 0) / 0.55, 0, 1);
+  const loadTransferSpeedScale = clamp(inverseLerp(8, 140, speedKph), 0, 1);
+  const loadTransferLongNorm = clamp(
+    (debugState.longitudinalAccelFiltered ?? longitudinalAccel) / 9.5,
+    -1,
+    1,
+  );
+  const loadTransferLatNorm = clamp(
+    (debugState.lateralAccelFiltered ?? lateralAccel) / 8.5,
+    -1,
+    1,
+  );
+  const brakingTransfer = clamp(-loadTransferLongNorm, 0, 1) * loadTransferSpeedScale;
+  const launchTransfer = clamp(loadTransferLongNorm, 0, 1) * loadTransferSpeedScale;
   let totalWheelEngineForce = 0;
 
   config.wheelLayout.forEach((wheel, wheelIndex) => {
@@ -1587,20 +1730,65 @@ function stepVehicle(
       steerAngle = wheel.side < 0 ? frontSteerAngles.left : frontSteerAngles.right;
     }
     vehicleController.setWheelSteering(wheelIndex, steerAngle);
-    const handbrakeSpeedBlend = clamp(speedKph / 90, 0, 1);
+    const handbrakeSpeedBlend = clamp(speedLongKph / 72, 0, 1);
+    const handbrakeHighSpeedRelax = THREE.MathUtils.lerp(
+      1,
+      0.22,
+      clamp(inverseLerp(70, 150, speedLongKph), 0, 1),
+    );
+    const handbrakeGripDemand = clamp(
+      handbrake *
+        handbrakeHighSpeedRelax *
+        THREE.MathUtils.lerp(1.1, 1.0, clamp(inverseLerp(0, 45, speedLongKph), 0, 1)),
+      0,
+      1,
+    );
     const frontSideGripScale = wheel.front
-      ? THREE.MathUtils.lerp(1, 0.88, handbrake * handbrakeSpeedBlend)
+      ? THREE.MathUtils.lerp(1, 0.65, handbrakeGripDemand * handbrakeSpeedBlend)
       : 1;
     const rearSideGripScale = wheel.front
       ? 1
-      : THREE.MathUtils.lerp(1, 0.44, handbrake * handbrakeSpeedBlend);
+      : THREE.MathUtils.lerp(1, 0.55, handbrakeGripDemand * handbrakeSpeedBlend);
     const rearLongGripScale = wheel.front
       ? 1
-      : THREE.MathUtils.lerp(1, 0.42, handbrake * handbrakeSpeedBlend);
+      : THREE.MathUtils.lerp(1, 0.45, handbrakeGripDemand * handbrakeSpeedBlend);
+    const sideSign = wheel.side < 0 ? -1 : 1;
+    const outsideByLatAccel = sideSign === -Math.sign(loadTransferLatNorm || 0);
+    const lateralTransferScale =
+      Math.sign(loadTransferLatNorm || 0) === 0
+        ? 1
+        : outsideByLatAccel
+          ? THREE.MathUtils.lerp(1, 1.16, Math.abs(loadTransferLatNorm) * loadTransferSpeedScale)
+          : THREE.MathUtils.lerp(1, 0.84, Math.abs(loadTransferLatNorm) * loadTransferSpeedScale);
+    const longitudinalTransferLongScale = wheel.front
+      ? THREE.MathUtils.lerp(1, 1.14, brakingTransfer) * THREE.MathUtils.lerp(1, 0.94, launchTransfer)
+      : THREE.MathUtils.lerp(1, 0.84, brakingTransfer) * THREE.MathUtils.lerp(1, 1.04, launchTransfer);
+    const longitudinalTransferSideScale = wheel.front
+      ? THREE.MathUtils.lerp(1, 1.08, brakingTransfer)
+      : THREE.MathUtils.lerp(1, 0.88, brakingTransfer);
+    const wheelRadius = Math.max(wheel.tireRadius ?? 0.34, 0.1);
+    const wheelLongitudinalSpeed = -(wheel.angularVelocity ?? 0) * wheelRadius;
+    const wheelGroundRelativeLongitudinalVelocity = wheelLongitudinalSpeed - speedForward;
+    const wheelSlipRatioAbs =
+      Math.abs(wheelGroundRelativeLongitudinalVelocity) /
+      Math.max(Math.abs(speedForward), Math.abs(wheelLongitudinalSpeed), 2);
+    const optimalSlipRatio = Math.max(config.tireConfig.optimalSlipRatio ?? 0.15, 0.02);
+    const slipRatioNorm = clamp(wheelSlipRatioAbs / optimalSlipRatio, 0, 3.5);
+    const wheelSlipGripScale =
+      slipRatioNorm <= 1
+        ? THREE.MathUtils.lerp(1.02, 0.94, slipRatioNorm)
+        : THREE.MathUtils.lerp(
+            0.94,
+            wheel.front ? 0.78 : 0.58,
+            clamp((slipRatioNorm - 1) / 1.8, 0, 1),
+          );
+    const wheelSlipLatUnload = wheel.front
+      ? THREE.MathUtils.lerp(1, 0.9, clamp((slipRatioNorm - 1.05) / 1.6, 0, 1))
+      : THREE.MathUtils.lerp(1, 0.48, clamp((slipRatioNorm - 0.9) / 1.3, 0, 1));
     const sideSlideScale = wheel.front ? frontSideSlideScale : rearSideSlideScale;
     const longSlideScale = wheel.front ? frontLongSlideScale : rearLongSlideScale;
     const launchBurnoutDemand =
-      clamp(1 - inverseLerp(6, 42, speedKph), 0, 1) *
+      clamp(1 - inverseLerp(6, 42, speedLongKph), 0, 1) *
       Math.pow(throttleAbs, 1.2) *
       (1 - clamp(handbrake, 0, 1) * 0.6);
     const launchSlipAuthority = clamp(
@@ -1614,20 +1802,67 @@ function stepVehicle(
       (1 - clamp(handbrake, 0, 1) * 0.7);
     const launchBurnoutScale = THREE.MathUtils.lerp(
       1,
-      0.34,
-      launchBurnoutDemand * (0.4 + 0.6 * launchSlipAuthority),
+      wheel.front ? 0.18 : 0.14,
+      launchBurnoutDemand * (0.72 + 0.28 * launchSlipAuthority),
     );
-    const reverseTransitionGripScale = THREE.MathUtils.lerp(1, 0.42, reverseToForwardDemand);
-    const launchSlipTimerNorm = clamp((debugState.launchSlipTimer ?? 0) / 0.45, 0, 1);
+    const reverseTransitionGripScale = THREE.MathUtils.lerp(1, 0.95, reverseToForwardDemand);
+    const launchSlipTimerNorm = clamp((debugState.launchSlipTimer ?? 0) / 0.2, 0, 1);
     const launchTimerLongScale = driven
-      ? THREE.MathUtils.lerp(1, 0.22, launchSlipTimerNorm)
+      ? THREE.MathUtils.lerp(1, wheel.front ? 0.2 : 0.16, launchSlipTimerNorm)
       : 1;
     const launchTimerSideScale = driven
-      ? THREE.MathUtils.lerp(1, 0.68, launchSlipTimerNorm)
+      ? THREE.MathUtils.lerp(1, 0.78, launchSlipTimerNorm)
       : 1;
     const launchDrivenSideScale = driven
       ? THREE.MathUtils.lerp(1, 0.72, launchBurnoutDemand)
       : 1;
+    const launchDrivenLongScale = driven
+      ? THREE.MathUtils.lerp(
+          1,
+          wheel.front ? 0.62 : 0.42,
+          Math.max(launchSlipTimerNorm, launchBurnoutDemand),
+        )
+      : 1;
+    const lowSpeedDonutSideScale = driven
+      ? THREE.MathUtils.lerp(1, wheel.front ? 0.86 : 0.58, lowSpeedSlipUnlock)
+      : 1;
+    const lowSpeedDonutLongScale = driven
+      ? THREE.MathUtils.lerp(1, wheel.front ? 0.74 : 0.22, lowSpeedSlipUnlock)
+      : 1;
+    const sustainedRearLongSlipScale =
+      driven && !wheel.front
+        ? THREE.MathUtils.lerp(1, 0.4, sustainedDriftSlipDemand)
+        : 1;
+    const lowSpeedDonutTorqueBias =
+      driven && !wheel.front
+        ? THREE.MathUtils.lerp(1, 1.12, lowSpeedSlipUnlock)
+        : driven && wheel.front
+          ? THREE.MathUtils.lerp(1, 0.76, lowSpeedSlipUnlock)
+          : 1;
+    const donutForwardBiteAttenuation = driven
+      ? THREE.MathUtils.lerp(
+          1,
+          wheel.front ? 0.62 : 0.44,
+          clamp(
+            lowSpeedSlipUnlock *
+              clamp(inverseLerp(0.12, 0.55, Math.abs(debugState.slipLongAvg ?? 0)), 0, 1),
+            0,
+            1,
+          ),
+        )
+      : 1;
+    const turnSign = Math.sign(steer !== 0 ? steer : rawSteer);
+    const wheelSideSign = wheel.side < 0 ? -1 : 1;
+    const insideWheel = turnSign !== 0 && wheelSideSign === -turnSign;
+    const donutAsymDemand =
+      lowSpeedSlipUnlock *
+      clamp(inverseLerp(8, 50, Math.abs(debugState.yawRateDeg ?? 0)), 0, 1);
+    const donutAsymLongScale =
+      driven && !wheel.front
+        ? insideWheel
+          ? THREE.MathUtils.lerp(1, 0.62, donutAsymDemand)
+          : THREE.MathUtils.lerp(1, 0.9, donutAsymDemand)
+        : 1;
     const driftDrivenSideScale =
       driven && driftIntent
         ? THREE.MathUtils.lerp(
@@ -1653,6 +1888,26 @@ function stepVehicle(
           ),
         )
       : 1;
+    const handbrakeYawSpeedAttenuation = THREE.MathUtils.lerp(
+      1,
+      0.42,
+      clamp(inverseLerp(35, 120, speedLongKph), 0, 1),
+    );
+    const handbrakeSteerDemand =
+      clamp(inverseLerp(0.12, 1, handbrake), 0, 1) *
+      clamp(inverseLerp(0.2, 1, effectiveSteerAbs), 0, 1) *
+      clamp(inverseLerp(8, 120, speedKph), 0, 1) *
+      handbrakeYawSpeedAttenuation;
+    const handbrakeYawSnapSideScale = wheel.front
+      ? THREE.MathUtils.lerp(1, 0.9, handbrakeSteerDemand)
+      : THREE.MathUtils.lerp(1, 0.72, handbrakeSteerDemand);
+    const handbrakeYawSnapLongScale = wheel.front
+      ? THREE.MathUtils.lerp(1, 0.93, handbrakeSteerDemand)
+      : THREE.MathUtils.lerp(1, 0.65, handbrakeSteerDemand);
+    const driftRecoverySideScale =
+      Math.abs(rawSteer) < 0.12
+        ? THREE.MathUtils.lerp(1, wheel.front ? 0.9 : 0.84, driftRecoveryNorm)
+        : 1;
     const driveLongGripScale = driven ? launchBurnoutScale * reverseTransitionGripScale : 1;
     vehicleController.setWheelSideFrictionStiffness(
       wheelIndex,
@@ -1662,8 +1917,14 @@ function stepVehicle(
         sideSlideScale *
         launchTimerSideScale *
         launchDrivenSideScale *
+        lowSpeedDonutSideScale *
+        longitudinalTransferSideScale *
+        lateralTransferScale *
         driftDrivenSideScale *
         driftGlobalSideScale *
+        wheelSlipLatUnload *
+        handbrakeYawSnapSideScale *
+        driftRecoverySideScale *
         frontSideGripScale *
         rearSideGripScale *
         surfaceGrip,
@@ -1676,11 +1937,20 @@ function stepVehicle(
         longSlideScale *
         launchTimerLongScale *
         driveLongGripScale *
+        launchDrivenLongScale *
+        lowSpeedDonutLongScale *
+        sustainedRearLongSlipScale *
+        longitudinalTransferLongScale *
+        donutAsymLongScale *
+        handbrakeYawSnapLongScale *
+        wheelSlipGripScale *
         rearLongGripScale *
         surfaceGrip,
     );
     const wheelEngineForce = driven
-      ? computeDriveForceForWheel(wheel, debugState, config, throttle, isolation)
+      ? computeDriveForceForWheel(wheel, debugState, config, throttle, isolation) *
+        lowSpeedDonutTorqueBias *
+        donutForwardBiteAttenuation
       : 0;
     vehicleController.setWheelEngineForce(
       wheelIndex,
@@ -1744,6 +2014,21 @@ function stepVehicle(
     const rollingResistanceForce = 0;
     void rollingResistanceForce;
   }
+  if ((debugState.counterSlipDirection ?? 0) !== 0 && handbrake < 0.15 && grounded) {
+    const counterSlipDemand = clamp(debugState.counterSlipDemand ?? 0, 0, 1);
+    const biteAccelMs2 =
+      (debugState.counterSlipDirection ?? 0) < 0
+        ? THREE.MathUtils.lerp(0, 6.5, counterSlipDemand)
+        : THREE.MathUtils.lerp(0, 8.0, counterSlipDemand);
+    if (biteAccelMs2 > 0.05) {
+      const biteForce = TMP_VEC_C
+        .copy(TMP_FORWARD)
+        .setY(0)
+        .normalize()
+        .multiplyScalar(config.massKg * biteAccelMs2 * (debugState.counterSlipDirection < 0 ? 1 : -1));
+      chassis.addForce(vectorFromThree(biteForce), true);
+    }
+  }
   if (isolation.downforce) {
     const downforce = {
       x: 0,
@@ -1754,8 +2039,8 @@ function stepVehicle(
   }
   if (grounded) {
     const inertiaSpeedScale = THREE.MathUtils.lerp(
-      0.24,
-      0.72,
+      0.38,
+      1.05,
       clamp(inverseLerp(10, 150, speedKph), 0, 1),
     );
     const comHeight = Math.max(Math.abs(config.centerOfMass.y), 0.08);
@@ -1768,43 +2053,52 @@ function stepVehicle(
       Math.abs(steer) > 0.05 ||
       Math.abs(speedRight) > 0.35 ||
       Math.abs(lateralAccel) > 1.25;
-    const effectiveLatAccel = hasLateralLoad ? lateralAccel : 0;
-    const effectiveLongAccel = longitudinalAccel + inputPitchBiasAccel;
+    const effectiveLatAccel = hasLateralLoad
+      ? (debugState.lateralAccelFiltered ?? lateralAccel)
+      : 0;
+    const effectiveLongAccel =
+      (debugState.longitudinalAccelFiltered ?? longitudinalAccel) + inputPitchBiasAccel;
     const rollRate = angvel.dot(TMP_FORWARD);
     const pitchRate = angvel.dot(TMP_RIGHT);
     const rollTorque = clamp(
       -effectiveLatAccel *
         config.massKg *
         rollLeverArm *
-        0.32 *
+        0.42 *
         BODY_ROLL_TORQUE_SCALE *
         inertiaSpeedScale -
-        rollRate * config.massKg * 0.12,
-      -14000,
-      14000,
+        rollRate * config.massKg * 0.07,
+      -22000,
+      22000,
     );
     const pitchTorque = clamp(
       effectiveLongAccel *
         config.massKg *
         pitchLeverArm *
-        0.4 *
+        0.56 *
         BODY_PITCH_TORQUE_SCALE *
         inertiaSpeedScale -
-        pitchRate * config.massKg * 0.13,
-      -15000,
-      15000,
+        pitchRate * config.massKg * 0.08,
+      -24000,
+      24000,
     );
+    const yawTorque = 0;
     if (Math.abs(rollTorque) + Math.abs(pitchTorque) > 5) {
       TMP_VEC_D.set(0, 0, 0)
         .addScaledVector(TMP_FORWARD, rollTorque)
-        .addScaledVector(TMP_RIGHT, pitchTorque);
+        .addScaledVector(TMP_RIGHT, pitchTorque)
+        .addScaledVector(TMP_UP, yawTorque);
       chassis.addTorque(vectorFromThree(TMP_VEC_D), true);
     }
     debugState.inertiaRollTorque = rollTorque;
     debugState.inertiaPitchTorque = pitchTorque;
+    debugState.loadTransferLong = loadTransferLongNorm;
+    debugState.loadTransferLat = loadTransferLatNorm;
   } else {
     debugState.inertiaRollTorque = 0;
     debugState.inertiaPitchTorque = 0;
+    debugState.loadTransferLong = 0;
+    debugState.loadTransferLat = 0;
   }
 
   if (isolation.uprightAssist) {
@@ -1886,7 +2180,7 @@ function stepVehicle(
   debugState.speedForward = speedForward;
   debugState.speedRight = speedRight;
   debugState.speedHorizontal = speedHorizontal;
-  debugState.yawRateDeg = THREE.MathUtils.radToDeg(angvel.y);
+  debugState.yawRateDeg = THREE.MathUtils.radToDeg(yawRateRadBody);
   debugState.wheelContacts = wheelContacts;
   debugState.forwardImpulse = forwardImpulse;
   debugState.suspensionForce = suspensionForce;
@@ -2001,7 +2295,8 @@ function syncCarRootFromBody(carRoot, chassis, config) {
 }
 
 function updateWheelVisuals(config, chassis, vehicleController, debugState, dt, carRoot) {
-  const speed = horizontalSpeed(rapierVectorToThree(chassis.linvel(), TMP_VEC));
+  const linvel = rapierVectorToThree(chassis.linvel(), TMP_VEC);
+  const speed = horizontalSpeed(linvel);
 
   for (const [wheelIndex, wheel] of config.wheelLayout.entries()) {
     if (!wheel.tire) {
@@ -2018,10 +2313,137 @@ function updateWheelVisuals(config, chassis, vehicleController, debugState, dt, 
       (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
 
     if (inContact && Number.isFinite(wheelRotation)) {
-      // updateDrivenWheelState already computed angular velocity for this physics tick.
-      // Do not recompute it here after currentRotation has been advanced, or telemetry
-      // collapses wheel spin to zero while the visual phase still changes.
-      wheel.spinAngle = wheelRotation;
+      // Keep contact rotation rooted in physical wheel phase.
+      // Drivetrain coupling stays bounded and rear handbrake can explicitly lock
+      // wheel omega, which better matches the original telemetry lock behavior.
+      const wheelRadius = Math.max(wheel.tireRadius ?? 0.34, 0.1);
+      const throttleAbs = Math.abs(debugState.throttleAxis ?? 0);
+      const brakeAbs = Math.abs(debugState.brakeAxis ?? 0);
+      const handbrakeAbs = Math.abs(debugState.handbrakeAxis ?? 0);
+      const speedKph = speed * 3.6;
+      const speedLongKph = Math.abs(debugState.speedForward ?? 0) * 3.6;
+      const launchSlipTimerNorm = clamp((debugState.launchSlipTimer ?? 0) / 0.9, 0, 1);
+      const counterSlipDemand = clamp(debugState.counterSlipDemand ?? 0, 0, 1);
+      const counterSlipDirection = Math.sign(debugState.counterSlipDirection ?? 0);
+      const physicalDelta = shortestAngleDelta(wheel.prevPhysicalRotation ?? wheelRotation, wheelRotation);
+      const measuredOmega = dt > 1e-5 ? physicalDelta / dt : 0;
+      wheel.prevPhysicalRotation = wheelRotation;
+
+      const gearRatio = Math.abs(getCurrentGearRatio(debugState, config) * config.gearbox.endRatio);
+      const clutchScale = clamp(Math.abs(debugState.clutch ?? 1), 0.08, 1);
+      const engineOmega =
+        (Math.max(debugState.engineRpm ?? config.engine.idleRpm, config.engine.idleRpm) *
+          Math.PI *
+          2) /
+        60;
+      const gearDriveSign = (debugState.gear ?? 0) < 0 ? 1 : -1;
+      const requestedDriveSign =
+        counterSlipDemand > 0.15 && counterSlipDirection !== 0
+          ? counterSlipDirection
+          : gearDriveSign;
+      const driveOmegaBase =
+        driven && gearRatio > 1e-4 ? (engineOmega / gearRatio) * clutchScale : 0;
+      const driveOmega = requestedDriveSign * driveOmegaBase;
+      const rearHandbrakeLockSpeedBlend = Math.max(
+        clamp(inverseLerp(2.5, 26, speedLongKph), 0, 1),
+        clamp(inverseLerp(12, 0, speedLongKph), 0, 1),
+      );
+      const highSpeedSteerRearLockScale = THREE.MathUtils.lerp(
+        1,
+        0.02,
+        clamp(inverseLerp(35, 120, speedKph), 0, 1) *
+          clamp(inverseLerp(0.35, 1, Math.abs(debugState.steer ?? 0)), 0, 1),
+      );
+      const rearHandbrakeLockDemand =
+        !wheel.front
+          ? clamp(
+              inverseLerp(0.08, 1, handbrakeAbs) *
+                rearHandbrakeLockSpeedBlend *
+                highSpeedSteerRearLockScale,
+              0,
+              1,
+            )
+          : 0;
+      const slipDriveDemand =
+        driven
+          ? clamp(
+              Math.max(
+                counterSlipDemand,
+                launchSlipTimerNorm,
+                inverseLerp(0.08, 0.55, Math.abs(debugState.slipLongAvg ?? 0)),
+              ) *
+                inverseLerp(0.18, 1, throttleAbs) *
+                clamp(1 - inverseLerp(22, 95, speedKph), 0, 1) *
+                (1 - brakeAbs * 0.7) *
+                (1 - handbrakeAbs * 0.45),
+              0,
+              1,
+            )
+          : 0;
+      const contactPhaseCouplingDemand = Math.max(
+        slipDriveDemand,
+        counterSlipDemand * clamp(inverseLerp(4, 95, speedKph), 0.2, 1),
+      );
+      const contactPhaseCoupling = driven
+        ? THREE.MathUtils.lerp(0.02, 0.68, contactPhaseCouplingDemand)
+        : 0;
+      const couplingBlend = wheel.front
+        ? contactPhaseCoupling
+        : contactPhaseCoupling * (1 - rearHandbrakeLockDemand);
+      const drivelineTargetOmega = THREE.MathUtils.lerp(
+        measuredOmega,
+        driveOmega,
+        couplingBlend,
+      );
+      const targetOmega = THREE.MathUtils.lerp(
+        drivelineTargetOmega,
+        0,
+        rearHandbrakeLockDemand,
+      );
+      const spinSignMismatch =
+        Math.abs(wheel.angularVelocity ?? 0) > 0.2 && Math.sign(wheel.angularVelocity ?? 0) !== Math.sign(targetOmega || 0);
+      const responseRate = driven
+        ? THREE.MathUtils.lerp(
+            12,
+            32,
+            Math.max(slipDriveDemand, counterSlipDemand, rearHandbrakeLockDemand),
+          )
+        : 20;
+      if (counterSlipDemand > 0.25 && spinSignMismatch) {
+        wheel.angularVelocity = THREE.MathUtils.lerp(
+          wheel.angularVelocity ?? measuredOmega,
+          targetOmega,
+          clamp(0.76 + counterSlipDemand * 0.22, 0, 1),
+        );
+      }
+      wheel.angularVelocity = dampToward(
+        wheel.angularVelocity ?? measuredOmega,
+        targetOmega,
+        responseRate,
+        dt,
+      );
+      if (!wheel.front && rearHandbrakeLockDemand > 0.12) {
+        const lockRate = THREE.MathUtils.lerp(20, 85, rearHandbrakeLockDemand);
+        wheel.angularVelocity = dampToward(
+          wheel.angularVelocity ?? 0,
+          0,
+          lockRate,
+          dt,
+        );
+        if (Math.abs(wheel.angularVelocity ?? 0) < 0.35 && rearHandbrakeLockDemand > 0.7) {
+          wheel.angularVelocity = 0;
+        }
+        if (rearHandbrakeLockDemand > 0.92) {
+          wheel.angularVelocity = clamp(wheel.angularVelocity ?? 0, -0.15, 0.15);
+        }
+        if (handbrakeAbs > 0.75 && speedLongKph < 15) {
+          wheel.angularVelocity = dampToward(wheel.angularVelocity ?? 0, 0, 120, dt);
+          if (Math.abs(wheel.angularVelocity ?? 0) < 0.12) {
+            wheel.angularVelocity = 0;
+          }
+        }
+      }
+      wheel.spinAngle = (wheel.spinAngle ?? wheelRotation) + (wheel.angularVelocity ?? 0) * dt;
     } else {
       const wheelRadius = Math.max(wheel.tireRadius ?? 0.34, 0.1);
       const rollingOmega = speed / wheelRadius;
@@ -2080,6 +2502,19 @@ function updateWheelVisuals(config, chassis, vehicleController, debugState, dt, 
       const gripScale = wheel.front
         ? (debugState.frontGripScale ?? 1)
         : (debugState.rearGripScale ?? 1);
+      const wheelRadius = Math.max(wheel.tireRadius ?? 0.34, 0.1);
+      const wheelLongitudinalSpeed = -(wheel.angularVelocity ?? 0) * wheelRadius;
+      const groundRelativeLongitudinalVelocity = inContact
+        ? wheelLongitudinalSpeed - (debugState.speedForward ?? 0)
+        : 0;
+      const slipNormalization = Math.max(
+        Math.abs(debugState.speedForward ?? 0),
+        Math.abs(wheelLongitudinalSpeed),
+        2,
+      );
+      const slipRatio = inContact
+        ? clamp(groundRelativeLongitudinalVelocity / slipNormalization, -2, 2)
+        : 0;
       wheelDebug.contactFlag = inContact ? 1 : 0;
       wheelDebug.surfaceType = debugState.surfaceType ?? "";
       wheelDebug.surfaceGrip = debugState.surfaceGrip ?? 1;
@@ -2091,6 +2526,10 @@ function updateWheelVisuals(config, chassis, vehicleController, debugState, dt, 
       wheelDebug.loadOrSpinCandidate = wheel.angularVelocity ?? 0;
       wheelDebug.rotationOrPhaseCandidate = wrapPositiveAngle(wheel.spinAngle ?? wheelRotation ?? 0);
       wheelDebug.verticalLoadCandidate = suspensionForce;
+      wheelDebug.angularVelocity = wheel.angularVelocity ?? 0;
+      wheelDebug.wheelLongitudinalSpeed = wheelLongitudinalSpeed;
+      wheelDebug.groundRelativeLongitudinalVelocity = groundRelativeLongitudinalVelocity;
+      wheelDebug.slipRatio = slipRatio;
     }
   }
 }
@@ -2134,9 +2573,28 @@ function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizon
     dt,
   );
   const steerKph = debugState.steerSpeedKph;
+  const steerMagnitude = Math.abs(rawSteer);
+  const steerInputFilterRate = THREE.MathUtils.lerp(
+    22,
+    8.5,
+    Math.pow(clamp(inverseLerp(35, 155, steerKph), 0, 1), 1.05),
+  );
+  debugState.steerRawFiltered = dampToward(
+    debugState.steerRawFiltered ?? rawSteer,
+    rawSteer,
+    steerInputFilterRate,
+    dt,
+  );
+  const steerFiltered = clamp(debugState.steerRawFiltered ?? rawSteer, -1, 1);
   const steerLimit = computeSteeringLimit(config.steering, steerKph);
-  const digitalInput = Math.abs(rawSteer) >= config.steering.DigitalThreshold;
-  const steerSign = Math.sign(rawSteer);
+  const digitalThreshold = Math.max(config.steering.DigitalThreshold ?? 0.2, 0.01);
+  const digitalExitThreshold = Math.max(digitalThreshold - 0.08, digitalThreshold * 0.58);
+  const wasDigitalInput = Boolean(debugState.steerDigitalMode);
+  const digitalInput = wasDigitalInput
+    ? steerMagnitude >= digitalExitThreshold
+    : steerMagnitude >= digitalThreshold;
+  debugState.steerDigitalMode = digitalInput;
+  const steerSign = Math.sign(steerFiltered);
   if (digitalInput && steerSign !== 0) {
     if ((debugState.steerHoldSign ?? 0) === steerSign) {
       debugState.steerHoldTime = (debugState.steerHoldTime ?? 0) + dt;
@@ -2176,7 +2634,7 @@ function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizon
     clamp((debugState.slipLatAvg ?? 0) * 1.15, 0, 1),
   );
   const desiredSteerTarget =
-    rawSteer *
+    steerFiltered *
     steerLimit *
     (rawHandbrake > 0.1 ? 0.98 : 1) *
     highSpeedAuthorityScale *
@@ -2211,8 +2669,13 @@ function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizon
   const steerTarget = debugState.steerTargetFiltered;
 
   if (Math.abs(rawSteer) < 1e-3) {
+    const driftRecoveryNorm = clamp((debugState.driftRecoveryTimer ?? 0) / 0.55, 0, 1);
+    const driftRecoveryCenterScale = THREE.MathUtils.lerp(1, 0.62, driftRecoveryNorm);
     const centeringRate = Math.max(
-      config.steering.CenteringSpeed * speedRate * highSpeedCenterScale,
+      config.steering.CenteringSpeed *
+        speedRate *
+        highSpeedCenterScale *
+        driftRecoveryCenterScale,
       0.4,
     );
     debugState.steerState = dampToward(debugState.steerState ?? 0, 0, centeringRate, dt);
@@ -2234,7 +2697,7 @@ function updateSteeringState(debugState, config, rawSteer, rawHandbrake, horizon
       deltaMagnitude,
     );
     const rate =
-      THREE.MathUtils.lerp(minSpeed, maxSpeed, Math.abs(rawSteer)) *
+      THREE.MathUtils.lerp(minSpeed, maxSpeed, steerMagnitude) *
       deltaScale *
       speedRate *
       highSpeedEntryScale;
@@ -2353,6 +2816,8 @@ function createDebugState() {
     mode: "rapier-raycast",
     steerState: 0,
     steerRaw: 0,
+    steerRawFiltered: 0,
+    steerDigitalMode: false,
     steerHoldSign: 0,
     steerHoldTime: 0,
     steerLimit: 1,
@@ -2394,11 +2859,17 @@ function createDebugState() {
     slipLatAvg: 0,
     slipAngleDeg: 0,
     launchSlipTimer: 0,
+    counterSlipDemand: 0,
     prevThrottleAxis: 0,
+    driftRecoveryTimer: 0,
     frontGripScale: 1,
     rearGripScale: 1,
     inertiaRollTorque: 0,
     inertiaPitchTorque: 0,
+    longitudinalAccelFiltered: 0,
+    lateralAccelFiltered: 0,
+    loadTransferLong: 0,
+    loadTransferLat: 0,
     surfaceType: "tarmac",
     surfaceGrip: 1,
     aeroDragForce: 0,
@@ -2421,6 +2892,10 @@ function createDebugState() {
       loadOrSpinCandidate: 0,
       rotationOrPhaseCandidate: 0,
       verticalLoadCandidate: 0,
+      angularVelocity: 0,
+      wheelLongitudinalSpeed: 0,
+      groundRelativeLongitudinalVelocity: 0,
+      slipRatio: 0,
     })),
   };
 }
@@ -2472,6 +2947,17 @@ function horizontalSpeed(vector) {
 function wrapPositiveAngle(angle) {
   const tau = Math.PI * 2;
   return ((angle % tau) + tau) % tau;
+}
+
+function shortestAngleDelta(from, to) {
+  const tau = Math.PI * 2;
+  let delta = (to - from) % tau;
+  if (delta > Math.PI) {
+    delta -= tau;
+  } else if (delta < -Math.PI) {
+    delta += tau;
+  }
+  return delta;
 }
 
 function clamp(value, min, max) {
@@ -2925,7 +3411,7 @@ function computeEngineDriveForceTotal(debugState, config, throttle, isolation = 
     Math.max(debugState.clutch ?? 1, 0.2) *
     (debugState.gear < 0 ? -1 : 1);
   const drivenWheelCount = Math.max(config.drivenWheelCount ?? 2, 1);
-  const speedKph = Math.abs(debugState.speedHorizontal ?? 0) * 3.6;
+  const speedKph = Math.abs(debugState.speedForward ?? 0) * 3.6;
   // FO2 drivetrain values do not map 1:1 to Rapier's wheelEngineForce unit.
   // Apply a calibrated low-speed conversion boost and taper it out with speed.
   const rapierForceScale = THREE.MathUtils.lerp(
@@ -2971,7 +3457,7 @@ function computeDriveForceForWheel(wheel, debugState, config, throttle, isolatio
           THREE.MathUtils.clamp(debugState.handbrakeAxis ?? 0, 0, 1),
         )
       : 1;
-  const speedKph = Math.abs(debugState.speedHorizontal ?? 0) * 3.6;
+  const speedKph = Math.abs(debugState.speedForward ?? 0) * 3.6;
   const reverseKinematicLimitKph = rpmToKph(
     config.engine.redLineRpm * 0.98,
     Math.abs(config.gearbox.reverseRatio),
@@ -2990,8 +3476,16 @@ function computeDriveForceForWheel(wheel, debugState, config, throttle, isolatio
     sampleEngineTorque(config.engine, debugState.engineRpm) *
     throttleMagnitude *
     reverseThrottleScale;
+  const counterSlipDemand = clamp(debugState.counterSlipDemand ?? 0, 0, 1);
+  const counterSlipDirection = debugState.counterSlipDirection ?? 0;
+  const counterSlipCapScale =
+    counterSlipDirection === -1 && throttle > 0
+      ? THREE.MathUtils.lerp(1, 3.2, counterSlipDemand)
+      : counterSlipDirection === 1 && throttle < 0
+        ? THREE.MathUtils.lerp(1, 2.6, counterSlipDemand)
+        : 1;
   const clutchTorqueCap = Math.max(config.gearbox.clutchTorque ?? 280, 120);
-  const transmissionTorque = Math.min(engineTorque, clutchTorqueCap);
+  const transmissionTorque = Math.min(engineTorque, clutchTorqueCap * counterSlipCapScale);
   const gearRatio = getCurrentGearRatio(debugState, config);
   const differential = wheel.front
     ? config.differentials.front
@@ -3035,6 +3529,16 @@ function computeDriveForceForWheel(wheel, debugState, config, throttle, isolatio
       (debugState.gear < 0 ? -1 : 1) *
       handbrakeDriveScale) /
     drivenWheelCount;
+  const counterSlipTorqueBoost =
+    counterSlipDirection === -1 && throttle > 0
+      ? THREE.MathUtils.lerp(1, 6.0, counterSlipDemand)
+      : counterSlipDirection === 1 && throttle < 0
+        ? THREE.MathUtils.lerp(1, 4.5, counterSlipDemand)
+        : 1;
+  const launchAccelScale =
+    (debugState.gear ?? 0) === 1
+      ? THREE.MathUtils.lerp(1.0, 1, clamp(inverseLerp(0, 42, speedKph), 0, 1))
+      : 1;
   const wheelRadius = Math.max(wheel.tireRadius ?? 0.34, 0.1);
   // FO2 drivetrain values do not map 1:1 to Rapier's wheelEngineForce unit.
   // Apply a calibrated low-speed conversion boost and taper it out with speed.
@@ -3048,8 +3552,9 @@ function computeDriveForceForWheel(wheel, debugState, config, throttle, isolatio
     isolation.aeroDrag,
   );
   return -(
-    (wheelTorque / wheelRadius) *
+    ((wheelTorque * counterSlipTorqueBoost) / wheelRadius) *
     Math.max(config.driveForceScale ?? 1, 0.1) *
+    launchAccelScale *
     rapierForceScale *
     driveAeroLimitScale
   );
@@ -3271,6 +3776,24 @@ function computeLateralSlip(speedRight, speedHorizontal) {
     return 0;
   }
   return Math.abs(speedRight) / Math.max(speedHorizontal, 0.5);
+}
+
+function syncDebugWheelSlipAggregates(debugState) {
+  const wheels = debugState?.wheels ?? [];
+  let totalLongSlip = 0;
+  let longCount = 0;
+
+  for (const wheel of wheels) {
+    if (!wheel || wheel.contactFlag !== 1 || !Number.isFinite(wheel.slipRatio)) {
+      continue;
+    }
+    totalLongSlip += Math.abs(wheel.slipRatio);
+    longCount += 1;
+  }
+
+  if (longCount > 0) {
+    debugState.slipLongAvg = totalLongSlip / longCount;
+  }
 }
 
 function averageDrivenWheelRadius(config) {

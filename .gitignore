@@ -2,9 +2,14 @@
 node_modules
 .parcel-cache
 dist
+.cache
+.fnm
+mods/**/bin
+mods/**/obj
 .DS_Store
 ._*
 *.log
+hs_err_pid*.log
 reference/**
 src/data/database/flatout2.db extracted/**
 .dotnet_cli

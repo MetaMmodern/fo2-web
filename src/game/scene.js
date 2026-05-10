@@ -48,6 +48,8 @@ const MIN_CAMERA_COLLISION_DISTANCE = 0.05;
 const MIN_CAMERA_TARGET_DISTANCE = 0.5;
 const CAMERA_PARITY_CHASE_DISTANCE_SCALE = 1.22;
 const CAMERA_PARITY_CHASE_HEIGHT_OFFSET = 0.32;
+const THREE_QUARTER_LATERAL_OFFSET = 1.7;
+const THREE_QUARTER_FORWARD_OFFSET = 0.9;
 
 export function createSceneApp(container = document.body) {
   const scene = new THREE.Scene();
@@ -758,6 +760,10 @@ function resolveRecoveredChasePose(
   );
   desiredPosition.multiplyScalar(CAMERA_PARITY_CHASE_DISTANCE_SCALE);
   desiredPosition.y += CAMERA_PARITY_CHASE_HEIGHT_OFFSET;
+  if (debugSettings.enableThreeQuarterView) {
+    desiredPosition.addScaledVector(TMP_VECTOR_E, THREE_QUARTER_LATERAL_OFFSET);
+    desiredPosition.addScaledVector(TMP_VECTOR_C, THREE_QUARTER_FORWARD_OFFSET);
+  }
 
   if (debugSettings.enableDynamics) {
     desiredPosition.applyAxisAngle(
@@ -1041,6 +1047,7 @@ function getTrackerHeading(dynamics, object) {
 function resolveCameraDebugSettings(debugControls) {
   return {
     enableDynamics: debugControls?.enableDynamics !== false,
+    enableThreeQuarterView: debugControls?.enableThreeQuarterView !== false,
     headingResponseScale: sanitizeCameraDebugNumber(
       debugControls?.headingResponseScale,
       1,

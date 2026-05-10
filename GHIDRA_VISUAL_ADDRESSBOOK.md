@@ -118,6 +118,11 @@ Source of truth notes:
   - Confirmed 2026-04-14: steering bootstrap uses speed buckets `20/90/200/300` plus analog/digital min/max rates, centering, and steering-speed-rate tables before steer reaches the vehicle runtime.
 - `FUN_00454c60` @ `0x00454c60` — Reads the larger car physics tree: differential, throttle/brake/speed curves, gearbox, suspension, tires, and engine.
 - `FUN_0046c8e0` @ `0x0046c8e0` — Local-player per-frame control path: samples controller state, shapes steer/gas/brake/handbrake inputs, then calls the vehicle step.
+- `Differential_SolveLeftRightWheelTorques` @ `0x004408d0` — Driven-axle left/right torque solver; key anchor for one-wheel spin and donut slip outcomes.
+- `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` — Applies nonlinear driven torque scalar (`c*0.3 + c^3*0.7`) before differential split.
+- `Drivetrain_UpdateWheelRatesAndAutoShift` @ `0x004414f0` — Refreshes wheel-rate aggregate and gearbox recommendation/ratio terms each update; RPM↔wheel coupling anchor.
+  - Confirmed 2026-05-01: writes `wheel + 0x31c = param_1 / (wheel + 0x30c)` across all wheels and updates aggregate candidate `vehicle + 0x3a4`; direct `+0x31c` was flat-zero in one validated runtime capture, so do not treat as guaranteed standalone wheel omega without path validation.
+- `GearNode_AccumulateAngularVelocityAndTorque` @ `0x004416b0` — Accumulates child gear-node angular/torque terms into `node + 0x38/+0x3c` (scaled by `node + 0x20`); key anchor for drivetrain-side wheel-rate reconstruction probes.
 - `0x0046f510` — Unnamed local-player steering/input shaping block recovered from disassembly; applies speed-bucket steering limits, analog centering, and final clamp before `FUN_0046fa50`.
 - `FUN_0046fa50` @ `0x0046fa50` — Post-input drive helper: writes control channels into vehicle state and manages auto-shift / shift cooldown behavior.
 - `AIPlayer_WriteVehicleControls` @ `0x00409520` — AI per-frame control writer; emits steer/throttle/brake/handbrake/gear requests into the same vehicle control channels used by the local player.
@@ -126,6 +131,7 @@ Source of truth notes:
 - `FUN_00429640` @ `0x00429640` — Chassis/drag/steering propagation stage within each vehicle substep.
 - `FUN_00429be0` @ `0x00429be0` — Main wheel/tire force and yaw-torque accumulation stage within each substep.
   - Confirmed 2026-04-26 telemetry anchors: per-wheel runtime blocks start at `vehicle + 0x0a00` with stride `0x03a0`; contact flag is `wheel + 0x334`, contact pointer is `wheel + 0x348`, and the validated vertical-load/unload proxy is `wheel + 0x330`.
+  - Confirmed 2026-05-01 runtime behavior: `wheel + 0x32c` behaves as a robust rotational phase signal; combined with `wheel + 0x320` (brake torque from `0x0042c540`) it cleanly exposes rear lock during handbrake.
 - `FUN_00441ae0` @ `0x00441ae0` — Wheel steer-angle clamp stage after car-level steer input is computed.
   - Confirmed 2026-04-14: applies a second rack-side dynamic steer cap from live vehicle/runtime fields at `+0x300/+0x304/+0x370/+0x374`; final wheel steer is not determined by player input shaping alone.
 - `FUN_00441f10` @ `0x00441f10` — Auto gear-selection helper based on projected forward speed and runtime threshold arrays at gearbox `+0x9c/+0xa0`; includes explicit reverse/neutral/launch cases.
@@ -137,6 +143,14 @@ Source of truth notes:
 - `FUN_00442160` @ `0x00442160` — Shift request/state-machine entry; validates requested gear in `[-1, numGears]`, writes requested gear to gearbox `+0x48`, and arms the timed shift state at `+0x4c/+0x50`.
 - `FUN_004421d0` @ `0x004421d0` — Timed shift-state integrator; applies the requested gear once the engage window `+0xc0` is reached and returns to idle after the full engage+release window `+0xc0 + +0xbc`.
 - `FUN_00441c40` @ `0x00441c40` — Gearbox handling loader; copies ratio/threshold data into runtime offsets `+0x5c..+0x98`, sets `numGears` at `+0x58`, and seeds clutch/auto-shift timing fields from loaded gearbox data.
+- `FUN_0042b5f0` @ `0x0042b5f0` — Vehicle finalize-substep stage; calls `Gearbox_UpdateShiftStateAndOutputShaft` each finalize pass.
+- `FUN_0046fc40` @ `0x0046fc40` — Local player control writer with confirmed vehicle-side gearbox/control offsets:
+  - `vehicle+0x634` current/applied gear
+  - `vehicle+0x63c` requested gear
+  - `vehicle+0x638` shift state
+  - `vehicle+0x64c` number of gears
+  - `vehicle+0x5d8` engine-speed-like runtime scalar
+  - `vehicle+0x648`, `vehicle+0x6e4` speed-related shift/reverse logic terms
 - `FUN_00454b50` @ `0x00454b50` — Builds the runtime engine curve table from `PeakPower*`, `PeakTorque*`, `RedLineRpm`, `RpmLimit`, and `ZeroPowerRpm`.
 - `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` — Driven-wheel torque distribution and differential dispatch stage.
   - Confirmed 2026-04-14 torque scalar:

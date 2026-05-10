@@ -62,3 +62,28 @@ In a short in-race test:
 - press handbrake and verify `vehicle_control_handbrake` rises independently
 - steer left/right and verify `vehicle_control_steer` changes as the car turns
 - verify frame delta remains stable and plausible
+
+## Drivetrain Runtime Anchors (2026-04-28)
+
+Confirmed from decompilation call paths:
+
+- `Vehicle_FinalizeSubstepAndUpdateAttachments` @ `0x0042b5f0` calls `Gearbox_UpdateShiftStateAndOutputShaft` once per vehicle finalize step.
+- `Player_WriteVehicleControls` @ `0x0046fc40` reads and writes gearbox runtime state on the vehicle object:
+  - `vehicle + 0x634`: applied/current gear
+  - `vehicle + 0x63c`: requested gear
+  - `vehicle + 0x638`: shift-state machine state
+  - `vehicle + 0x64c`: number of forward gears
+  - `vehicle + 0x648`: speed-related scale used in shift/reverse logic
+  - `vehicle + 0x6e4`: speed threshold term used in shift/reverse logic
+  - `vehicle + 0x5d8`: engine-speed-like runtime scalar used during control logic
+
+Gearbox internal state machine anchors (object-relative, from gearbox methods):
+
+- `Gearbox_RequestGear` @ `0x00442160`: requested gear at `+0x48`, state at `+0x4c`, timer at `+0x50`.
+- `Gearbox_UpdateShiftState` @ `0x004421d0`: state transitions `1 -> 3 -> 0` driven by timers `+0xc0` and `+0xbc`.
+- `Gearbox_ApplyGearRatio` @ `0x00442110`: applied/current gear at `+0x40`.
+
+Status:
+
+- `vehicle+0x1e24` previously used as RPM candidate is now confirmed speed-like in runtime CSV and should not be treated as engine RPM.
+- New telemetry columns were added to log the confirmed vehicle-side gearbox fields directly for validation against race traces.

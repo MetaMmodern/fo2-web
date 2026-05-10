@@ -49,6 +49,24 @@ export function createDrivingInput(target = window) {
       return version;
     },
     snapshot,
+    debugPress(code) {
+      const previousSize = pressedKeys.size;
+      pressedKeys.add(code);
+      if (pressedKeys.size !== previousSize) {
+        version += 1;
+      }
+    },
+    debugRelease(code) {
+      if (pressedKeys.delete(code)) {
+        version += 1;
+      }
+    },
+    debugClear() {
+      if (pressedKeys.size > 0) {
+        pressedKeys.clear();
+        version += 1;
+      }
+    },
     clearResetPressed() {
       if (pressedKeys.delete("KeyR")) {
         version += 1;
