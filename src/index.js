@@ -21,6 +21,8 @@ import {
 } from "./game/hud";
 import { createDrivingInput } from "./game/input";
 import { loadVehicleLightsConfig } from "./game/lightsConfig";
+import { createMvpMenu } from "./game/mvpMenu.js";
+import { createMvpMenuScene } from "./game/mvpMenuScene.js";
 import {
   createTextureRegistry,
   prepareMaterials,
@@ -55,9 +57,15 @@ const drivingDebug = {
   freezePosition: false,
 };
 const initialTrack = getTrackById(defaultSelection.trackId);
+const mvpMenuCars = carCatalog;
+const mvpInitialCar =
+  mvpMenuCars.find((car) => car.id === defaultSelection.carId) ??
+  mvpMenuCars[0] ??
+  carCatalog[0] ??
+  null;
 const cameraDebug = {
   enableDynamics: true,
-  enableThreeQuarterView: true,
+  enableThreeQuarterView: false,
   headingResponseScale: 1,
   positionResponseScale: 1,
   lookResponseScale: 1,
@@ -105,7 +113,14 @@ const runtimeDebug = {
     setRenderGeometryVisibility(runtimeDebug.renderGeometryVisible);
   },
 };
-const selection = { ...defaultSelection };
+const selection = {
+  ...defaultSelection,
+  carId: mvpInitialCar?.id ?? defaultSelection.carId,
+  skinId:
+    mvpInitialCar?.defaultSkinId ??
+    mvpInitialCar?.skins?.[0]?.id ??
+    defaultSelection.skinId,
+};
 const telemetryRecorder = createTelemetryRecorder({
   getContext: () => ({
     camera,
@@ -159,6 +174,43 @@ const sceneState = {
   environmentState: null,
   environmentController: null,
 };
+const mvpMenuScene = createMvpMenuScene({
+  renderer,
+  tracks: trackCatalog,
+  cars: mvpMenuCars,
+  selection,
+});
+const mvpMenu = createMvpMenu({
+  tracks: trackCatalog,
+  cars: mvpMenuCars,
+  selection,
+  onSelectionChange(nextSelection) {
+    setSelection(nextSelection);
+  },
+  onStartRace() {
+    return loadRaceSelection();
+  },
+  onRaceStartConfirmed() {
+    drivingInput.debugClear();
+    setRacePaused(false);
+    mvpMenuScene.setState({ screen: "racing", selection });
+  },
+  onPauseRace() {
+    drivingInput.debugClear();
+    setRacePaused(true);
+  },
+  onResumeRace() {
+    drivingInput.debugClear();
+    setRacePaused(false);
+    mvpMenuScene.setState({ screen: "racing", selection });
+  },
+  onExitRace() {
+    return unloadRaceSelection();
+  },
+  onStateChange(menuState) {
+    mvpMenuScene.setState(menuState);
+  },
+});
 let transitionChain = Promise.resolve();
 const sunOcclusionOrigin = new THREE.Vector3();
 const sunOcclusionDirection = new THREE.Vector3();
@@ -278,6 +330,10 @@ if (typeof window !== "undefined") {
     get telemetryRecorder() {
       return telemetryRecorder;
     },
+    setSelection,
+    loadRaceSelection,
+    unloadRaceSelection,
+    setRacePaused,
     async runSlipSanityCheck() {
       if (!drivingInput?.debugPress || !sceneState.drivingSimulation?.getDebugState) {
         return null;
@@ -346,10 +402,6 @@ if (typeof window !== "undefined") {
   };
 }
 
-queueTransition(() =>
-  loadSceneSelection({ reloadTrack: true, reloadCar: true }),
-);
-
 const frameClock = new THREE.Clock();
 
 animate();
@@ -360,6 +412,12 @@ function animate() {
   const frameStart = performance.now();
   const measuredDeltaSeconds = Math.min(frameClock.getDelta(), 0.1);
   const deltaSeconds = runtimeDebug.paused ? 0 : measuredDeltaSeconds;
+
+  if (mvpMenuScene.render(measuredDeltaSeconds)) {
+    stats.end();
+    return;
+  }
+
   const simStart = performance.now();
   if (!runtimeDebug.paused) {
     sceneState.drivingSimulation?.update(deltaSeconds);
@@ -606,6 +664,7 @@ function maxFrameMetric(samples, key) {
 }
 
 function applySelection(nextPartialSelection) {
+  const hadLoadedRace = hasLoadedRace();
   const nextSelection = {
     ...selection,
     ...nextPartialSelection,
@@ -624,15 +683,63 @@ function applySelection(nextPartialSelection) {
 
   Object.assign(selection, nextSelection);
   syncHudSelection(hud, { tracks: trackCatalog, cars: carCatalog, selection });
-  queueTransition(() => loadSceneSelection({ reloadTrack, reloadCar }));
+  if (hadLoadedRace) {
+    queueTransition(() => loadSceneSelection({ reloadTrack, reloadCar }));
+  }
+}
+
+function setSelection(nextPartialSelection) {
+  const nextSelection = {
+    ...selection,
+    ...nextPartialSelection,
+  };
+  const selectedTrack = getTrackById(nextSelection.trackId);
+  const selectedCar = getCarById(nextSelection.carId);
+  const selectedSkin = getSkinById(selectedCar, nextSelection.skinId);
+
+  Object.assign(selection, {
+    trackId: selectedTrack?.id ?? selection.trackId,
+    carId: selectedCar?.id ?? selection.carId,
+    skinId: selectedSkin?.id ?? selection.skinId,
+  });
+  syncHudSelection(hud, { tracks: trackCatalog, cars: carCatalog, selection });
+}
+
+function loadRaceSelection() {
+  runtimeDebug.autoPauseAfterLoad = true;
+  setRacePaused(true);
+  drivingInput.debugClear();
+  return queueTransition(async () => {
+    await loadSceneSelection({ reloadTrack: true, reloadCar: true });
+    setRacePaused(true);
+    drivingInput.debugClear();
+  });
+}
+
+function unloadRaceSelection() {
+  drivingInput.debugClear();
+  setRacePaused(true);
+  return queueTransition(async () => {
+    disposeLoadedRace();
+    setRacePaused(false);
+    runtimeDebug.autoPauseAfterLoad = false;
+  });
+}
+
+function setRacePaused(paused) {
+  runtimeDebug.paused = Boolean(paused);
+}
+
+function hasLoadedRace() {
+  return Boolean(sceneState.trackRoot || sceneState.carRoot || sceneState.drivingSimulation);
 }
 
 function queueTransition(task) {
-  transitionChain = transitionChain
-    .then(() => task())
-    .catch((error) => {
-      console.error("Error updating scene selection:", error);
-    });
+  const nextTransition = transitionChain.then(() => task());
+  transitionChain = nextTransition.catch((error) => {
+    console.error("Error updating scene selection:", error);
+  });
+  return nextTransition;
 }
 
 async function loadSceneSelection({ reloadTrack, reloadCar }) {
@@ -800,6 +907,48 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     setRenderGeometryVisibility(runtimeDebug.renderGeometryVisible);
     updateVehicleLights();
   }
+}
+
+function disposeLoadedRace() {
+  sceneState.chaseCamera?.dispose?.();
+  sceneState.chaseCamera = null;
+  controls.enabled = false;
+
+  sceneState.drivingSimulation?.dispose?.();
+  sceneState.drivingSimulation = null;
+  sceneState.lightsConfig = null;
+
+  if (sceneState.carRoot) {
+    scene.remove(sceneState.carRoot);
+    disposeHierarchy(sceneState.carRoot);
+    sceneState.carRoot = null;
+    sceneState.tireRoot = null;
+  }
+
+  if (sceneState.trackRoot) {
+    scene.remove(sceneState.trackRoot);
+    disposeHierarchy(sceneState.trackRoot);
+    sceneState.trackRoot = null;
+  }
+
+  if (sceneState.collisionAsset?.root) {
+    if (sceneState.collisionAsset.root.parent === scene) {
+      scene.remove(sceneState.collisionAsset.root);
+    }
+    disposeHierarchy(sceneState.collisionAsset.root);
+  }
+
+  sceneState.collisionAsset = null;
+  sceneState.dynamicObjects = [];
+  sceneState.contactSampler = null;
+  sceneState.sceneSampler = null;
+  sceneState.startPoints = [];
+
+  sceneState.environmentController?.dispose?.();
+  sceneState.environmentController = null;
+  sceneState.environmentState?.dispose?.();
+  sceneState.environmentState = null;
+  smoothedVehicleSunVisibility = 1;
 }
 
 function syncEnvironmentSunToTrack(environmentState, trackRoot) {

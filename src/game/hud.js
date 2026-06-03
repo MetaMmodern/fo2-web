@@ -266,14 +266,6 @@ export function createHud(
     ]);
   }
 
-  if (cameraDebug) {
-    const cameraFolder = mainGui.addFolder("Camera");
-    cameraFolder
-      .add(cameraDebug, "enableThreeQuarterView")
-      .name("3/4 debug camera")
-      .listen();
-  }
-
   addInfoBlock(helpFolder, [
     "W/S or arrows: throttle and brake",
     "A/D or arrows: steer",

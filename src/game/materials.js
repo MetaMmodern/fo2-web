@@ -45,6 +45,7 @@ export function prepareMaterials(root, getTexture, environmentState = null) {
             getTexture,
             environmentState,
             Boolean(obj.geometry?.getAttribute("color")),
+            material,
           )
         : material,
     );
@@ -141,13 +142,15 @@ function createMaterialForName(
   getTexture,
   environmentState,
   useVertexColors,
+  sourceMaterial = null,
 ) {
   const materialName = name ?? "";
+  const primaryTexture = resolveSourceTextureName(sourceMaterial, null);
 
   if (name === "body") {
     return createCarBodyMaterial({
       name: materialName,
-      baseMap: getTexture("skin"),
+      baseMap: getTexture(primaryTexture ?? "skin"),
       useVertexColors,
       environmentState,
     });
@@ -156,7 +159,7 @@ function createMaterialForName(
   if (name === "common" || name === "shear") {
     return createDynamicVehicleMaterial({
       name: materialName,
-      map: getTexture("common"),
+      map: getTexture(primaryTexture ?? "common"),
       useVertexColors,
       environmentState,
       specularStrength: 0.2,
@@ -173,7 +176,7 @@ function createMaterialForName(
   ) {
     return createDynamicVehicleMaterial({
       name: materialName,
-      map: getTexture("shock"),
+      map: getTexture(primaryTexture ?? "shock"),
       useVertexColors,
       environmentState,
       transparent: true,
@@ -187,7 +190,7 @@ function createMaterialForName(
   if (name === "interior") {
     return createDynamicVehicleMaterial({
       name: materialName,
-      map: getTexture("interior"),
+      map: getTexture(primaryTexture ?? "interior"),
       useVertexColors,
       environmentState,
       specularStrength: 0.08,
@@ -199,7 +202,7 @@ function createMaterialForName(
   if (name.startsWith("window")) {
     return createCarWindowMaterial({
       name: materialName,
-      baseMap: getTexture("windows"),
+      baseMap: getTexture(primaryTexture ?? "windows"),
       environmentState,
     });
   }
@@ -220,7 +223,7 @@ function createMaterialForName(
 
     return createCarLightMaterial({
       name: materialName,
-      baseMap: getTexture("lights"),
+      baseMap: getTexture(primaryTexture ?? "lights"),
       glowMap: getTexture("lightsGlow"),
       litMap: getTexture("lightsGlowLit"),
       useVertexColors,
@@ -231,20 +234,21 @@ function createMaterialForName(
     });
   }
 
-  if (name === "shadow") {
+  if (name === "shadow" || name === "groundplane") {
     return new THREE.MeshBasicMaterial({
       name: materialName,
-      map: getTexture("shadow"),
+      map: getTexture(primaryTexture ?? "shadow"),
       color: 0xffffff,
       transparent: true,
-      opacity: 0.6,
+      opacity: name === "groundplane" ? 0.72 : 0.6,
+      depthWrite: false,
     });
   }
 
   if (name === "tire") {
     return createDynamicVehicleMaterial({
       name: materialName,
-      map: getTexture("tire"),
+      map: getTexture(primaryTexture ?? "tire"),
       useVertexColors,
       environmentState,
       specularStrength: 0,
@@ -257,7 +261,7 @@ function createMaterialForName(
   if (name === "rim") {
     return createDynamicVehicleMaterial({
       name: materialName,
-      map: getTexture("tire"),
+      map: getTexture(primaryTexture ?? "tire"),
       useVertexColors,
       environmentState,
       alphaTest: 0.02,
@@ -277,6 +281,18 @@ function createMaterialForName(
     specularStrength: 0.14,
     specularPower: 16,
   });
+}
+
+function resolveSourceTextureName(sourceMaterial, fallback) {
+  const textureName = sourceMaterial?.userData?.flatoutTextures?.find(Boolean);
+  if (!textureName) {
+    return fallback;
+  }
+
+  return textureName
+    .replace(/^.*[\\/]/, "")
+    .replace(/\.[^.]+$/, "")
+    .toLowerCase();
 }
 
 function createDynamicVehicleMaterial({

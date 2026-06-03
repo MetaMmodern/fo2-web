@@ -428,3 +428,16 @@ Not making code changes in this note, but these are the clean, low-risk facts to
 - The “final composite to backbuffer” in `FUN_005aa390` is `post_mask` via `FUN_005a96e0`, not `post_combine2`.
 - The buffer fed into `post_mask` `Tex0` is the last destination render target produced by the preceding `FUN_005a8c60` ping-pong loop.
 - `radialblur.tga` participates only as the `Tex1.a` mask term in `post_mask`; it is not the final bloom RGB source.
+
+---
+
+## 2026-06-03 Menu Car Preview Hook
+
+`Confirmed (Ghidra + binary constants)`
+
+The menu car display path uses compact `data/menu/cars/menucar_%i.bgm` meshes plus `data/menu/cars/car_%i/skin%i.dds` skin textures. `MenuInterface_UpdateMenuCarTransform` @ `0x004ac680` stores yaw at `gui+0x5b4` and advances automatic rotation by `dtSeconds * 0.104719758` radians, i.e. exactly 6 degrees/sec.
+
+Implementation implication for the web MVP:
+- The menu preview should rotate the model about its local/pose origin, not orbit an offset parent.
+- The preview should use the existing vehicle shader alpha-as-gloss path; do not solve UI layering by forcing body materials transparent.
+- Focused details are in `ghidra_findings/MENU_CAR_RENDERING_FINDINGS_2026-06-03.md`.

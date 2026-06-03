@@ -19,6 +19,10 @@ canvas {
   display: block;
 }
 
+.mvp-input-layer {
+  display: none;
+}
+
 .debug-gui {
   position: fixed;
   top: 16px;
