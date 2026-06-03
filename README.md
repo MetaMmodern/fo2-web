@@ -2,6 +2,7 @@
 
 ## Ghidra Baseline
 
+
 - Use [reference/ghidra_projects/fo2_zack_result.rep](/Users/metamodern/Documents/Github/Personal/flatout_oss/reference/ghidra_projects/fo2_zack_result.rep) as the active Ghidra project baseline.
 - Treat [reference/ghidra_projects/flatout2.rep](/Users/metamodern/Documents/Github/Personal/flatout_oss/reference/ghidra_projects/flatout2.rep) as legacy only.
 - The address book remains valid without remapping because both projects target the same `FlatOut2.exe` hash.
