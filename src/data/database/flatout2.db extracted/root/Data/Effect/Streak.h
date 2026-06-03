@@ -1,0 +1,15 @@
+float AmountScale = 0.9;
+vec2 Size = { 0.02, 0.06 };
+vec2 Life = { 0.2, 0.7 };
+float RandomPos = 0.2;
+float NormalVelocityMul = 0.4;
+vec2 UpVelocity = { 0.5, 1.8 };
+vec2 Backwards = { 3, 8 };
+float CountPerHitVelocity = 5;
+vec2 HitSpread = { 0.2, 0.2 };
+vec2 MoveInwards = { 0.1, 0.3 };
+vec2 VelocityInwards = { 0, 0.1 };
+float Gravity = 9.81;
+int MaxScratchIterations = 4;
+float ExplosionMul = 0.5;
+int MaxHitIterations = 64;

@@ -1,0 +1,17 @@
+float CarPowerMul = 1.15;
+float CarPowerAdd = 4;
+int NumNudges = -1;
+float NudgePower = 10;
+int MinWaterTime = 40;
+float MaxAngle = 0.714;
+float MinWaterVelocity = 5;
+float MaxWaterAngle = 0.6;
+float ExtraGravity = 1.68;
+int Timer = 450;
+bool TimerSlowdown = true;
+float MinAngle = 0;
+float PowerMulLow = 1;
+float PowerMulHigh = 1;
+vec2 AftertouchPower = { 0.005, 0.005 };
+float AftertouchSlowdown = 0.9;
+vec3 Wind = { 0, 0, 0 };

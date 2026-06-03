@@ -1,0 +1,14 @@
+float Spacing = 0;
+float Spread = 0.5;
+float Follow = 0;
+vec2 SizePerRadius = { 0.1, 0.15 };
+vec2 Grow = { 2, 2 };
+vec2 Lifetime = { 0.4, 2 };
+float AngleSpeed = 0;
+float Damping = 1;
+vec2 Alpha = { 1, 1 };
+float FadePeak = 0.5;
+vec2 AccelerationY = { 0, 0 };
+vec2 ColorRange = { 1, 1 };
+float NormalVelocity = 4;
+float UpwardsPerGrow = 0.5;

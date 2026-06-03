@@ -1,0 +1,13 @@
+vec2 PeakPowerRpm = { 6500, 7800 };
+vec2 PeakPower = { 134, 177 };
+vec2 PeakTorqueRpm = { 5000, 6000 };
+vec2 PeakTorque = { 210, 262 };
+vec2 RedLineRpm = { 6800, 8300 };
+vec2 RpmLimit = { 100, 100 };
+vec2 ZeroPowerRpm = { 600, 600 };
+vec2 IdleRpm = { 1000, 1000 };
+vec2 NitroStorage = { 5, 5 };
+vec2 NitroAcceleration = { 0.88, 1.78 };
+vec2 TurboAcceleration = { 0.185, 0.215 };
+vec2 InertiaEngine = { 0.17, 0.17 };
+vec2 EngineFriction = { 0.015, 0.015 };

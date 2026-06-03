@@ -1,0 +1,14 @@
+bool Enabled = true;
+float MinEmitAtSpeed = 5;
+float Propability = 1;
+vec2 Size = { 0.1, 0.15 };
+vec2 Lifetime = { 1, 1.4 };
+vec2 Grow = { 0.6, 0.7 };
+float AngleSpeed = 0;
+float Gravity = 9.81;
+float Alpha = 1;
+float FadePeak = 0.1;
+vec2 UpwardsBase = { 5, 7.5 };
+float UpwardsPerVelocity = 0.1;
+vec2 FollowLinear = { 0, 0 };
+float Spread = 2;

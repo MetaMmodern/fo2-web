@@ -1,0 +1,10 @@
+const char* IdleSample = "engine/Car31_idle.wav";
+const char* GearShiftSample = "gearshift/gearshift_1.wav";
+const char* NitroShotSample = "gearshift/nitroshot_subsonic.wav";
+const char* NitroLoopSample = "gearshift/nitroloop_2.wav";
+const char* OffLow = "engine/Car31_offlow.wav";
+const char* OffMid = "engine/Car31_offmid.wav";
+const char* OffHigh = "engine/Car31_offhigh.wav";
+const char* OnLow = "engine/Car31_onlow.wav";
+const char* OnMid = "engine/Car31_onmid.wav";
+const char* OnHigh = "engine/Car31_onhigh.wav";

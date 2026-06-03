@@ -11,5 +11,4 @@ mods/**/obj
 *.log
 hs_err_pid*.log
 reference/**
-src/data/database/flatout2.db extracted/**
 .dotnet_cli

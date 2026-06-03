@@ -1,0 +1,10 @@
+vec3 curling = { 204, 68, 48 };
+vec3 darts = { -149.7, 50, 70.7 };
+vec3 blackDanny = { -215, 45, -200 };
+vec3 highJump = { 95, 90, -200 };
+vec3 fieldGoal = { 97, 120, -280 };
+vec3 bowling = { 9, 67, 104 };
+vec3 soccer0 = { -146, 98, -45.81 };
+vec3 soccer1 = { -214.46, 98, -45.81 };
+vec3 soccer2 = { -146, 76, -45.81 };
+vec3 soccer3 = { -214, 76, -45.81 };

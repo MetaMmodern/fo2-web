@@ -1,0 +1,10 @@
+float MinScreenSize = 1;
+float CountPerVolume = 64;
+int MinCount = 64;
+int MaxCount = 256;
+vec2 Size = { 0.1, 0.15 };
+vec2 Life = { 0.5, 1.5 };
+vec2 Upwards = { 0, 2 };
+float Gravity = 9.81;
+float AngleSpeed = 512;
+vec2 BaseSpreadVelocity = { 4, 16 };

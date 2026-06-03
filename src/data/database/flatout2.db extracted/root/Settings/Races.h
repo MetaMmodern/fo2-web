@@ -1,0 +1,1 @@
+int OnlineTimeToFinish = 60;

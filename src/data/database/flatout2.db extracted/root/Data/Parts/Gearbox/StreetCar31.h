@@ -1,0 +1,12 @@
+vec4 GearR = { -4.1, 0.3, -4.1, 0.3 };
+vec4 Gear1 = { 2.79, 0.15, 2.79, 0.15 };
+vec4 Gear2 = { 1.95, 0.13, 1.95, 0.13 };
+vec4 Gear3 = { 1.44, 0.1, 1.44, 0.1 };
+vec4 Gear4 = { 1.14, 0.07, 1.14, 0.07 };
+vec4 Gear5 = { 0.89, 0.05, 0.89, 0.05 };
+vec4 Gear6 = { 0, 0, 0, 0 };
+int NumGears = 5;
+vec2 EndRatio = { 4.9, 4.9 };
+vec2 ClutchEngageTime = { 0.1, 0.1 };
+vec2 ClutchReleaseTime = { 0.1, 0.1 };
+vec2 ClutchTorque = { 500, 750 };

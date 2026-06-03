@@ -1,0 +1,12 @@
+float Sensitivity = 0.5;
+float MinAnalogSpeed = 0.1;
+float MaxAnalogSpeed = 2;
+float MinAtDelta = 1;
+float MaxAtDelta = 2;
+float CenteringSpeed = 0.9;
+vec4 SteeringLimitRate = { 1, 0.8, 0.5, 0.25 };
+vec4 SteeringSpeedRate = { 2, 2, 2, 2 };
+vec4 SteeringLimitSpeed = { 20, 40, 100, 250 };
+float DigitalThreshold = 0.2;
+float MinDigitalSpeed = 1;
+float MaxDigitalSpeed = 2.5;

@@ -1,0 +1,17 @@
+int Effect0 = 0;
+int Effect1 = 1;
+int Effect2 = 0;
+int Effect3 = 0;
+float LayerDuration = 3;
+float VideoAlpha = 1;
+rgba BackgroundColor = { 0, 0, 0, 0 };
+vec2 FadeInOutFractions = { 0.2, 0.2 };
+float HeaderX = 120;
+float TextX = 180;
+float HeaderSpacing = 30;
+float LineSpacing = 20;
+vec2 ShadowOffset = { 2, 2 };
+float ShadowAlpha = 0.5;
+float ScrollSpeed = 32;
+float ScrollFontSize = 1;
+float HorizontalScrollDistance = 60;

@@ -1,0 +1,16 @@
+int Count = 1;
+float MinScreenSize = 1;
+float Propability = 1;
+vec2 Lifetime = { 0.08, 0.12 };
+float AngleSpeed = 1024;
+vec2 Size = { 0.05, 0.08 };
+vec2 Grow = { 0.12, 0.14 };
+float MinTurbulence = 0;
+float AddSpeedTurbulence = 0;
+float AddLoadTurbulence = 0;
+float MinVelocity = 2;
+float AddLoadVelocity = 0;
+float Damping = 1;
+float MinAlpha = 0.5;
+float AddLoadAlpha = 0;
+float FadePeak = 0.05;

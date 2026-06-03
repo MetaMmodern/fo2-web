@@ -1,0 +1,14 @@
+bool BloomDisable = false;
+bool BloomShow = false;
+bool BloomFromLuminance = false;
+bool BloomMonochromeCombine = false;
+int BloomPasses = 4;
+float BloomIntensity = 0.9;
+bool BloomDownsampled = false;
+bool RadialBlurShow = false;
+int RadialBlurPasses = 2;
+float RadialBlurZoomStart = 0.92;
+float RadialBlurZoomMultiplier = 0.92;
+vec2 RadialBlurZoomCenter = { 0.5, 0.5 };
+float RadialBlurStrength = 2;
+bool ColorFilter = true;

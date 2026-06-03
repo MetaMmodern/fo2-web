@@ -1,0 +1,15 @@
+float RollingResistance = 0.005;
+float InducedDragCoeff = 0.15;
+float PneumaticTrail = 0.1;
+float PneumaticOffset = 0.5;
+vec3 ZStiffness = { 1, 0.95, 1 };
+vec3 XStiffness = { 0.85, 1, 1 };
+vec2 CStiffness = { 0, 0 };
+vec2 ZFriction = { 1.5, 1 };
+vec2 XFriction = { 1.5, 1 };
+float FrictionBoost = 0.1;
+float SlideUnderSteer = 0;
+float SlideControl = 0.6;
+float UnderSteer = 0;
+float SlowDown = 0;
+float AntiSpin = 0;

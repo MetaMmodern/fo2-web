@@ -1,0 +1,14 @@
+float MinScreenSize = 0.01;
+float MinEmitAlpha = 0.01;
+float DelayDistance = 0.5;
+int DelayTimeMs = 80;
+float Spread = 0.01;
+float Upwards = 0.1;
+float FollowEmitter = 0.8;
+vec2 Size = { 0.1, 0.4 };
+vec2 Grow = { 0.1, 0.4 };
+vec2 Lifetime = { 1, 1.5 };
+float AngleSpeed = 128;
+float Damping = 0;
+float Alpha = 1;
+float FadePeak = 0.15;
