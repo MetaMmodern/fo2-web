@@ -94,11 +94,16 @@ export async function createDrivingSimulation({
 
   return {
     update(deltaSeconds) {
+      const framePerfStart = nowMs();
       const dt = Math.min(Math.max(deltaSeconds, 0), MAX_FRAME_DELTA);
 
       if (dt <= 0) {
         return;
       }
+
+      const isolation = resolveRapierDebugOptions(debugOptions);
+      setStaticWorldRuntimeEnabled(staticWorldDebug, isolation.staticWorld);
+      setDynamicObjectsRuntimeEnabled(dynamicObjectState, isolation.dynamicProps);
 
       if (input?.resetPressed && !previousResetPressed) {
         resetChassis(chassis, spawnTranslation, spawnRotation);
@@ -107,8 +112,13 @@ export async function createDrivingSimulation({
 
       accumulator += dt;
       let stepCount = 0;
+      let stepVehicleMs = 0;
+      let dynamicPropsMs = 0;
+      let worldStepMs = 0;
+      let clearanceMs = 0;
 
       while (accumulator >= FIXED_DT && stepCount < MAX_STEPS_PER_FRAME) {
+        const stepVehicleStart = nowMs();
         stepVehicle(
           world,
           chassis,
@@ -118,29 +128,79 @@ export async function createDrivingSimulation({
           debugState,
           trackFloorSampler,
         );
-        activateImpactedDynamicObjects(
-          world,
-          dynamicObjectState,
-          chassis,
-          chassisColliders,
-        );
+        stepVehicleMs += nowMs() - stepVehicleStart;
+
+        if (isolation.dynamicProps) {
+          const dynamicPropsStart = nowMs();
+          activateImpactedDynamicObjects(
+            world,
+            dynamicObjectState,
+            chassis,
+            chassisColliders,
+          );
+          dynamicPropsMs += nowMs() - dynamicPropsStart;
+        }
+
+        const worldStepStart = nowMs();
         world.step();
-        enforceChassisGroundClearance(chassis, config, trackFloorSampler);
+        worldStepMs += nowMs() - worldStepStart;
+
+        if (isolation.clearanceGuard) {
+          const clearanceStart = nowMs();
+          enforceChassisGroundClearance(chassis, config, world);
+          clearanceMs += nowMs() - clearanceStart;
+        }
+
         accumulator -= FIXED_DT;
         stepCount += 1;
       }
       debugState.simSteps = stepCount;
       debugState.simBacklogMs = accumulator * 1000;
 
+      const syncPoseStart = nowMs();
       if (stepCount > 0) {
         syncCarRootFromBody(carRoot, chassis, config);
       }
+      const syncPoseMs = nowMs() - syncPoseStart;
 
-      syncDynamicSceneObjects(dynamicObjectState);
+      const dynamicSyncStart = nowMs();
+      let dynamicSyncStats = null;
+      if (isolation.dynamicProps) {
+        dynamicSyncStats = syncDynamicSceneObjects(dynamicObjectState);
+      }
+      const dynamicSyncMs = nowMs() - dynamicSyncStart;
+
+      const cameraStart = nowMs();
       updateCameraState(cameraState, chassis, carRoot);
+      const cameraMs = nowMs() - cameraStart;
+
+      const debugStart = nowMs();
       updateDebugState(debugState, chassis, config);
-      updateWheelVisuals(config, chassis, vehicleController, debugState, dt, carRoot);
+      const debugMs = nowMs() - debugStart;
+
+      const wheelVisualsStart = nowMs();
+      if (isolation.wheelVisuals) {
+        updateWheelVisuals(config, chassis, vehicleController, debugState, dt, carRoot);
+      }
+      const wheelVisualsMs = nowMs() - wheelVisualsStart;
+
       syncDebugWheelSlipAggregates(debugState);
+      debugState.perf = {
+        frameMs: nowMs() - framePerfStart,
+        stepVehicleMs,
+        dynamicPropsMs,
+        worldStepMs,
+        clearanceMs,
+        syncPoseMs,
+        dynamicSyncMs,
+        dynamicSyncVisited: dynamicSyncStats?.visited ?? 0,
+        dynamicSyncUpdated: dynamicSyncStats?.updated ?? 0,
+        dynamicSyncSkippedDormant: dynamicSyncStats?.skippedDormant ?? 0,
+        dynamicSyncSkippedSleeping: dynamicSyncStats?.skippedSleeping ?? 0,
+        cameraMs,
+        debugMs,
+        wheelVisualsMs,
+      };
     },
     speedKph() {
       return horizontalSpeed(rapierVectorToThree(chassis.linvel(), TMP_VEC)) * 3.6;
@@ -551,6 +611,7 @@ function buildStaticWorldFromRoot(world, root, dynamicObjects = []) {
   if (!root || !ENABLE_STATIC_WORLD_COLLISION) {
     return {
       enabled: false,
+      runtimeEnabled: false,
       colliderCount: 0,
       meshCount: 0,
       triangleCount: 0,
@@ -566,6 +627,7 @@ function buildStaticWorldFromRoot(world, root, dynamicObjects = []) {
   if (!merged) {
     return {
       enabled: true,
+      runtimeEnabled: false,
       colliderCount: 0,
       meshCount: 0,
       triangleCount: 0,
@@ -586,10 +648,11 @@ function buildStaticWorldFromRoot(world, root, dynamicObjects = []) {
         COLLISION_GROUP_VEHICLE | COLLISION_GROUP_PROP,
       ),
     );
-  world.createCollider(colliderDesc);
+  const collider = world.createCollider(colliderDesc);
 
-  return {
+  const debug = {
     enabled: true,
+    runtimeEnabled: true,
     colliderCount: 1,
     meshCount: merged.meshCount,
     triangleCount: merged.indices.length / 3,
@@ -598,6 +661,11 @@ function buildStaticWorldFromRoot(world, root, dynamicObjects = []) {
     boundsMin: merged.bounds.min.toArray(),
     boundsMax: merged.bounds.max.toArray(),
   };
+  Object.defineProperty(debug, "collider", {
+    value: collider,
+    enumerable: false,
+  });
+  return debug;
 }
 
 function extractMergedWorldTrimesh(root, excludedNames = new Set()) {
@@ -748,6 +816,7 @@ function createDynamicSceneObjects(world, dynamicObjects) {
       collider: body.collider(0),
       category,
       dormant: category.releaseOnImpact,
+      runtimeEnabled: true,
       renderParent: renderNode.parent ?? null,
       renderScale: renderNode.scale.clone(),
     });
@@ -779,6 +848,37 @@ function summarizeDynamicCategories(entries, limit = 5) {
     .slice(0, limit)
     .map(([name, count]) => `${name}:${count}`)
     .join(",");
+}
+
+function setStaticWorldRuntimeEnabled(staticWorldDebug, enabled) {
+  const nextEnabled = Boolean(enabled);
+
+  if (!staticWorldDebug?.collider || staticWorldDebug.runtimeEnabled === nextEnabled) {
+    return;
+  }
+
+  if (typeof staticWorldDebug.collider.setEnabled === "function") {
+    staticWorldDebug.collider.setEnabled(nextEnabled);
+  }
+  staticWorldDebug.runtimeEnabled = nextEnabled;
+}
+
+function setDynamicObjectsRuntimeEnabled(entries, enabled) {
+  const nextEnabled = Boolean(enabled);
+
+  for (const entry of entries) {
+    if (entry.runtimeEnabled === nextEnabled) {
+      continue;
+    }
+
+    entry.runtimeEnabled = nextEnabled;
+    if (typeof entry.body?.setEnabled === "function") {
+      entry.body.setEnabled(nextEnabled);
+    }
+    if (typeof entry.collider?.setEnabled === "function") {
+      entry.collider.setEnabled(nextEnabled);
+    }
+  }
 }
 
 function createDynamicObjectCollider(object, halfExtents, localCenter) {
@@ -986,10 +1086,28 @@ function activateImpactedDynamicObjects(
 }
 
 function syncDynamicSceneObjects(dynamicObjectState) {
+  const stats = {
+    visited: 0,
+    updated: 0,
+    skippedDormant: 0,
+    skippedSleeping: 0,
+  };
+
   for (const entry of dynamicObjectState) {
     const { body, renderNode, renderParent, renderScale } = entry;
+    stats.visited += 1;
 
     if (!body || !renderNode) {
+      continue;
+    }
+
+    if (entry.dormant) {
+      stats.skippedDormant += 1;
+      continue;
+    }
+
+    if (typeof body.isSleeping === "function" && body.isSleeping()) {
+      stats.skippedSleeping += 1;
       continue;
     }
 
@@ -1009,7 +1127,10 @@ function syncDynamicSceneObjects(dynamicObjectState) {
       renderNode.quaternion.copy(TMP_QUAT_C);
       renderNode.scale.copy(renderScale);
     }
+    stats.updated += 1;
   }
+
+  return stats;
 }
 
 function createChassisBody(world, config, translation, rotation) {
@@ -1408,7 +1529,9 @@ function stepVehicle(
     7.2,
     FIXED_DT,
   );
-  const surfaceType = sampleSurfaceType(trackFloorSampler, translation);
+  const surfaceType = isolation.surfaceSampler
+    ? sampleSurfaceType(trackFloorSampler, translation)
+    : "tarmac";
   const surfaceDynamics = resolveSurfaceDynamics(config.surfaceDynamics, surfaceType);
   const surfaceGrip = computeSurfaceGrip(surfaceDynamics);
   const surfaceRollingResistanceScale = Math.max(
@@ -2227,29 +2350,20 @@ function sampleGround(world, chassis, rayLength) {
   );
 }
 
-function enforceChassisGroundClearance(chassis, config, trackFloorSampler) {
-  if (!trackFloorSampler?.sample) {
-    return;
-  }
+function enforceChassisGroundClearance(chassis, config, world) {
+  const floorHit = sampleGround(world, chassis, config.bodyHalfExtents.y + 1.2);
 
-  const translation = chassis.translation();
-  const floorHit = trackFloorSampler.sample(
-    new THREE.Vector3(translation.x, translation.y + 2, translation.z),
-    {
-      rayHeight: 8,
-      rayDistance: 18,
-      minUpDot: 0.15,
-    },
-  );
-
-  if (!floorHit?.point) {
+  if (!floorHit || floorHit.normal.y < 0.15) {
     return;
   }
 
   // This is only an emergency anti-tunneling guard. Do not keep the full rotated
   // chassis box above ground here: that unloads the raycast wheels as pitch/roll
   // changes and creates a self-amplifying pogo/rollover loop on flat ground.
-  const minY = floorHit.point.y + CHASSIS_GROUND_CLEARANCE;
+  const translation = chassis.translation();
+  const rayOriginY = translation.y + 0.2;
+  const floorY = rayOriginY - floorHit.timeOfImpact;
+  const minY = floorY + CHASSIS_GROUND_CLEARANCE;
 
   if (translation.y >= minY) {
     return;
@@ -2916,6 +3030,11 @@ function resolveRapierDebugOptions(debugOptions) {
     downforce: source.downforce !== false,
     uprightAssist: source.uprightAssist !== false,
     gravity: source.gravity !== false,
+    staticWorld: source.staticWorld !== false,
+    dynamicProps: source.dynamicProps !== false,
+    surfaceSampler: source.surfaceSampler !== false,
+    clearanceGuard: source.clearanceGuard !== false,
+    wheelVisuals: source.wheelVisuals !== false,
   };
 }
 
@@ -2962,6 +3081,10 @@ function shortestAngleDelta(from, to) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function nowMs() {
+  return globalThis.performance?.now?.() ?? Date.now();
 }
 
 function interactionGroups(group, mask) {
@@ -3109,6 +3232,7 @@ function sampleSurfaceType(trackFloorSampler, translation) {
       rayHeight: 8,
       rayDistance: 24,
       minUpDot: -0.4,
+      maxHitY: translation.y + 0.35,
     },
   );
   return hit?.surfaceType ?? "tarmac";

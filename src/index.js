@@ -29,7 +29,7 @@ import {
   setVehicleLightState,
   setVehicleSunVisibility,
 } from "./game/materials";
-import { createDrivingSimulation } from "./game/physicsWorkerClient";
+import { createDrivingSimulation } from "./game/physicsRapier";
 import { createColorFilterPass } from "./game/postprocessing";
 import {
   createChaseCamera,
@@ -43,19 +43,6 @@ import { loadVehicle } from "./game/vehicle";
 const { scene, camera, renderer, controls } = createSceneApp();
 const stats = createStatsPanel();
 const drivingInput = createDrivingInput();
-const drivingDebug = {
-  enabled: true,
-  substeps: 1,
-  sampleContacts: true,
-  alignToGround: true,
-  tireForces: true,
-  aeroForces: true,
-  gravity: true,
-  gearbox: true,
-  wheelVisuals: true,
-  cameraShake: true,
-  freezePosition: false,
-};
 const initialTrack = getTrackById(defaultSelection.trackId);
 const mvpMenuCars = carCatalog;
 const mvpInitialCar =
@@ -78,6 +65,13 @@ const runtimeDebug = {
   autoPauseAfterLoad: false,
   collisionFramesVisible: false,
   renderGeometryVisible: true,
+  renderIsolation: {
+    track: true,
+    vehicle: true,
+    environmentOverlay: true,
+    postprocess: true,
+    sunOcclusion: true,
+  },
   physicsIsolation: {
     driveForce: true,
     gearbox: true,
@@ -90,6 +84,11 @@ const runtimeDebug = {
     downforce: true,
     uprightAssist: true,
     gravity: true,
+    staticWorld: true,
+    dynamicProps: true,
+    surfaceSampler: false,
+    clearanceGuard: true,
+    wheelVisuals: true,
   },
   physicsAllOn() {
     Object.keys(runtimeDebug.physicsIsolation).forEach((key) => {
@@ -111,6 +110,16 @@ const runtimeDebug = {
   toggleRenderGeometry() {
     runtimeDebug.renderGeometryVisible = !runtimeDebug.renderGeometryVisible;
     setRenderGeometryVisibility(runtimeDebug.renderGeometryVisible);
+  },
+  renderAllOn() {
+    Object.keys(runtimeDebug.renderIsolation).forEach((key) => {
+      runtimeDebug.renderIsolation[key] = true;
+    });
+  },
+  renderAllOff() {
+    Object.keys(runtimeDebug.renderIsolation).forEach((key) => {
+      runtimeDebug.renderIsolation[key] = false;
+    });
   },
 };
 const selection = {
@@ -229,7 +238,6 @@ if (typeof window !== "undefined") {
     camera,
     renderer,
     controls,
-    drivingDebug,
     input: drivingInput,
     runtimeDebug,
     selection,
@@ -242,76 +250,94 @@ if (typeof window !== "undefined") {
     get drivingSimulation() {
       return sceneState.drivingSimulation;
     },
-    setDrivingPerfMode(mode) {
-      if (mode === "off") {
-        Object.assign(drivingDebug, {
-          enabled: false,
+    setPhysicsIsolation(nextOptions = {}) {
+      Object.assign(runtimeDebug.physicsIsolation, nextOptions);
+      return { ...runtimeDebug.physicsIsolation };
+    },
+    getPhysicsPerf() {
+      const debugState = sceneState.drivingSimulation?.getDebugState?.() ?? null;
+      return {
+        isolation: { ...runtimeDebug.physicsIsolation },
+        perf: {
+          ...(debugState?.perf ?? {}),
+          pStep: debugState?.perf?.stepVehicleMs ?? null,
+          pWorld: debugState?.perf?.worldStepMs ?? null,
+          pDyn: debugState?.perf?.dynamicPropsMs ?? null,
+          pDynSync: debugState?.perf?.dynamicSyncMs ?? null,
+          pClear: debugState?.perf?.clearanceMs ?? null,
+          pWheel: debugState?.perf?.wheelVisualsMs ?? null,
+        },
+        staticWorld: debugState?.staticWorld ?? null,
+        frame: summarizeFrameTrace(frameTrace.slice(-120)),
+      };
+    },
+    setPhysicsPerfMode(mode) {
+      const allOn = {
+        driveForce: true,
+        gearbox: true,
+        steering: true,
+        braking: true,
+        handbrake: true,
+        differentialCurve: true,
+        aeroDrag: true,
+        lateralDrag: true,
+        downforce: true,
+        uprightAssist: true,
+        gravity: true,
+        staticWorld: true,
+        dynamicProps: true,
+        surfaceSampler: false,
+        clearanceGuard: true,
+        wheelVisuals: true,
+      };
+
+      if (mode === "all") {
+        Object.assign(runtimeDebug.physicsIsolation, allOn);
+      } else if (mode === "surface-on") {
+        Object.assign(runtimeDebug.physicsIsolation, allOn, { surfaceSampler: true });
+      } else if (mode === "no-static") {
+        Object.assign(runtimeDebug.physicsIsolation, allOn, { staticWorld: false });
+      } else if (mode === "no-dynamic") {
+        Object.assign(runtimeDebug.physicsIsolation, allOn, { dynamicProps: false });
+      } else if (mode === "no-samplers") {
+        Object.assign(runtimeDebug.physicsIsolation, allOn, {
+          surfaceSampler: false,
+          clearanceGuard: false,
         });
-        return;
-      }
-      if (mode === "bare") {
-        Object.assign(drivingDebug, {
-          enabled: true,
-          substeps: 1,
-          sampleContacts: false,
-          alignToGround: false,
-          tireForces: false,
-          aeroForces: false,
-          gravity: false,
+      } else if (mode === "no-visual-sync") {
+        Object.assign(runtimeDebug.physicsIsolation, allOn, { wheelVisuals: false });
+      } else if (mode === "forces-off") {
+        Object.assign(runtimeDebug.physicsIsolation, allOn, {
+          driveForce: false,
           gearbox: false,
-          wheelVisuals: false,
-          cameraShake: false,
-          freezePosition: false,
-        });
-        return;
-      }
-      if (mode === "contacts") {
-        Object.assign(drivingDebug, {
-          enabled: true,
-          substeps: 1,
-          sampleContacts: true,
-          alignToGround: true,
-          tireForces: false,
-          aeroForces: false,
-          gravity: false,
-          gearbox: false,
-          wheelVisuals: false,
-          cameraShake: false,
-          freezePosition: false,
-        });
-        return;
-      }
-      if (mode === "forces") {
-        Object.assign(drivingDebug, {
-          enabled: true,
-          substeps: 1,
-          sampleContacts: true,
-          alignToGround: true,
-          tireForces: true,
-          aeroForces: true,
-          gravity: true,
-          gearbox: true,
-          wheelVisuals: false,
-          cameraShake: false,
-          freezePosition: false,
-        });
-        return;
-      }
-      if (mode === "full") {
-        Object.assign(drivingDebug, {
-          enabled: true,
-          substeps: 1,
-          sampleContacts: true,
-          alignToGround: true,
-          tireForces: true,
-          aeroForces: true,
-          gravity: true,
-          gearbox: true,
-          wheelVisuals: true,
-          cameraShake: true,
-          freezePosition: false,
+          steering: false,
+          braking: false,
+          handbrake: false,
+          differentialCurve: false,
+          aeroDrag: false,
+          lateralDrag: false,
+          downforce: false,
+          uprightAssist: false,
         });
       }
+
+      return { ...runtimeDebug.physicsIsolation };
+    },
+    setRenderIsolation(nextOptions = {}) {
+      Object.assign(runtimeDebug.renderIsolation, nextOptions);
+      return { ...runtimeDebug.renderIsolation };
+    },
+    getRenderPerf() {
+      const recentFrame = frameTrace[frameTrace.length - 1] ?? null;
+      return {
+        isolation: { ...runtimeDebug.renderIsolation },
+        frame: summarizeFrameTrace(frameTrace.slice(-120)),
+        render: { ...(recentFrame?.renderDebug ?? {}) },
+        track: collectRenderHierarchyStats(sceneState.trackRoot),
+        vehicle: collectRenderHierarchyStats(sceneState.carRoot),
+        renderer: { ...renderer.info.render },
+        memory: { ...renderer.info.memory },
+      };
     },
     get environmentState() {
       return sceneState.environmentState;
@@ -430,7 +456,9 @@ function animate() {
   sceneState.environmentController?.update(camera);
   const environmentMs = performance.now() - envStart;
   const sunStart = performance.now();
-  updateVehicleSunOcclusion(deltaSeconds);
+  if (runtimeDebug.renderIsolation.sunOcclusion) {
+    updateVehicleSunOcclusion(deltaSeconds);
+  }
   const sunMs = performance.now() - sunStart;
   const lightsStart = performance.now();
   updateVehicleLights();
@@ -444,10 +472,7 @@ function animate() {
   }
 
   const renderStart = performance.now();
-  colorFilterPass.render(scene, camera, {
-    scene: sceneState.environmentController?.getOverlayScene?.(),
-    camera: sceneState.environmentController?.getOverlayCamera?.(),
-  });
+  const renderDebug = renderSceneFrame();
   const renderMs = performance.now() - renderStart;
   const totalMs = performance.now() - frameStart;
   smoothedFrameMs = THREE.MathUtils.lerp(smoothedFrameMs, totalMs, 0.12);
@@ -460,13 +485,8 @@ function animate() {
     frameMs: smoothedFrameMs,
     simMs: smoothedSimMs,
     renderMs: smoothedRenderMs,
-    chaseMs: smoothedChaseMs,
-    physicsDebug: formatPhysicsDebug(
-      sceneState.drivingSimulation?.getDebugState?.() ?? null,
-    ),
-    worldDebug: formatWorldDebug(
-      sceneState.drivingSimulation?.getDebugState?.() ?? null,
-    ),
+    physicsDebug: sceneState.drivingSimulation?.getDebugState?.() ?? null,
+    renderDebug,
   });
   telemetryRecorder.capture({
     debugState: sceneState.drivingSimulation?.getDebugState?.() ?? null,
@@ -481,6 +501,7 @@ function animate() {
     lightsMs,
     controlsMs,
     renderMs,
+    renderDebug,
     totalMs,
   });
   recordFrameTrace({
@@ -507,67 +528,93 @@ function createStatsPanel() {
   return panel;
 }
 
-function formatPhysicsDebug(debugState) {
-  if (!debugState) {
-    return null;
+function renderSceneFrame() {
+  const previousInfoAutoReset = renderer.info.autoReset;
+  renderer.info.autoReset = false;
+  renderer.info.reset();
+
+  const restoreVisibility = applyRenderIsolationVisibility();
+  let passStats = null;
+
+  try {
+    const overlay = runtimeDebug.renderIsolation.environmentOverlay
+      ? {
+          scene: sceneState.environmentController?.getOverlayScene?.(),
+          camera: sceneState.environmentController?.getOverlayCamera?.(),
+        }
+      : null;
+
+    passStats = runtimeDebug.renderIsolation.postprocess
+      ? colorFilterPass.render(scene, camera, overlay)
+      : renderSceneDirect(overlay);
+  } finally {
+    restoreVisibility();
+    renderer.info.autoReset = previousInfoAutoReset;
   }
 
-  const pos = debugState.chassisPosition;
-  const vel = debugState.chassisVelocity;
-  return [
-    `m=${debugState.mode ?? "--"}`,
-    `g=${debugState.grounded ? 1 : 0}`,
-    `toi=${Number.isFinite(debugState.groundToi) ? debugState.groundToi.toFixed(2) : "--"}`,
-    `gear=${Number.isFinite(debugState.gear) ? debugState.gear : "--"}`,
-    `rpm=${Number.isFinite(debugState.engineRpm) ? debugState.engineRpm.toFixed(0) : "--"}`,
-    `thr=${debugState.throttle.toFixed(1)}`,
-    `st=${debugState.steer.toFixed(1)}`,
-    `sraw=${Number.isFinite(debugState.steerRaw) ? debugState.steerRaw.toFixed(2) : "--"}`,
-    `sf=${Number.isFinite(debugState.steerState) ? debugState.steerState.toFixed(2) : "--"}`,
-    `slim=${Number.isFinite(debugState.steerLimit) ? debugState.steerLimit.toFixed(2) : "--"}`,
-    `stgt=${Number.isFinite(debugState.steerTarget) ? debugState.steerTarget.toFixed(2) : "--"}`,
-    `sl=${Number.isFinite(debugState.steerLeftDeg) ? debugState.steerLeftDeg.toFixed(1) : "--"}`,
-    `sr=${Number.isFinite(debugState.steerRightDeg) ? debugState.steerRightDeg.toFixed(1) : "--"}`,
-    `yr=${Number.isFinite(debugState.yawRateDeg) ? debugState.yawRateDeg.toFixed(1) : "--"}`,
-    `lat=${Number.isFinite(debugState.speedRight) ? debugState.speedRight.toFixed(2) : "--"}`,
-    `surf=${debugState.surfaceType ?? "--"}`,
-    `grip=${Number.isFinite(debugState.surfaceGrip) ? debugState.surfaceGrip.toFixed(2) : "--"}`,
-    `drv=${debugState.engineForce.toFixed(0)}`,
-    `wc=${debugState.wheelContacts ?? 0}`,
-    `imp=${Number.isFinite(debugState.forwardImpulse) ? debugState.forwardImpulse.toFixed(0) : "--"}`,
-    `sus=${Number.isFinite(debugState.suspensionForce) ? debugState.suspensionForce.toFixed(0) : "--"}`,
-    `slpL=${Number.isFinite(debugState.slipLongAvg) ? debugState.slipLongAvg.toFixed(2) : "--"}`,
-    `slpT=${Number.isFinite(debugState.slipLatAvg) ? debugState.slipLatAvg.toFixed(2) : "--"}`,
-    `aero=${Number.isFinite(debugState.aeroDragForce) ? debugState.aeroDragForce.toFixed(0) : "--"}`,
-    `roll=${Number.isFinite(debugState.rollingResistanceDrag) ? debugState.rollingResistanceDrag.toFixed(0) : "--"}`,
-    `ss=${Number.isFinite(debugState.simSteps) ? debugState.simSteps : "--"}`,
-    `sb=${Number.isFinite(debugState.simBacklogMs) ? debugState.simBacklogMs.toFixed(1) : "--"}`,
-    `spd=${debugState.speedHorizontal.toFixed(2)}`,
-    `y=${pos.y.toFixed(2)}`,
-    `vy=${vel.y.toFixed(2)}`,
-  ].join(" ");
+  const renderInfo = renderer.info.render;
+  const memoryInfo = renderer.info.memory;
+  return {
+    ...(passStats ?? {}),
+    calls: renderInfo.calls ?? 0,
+    triangles: renderInfo.triangles ?? 0,
+    points: renderInfo.points ?? 0,
+    lines: renderInfo.lines ?? 0,
+    geometries: memoryInfo.geometries ?? 0,
+    textures: memoryInfo.textures ?? 0,
+  };
 }
 
-function formatWorldDebug(debugState) {
-  const world = debugState?.staticWorld;
+function renderSceneDirect(overlay = null) {
+  const stats = {
+    sceneMs: 0,
+    overlayMs: 0,
+    postprocessMs: 0,
+    fullscreenPasses: 0,
+    bloomPasses: 0,
+  };
+  const sceneStart = performance.now();
+  renderer.setRenderTarget(null);
+  renderer.render(scene, camera);
+  stats.sceneMs = performance.now() - sceneStart;
 
-  if (!world) {
-    return null;
+  if (overlay?.scene && overlay?.camera) {
+    const overlayStart = performance.now();
+    const previousAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.render(overlay.scene, overlay.camera);
+    renderer.autoClear = previousAutoClear;
+    stats.overlayMs = performance.now() - overlayStart;
   }
 
-  const minY = Array.isArray(world.boundsMin) ? world.boundsMin[1] : null;
-  const maxY = Array.isArray(world.boundsMax) ? world.boundsMax[1] : null;
+  return stats;
+}
 
-  return [
-    `on=${world.enabled ? 1 : 0}`,
-    `col=${world.colliderCount ?? 0}`,
-    `mesh=${world.meshCount ?? 0}`,
-    `tri=${Math.round(world.triangleCount ?? 0)}`,
-    `dyn=${world.dynamicBodyCount ?? 0}/${world.dynamicObjectCount ?? 0}`,
-    `cats=${world.dynamicCategorySummary || "--"}`,
-    `minY=${Number.isFinite(minY) ? minY.toFixed(2) : "--"}`,
-    `maxY=${Number.isFinite(maxY) ? maxY.toFixed(2) : "--"}`,
-  ].join(" ");
+function applyRenderIsolationVisibility() {
+  const previousTrackVisible = sceneState.trackRoot?.visible ?? null;
+  const previousCarVisible = sceneState.carRoot?.visible ?? null;
+
+  if (sceneState.trackRoot) {
+    sceneState.trackRoot.visible =
+      Boolean(runtimeDebug.renderGeometryVisible) &&
+      Boolean(runtimeDebug.renderIsolation.track);
+  }
+
+  if (sceneState.carRoot) {
+    sceneState.carRoot.visible =
+      Boolean(runtimeDebug.renderGeometryVisible) &&
+      Boolean(runtimeDebug.renderIsolation.vehicle);
+  }
+
+  return () => {
+    if (sceneState.trackRoot && previousTrackVisible !== null) {
+      sceneState.trackRoot.visible = previousTrackVisible;
+    }
+
+    if (sceneState.carRoot && previousCarVisible !== null) {
+      sceneState.carRoot.visible = previousCarVisible;
+    }
+  };
 }
 
 function updateVehicleSunOcclusion(deltaSeconds) {
@@ -639,6 +686,11 @@ function summarizeFrameTrace(samples) {
     avgLightsMs: averageFrameMetric(samples, "lightsMs"),
     avgControlsMs: averageFrameMetric(samples, "controlsMs"),
     avgRenderMs: averageFrameMetric(samples, "renderMs"),
+    avgRenderSceneMs: averageNestedFrameMetric(samples, "renderDebug", "sceneMs"),
+    avgRenderOverlayMs: averageNestedFrameMetric(samples, "renderDebug", "overlayMs"),
+    avgRenderPostMs: averageNestedFrameMetric(samples, "renderDebug", "postprocessMs"),
+    avgRenderCalls: averageNestedFrameMetric(samples, "renderDebug", "calls"),
+    avgRenderTriangles: averageNestedFrameMetric(samples, "renderDebug", "triangles"),
     avgTotalMs: averageFrameMetric(samples, "totalMs"),
     maxTotalMs: maxFrameMetric(samples, "totalMs"),
     last: samples[samples.length - 1] ?? null,
@@ -661,6 +713,133 @@ function maxFrameMetric(samples, key) {
   }
 
   return Math.max(...samples.map((sample) => sample[key] ?? 0));
+}
+
+function averageNestedFrameMetric(samples, objectKey, metricKey) {
+  if (samples.length === 0) {
+    return null;
+  }
+
+  return (
+    samples.reduce(
+      (sum, sample) => sum + (sample[objectKey]?.[metricKey] ?? 0),
+      0,
+    ) / samples.length
+  );
+}
+
+function collectRenderHierarchyStats(root) {
+  if (!root) {
+    return null;
+  }
+
+  const stats = {
+    meshes: 0,
+    visibleMeshes: 0,
+    triangles: 0,
+    hiddenTriangles: 0,
+    staticBatches: 0,
+    staticBatchSourceMeshes: 0,
+    dynamicPropMeshes: 0,
+    dynamicPropTriangles: 0,
+    transparentMeshes: 0,
+    transparentTriangles: 0,
+    doubleSideMeshes: 0,
+    doubleSideTriangles: 0,
+    alphaTestMeshes: 0,
+    alphaTestTriangles: 0,
+    topMaterials: [],
+    topDynamicCategories: [],
+  };
+  const materialTriangles = new Map();
+  const dynamicCategoryTriangles = new Map();
+
+  root.updateWorldMatrix(true, true);
+  root.traverse((node) => {
+    if (!node.isMesh || !node.geometry) {
+      return;
+    }
+
+    const triangles = countGeometryTriangles(node.geometry);
+    const materials = Array.isArray(node.material)
+      ? node.material
+      : [node.material];
+    const transparent = materials.some((material) => Boolean(material?.transparent));
+    const doubleSide = materials.some((material) => material?.side === THREE.DoubleSide);
+    const alphaTest = materials.some((material) => (material?.alphaTest ?? 0) > 0);
+
+    stats.meshes += 1;
+    if (node.visible) {
+      stats.visibleMeshes += 1;
+      stats.triangles += triangles;
+    } else {
+      stats.hiddenTriangles += triangles;
+    }
+    if (node.userData?.trackStaticBatch) {
+      stats.staticBatches += 1;
+      stats.staticBatchSourceMeshes += node.userData.sourceMeshCount ?? 0;
+    }
+    if (node.visible && node.userData?.trackDynamicObject) {
+      const dynamicName = node.userData.trackDynamicName ?? "unknown";
+      stats.dynamicPropMeshes += 1;
+      stats.dynamicPropTriangles += triangles;
+      dynamicCategoryTriangles.set(
+        dynamicName,
+        (dynamicCategoryTriangles.get(dynamicName) ?? 0) + triangles,
+      );
+    }
+    if (transparent) {
+      if (node.visible) {
+        stats.transparentMeshes += 1;
+        stats.transparentTriangles += triangles;
+      }
+    }
+    if (doubleSide) {
+      if (node.visible) {
+        stats.doubleSideMeshes += 1;
+        stats.doubleSideTriangles += triangles;
+      }
+    }
+    if (alphaTest) {
+      if (node.visible) {
+        stats.alphaTestMeshes += 1;
+        stats.alphaTestTriangles += triangles;
+      }
+    }
+
+    if (!node.visible) {
+      return;
+    }
+
+    const materialName = materials
+      .map((material) => material?.name)
+      .filter(Boolean)
+      .join(",") || node.name || "unnamed";
+    materialTriangles.set(
+      materialName,
+      (materialTriangles.get(materialName) ?? 0) + triangles,
+    );
+  });
+
+  stats.topMaterials = [...materialTriangles.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([name, triangles]) => ({ name, triangles }));
+  stats.topDynamicCategories = [...dynamicCategoryTriangles.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([name, triangles]) => ({ name, triangles }));
+  return stats;
+}
+
+function countGeometryTriangles(geometry) {
+  const index = geometry.index;
+  if (index?.count) {
+    return Math.floor(index.count / 3);
+  }
+
+  const position = geometry.getAttribute?.("position");
+  return position?.count ? Math.floor(position.count / 3) : 0;
 }
 
 function applySelection(nextPartialSelection) {

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 const textureNameAliases = {
   colormap: "col",
@@ -8,8 +9,12 @@ const whiteTexture = createSolidColorTexture();
 const DOWN = new THREE.Vector3(0, -1, 0);
 const FORWARD = new THREE.Vector3();
 const raycastOrigin = new THREE.Vector3();
+const raycastEnd = new THREE.Vector3();
 const worldNormal = new THREE.Vector3();
 const defaultWheelSpawnLift = 0.35;
+const DEFAULT_SAMPLER_GRID_SIZE = 64;
+const TRACK_BATCH_GRID_SIZE = 96;
+const TRACK_BATCH_MIN_MESHES = 3;
 const WEBTEST_TRACK_ID = "webtest";
 const WEBTEST_TRACK_SIZE = 1200;
 const WEBTEST_GRID_DIVISIONS = 480;
@@ -58,12 +63,14 @@ export async function loadTrack(
   }
 
   scene.add(trackRoot);
+  const dynamicObjects = extractDynamicObjectsFromCollisionMeta(trackRoot, collisionAsset);
+  batchStaticTrackRenderMeshes(trackRoot, dynamicObjects);
 
   return {
     trackRoot,
     startPoints,
     collisionAsset,
-    dynamicObjects: extractDynamicObjectsFromCollisionMeta(trackRoot, collisionAsset),
+    dynamicObjects,
     contactSampler: createTrackFloorSampler(
       collisionAsset?.root ?? trackRoot,
       { includeInvisible: Boolean(collisionAsset?.root) },
@@ -216,6 +223,7 @@ export function createTrackFloorSampler(trackRoot, options = {}) {
   raycaster.firstHitOnly = false;
   raycaster.far = 128;
   const includeInvisible = options.includeInvisible ?? false;
+  const gridSize = options.gridSize ?? DEFAULT_SAMPLER_GRID_SIZE;
 
   trackRoot.traverse((node) => {
     if (!node.isMesh || !node.geometry) {
@@ -229,6 +237,7 @@ export function createTrackFloorSampler(trackRoot, options = {}) {
     node.updateWorldMatrix(true, false);
     meshes.push(node);
   });
+  const spatialIndex = buildTrackSamplerSpatialIndex(meshes, gridSize);
 
   return {
     sample(worldPosition, options = {}) {
@@ -238,11 +247,16 @@ export function createTrackFloorSampler(trackRoot, options = {}) {
 
       const rayHeight = options.rayHeight ?? 12;
       const minUpDot = options.minUpDot ?? 0.2;
+      const maxHitY = options.maxHitY ?? Infinity;
       raycastOrigin.copy(worldPosition);
       raycastOrigin.y += rayHeight;
       raycaster.set(raycastOrigin, DOWN);
       raycaster.far = options.rayDistance ?? rayHeight + 32;
-      const intersections = raycaster.intersectObjects(meshes, false);
+      raycastEnd.copy(raycastOrigin).addScaledVector(DOWN, raycaster.far);
+      const intersections = raycaster.intersectObjects(
+        queryTrackSamplerMeshes(spatialIndex, meshes, raycastOrigin, raycastEnd),
+        false,
+      );
 
       if (intersections.length === 0) {
         return null;
@@ -252,6 +266,10 @@ export function createTrackFloorSampler(trackRoot, options = {}) {
 
       for (const hit of intersections) {
         const hitNormal = resolveWorldHitNormal(hit);
+
+        if (hit.point.y > maxHitY) {
+          continue;
+        }
 
         if (!fallbackHit) {
           fallbackHit = buildTrackFloorHit(hit, hitNormal);
@@ -278,7 +296,11 @@ export function createTrackFloorSampler(trackRoot, options = {}) {
       FORWARD.copy(direction).normalize();
       raycaster.set(raycastOrigin, FORWARD);
       raycaster.far = options.rayDistance ?? 8;
-      const intersections = raycaster.intersectObjects(meshes, false);
+      raycastEnd.copy(raycastOrigin).addScaledVector(FORWARD, raycaster.far);
+      const intersections = raycaster.intersectObjects(
+        queryTrackSamplerMeshes(spatialIndex, meshes, raycastOrigin, raycastEnd),
+        false,
+      );
 
       if (intersections.length === 0) {
         return null;
@@ -300,6 +322,101 @@ export function createTrackFloorSampler(trackRoot, options = {}) {
       return null;
     },
   };
+}
+
+function buildTrackSamplerSpatialIndex(meshes, gridSize) {
+  if (meshes.length < 8 || !Number.isFinite(gridSize) || gridSize <= 0) {
+    return null;
+  }
+
+  const grid = new Map();
+  const meshBox = new THREE.Box3();
+  const queryBox = new THREE.Box3();
+  let indexedMeshCount = 0;
+
+  for (const mesh of meshes) {
+    meshBox.setFromObject(mesh);
+
+    if (meshBox.isEmpty()) {
+      continue;
+    }
+
+    const minX = Math.floor(meshBox.min.x / gridSize);
+    const maxX = Math.floor(meshBox.max.x / gridSize);
+    const minZ = Math.floor(meshBox.min.z / gridSize);
+    const maxZ = Math.floor(meshBox.max.z / gridSize);
+
+    for (let cellX = minX; cellX <= maxX; cellX += 1) {
+      for (let cellZ = minZ; cellZ <= maxZ; cellZ += 1) {
+        const key = buildTrackSamplerCellKey(cellX, cellZ);
+        const cellMeshes = grid.get(key);
+
+        if (cellMeshes) {
+          cellMeshes.push(mesh);
+        } else {
+          grid.set(key, [mesh]);
+        }
+      }
+    }
+
+    indexedMeshCount += 1;
+  }
+
+  if (indexedMeshCount === 0 || grid.size === 0) {
+    return null;
+  }
+
+  return {
+    grid,
+    gridSize,
+    queryBox,
+    result: [],
+    seen: new Set(),
+  };
+}
+
+function queryTrackSamplerMeshes(spatialIndex, fallbackMeshes, from, to) {
+  if (!spatialIndex) {
+    return fallbackMeshes;
+  }
+
+  const { grid, gridSize, queryBox, result, seen } = spatialIndex;
+  queryBox.makeEmpty();
+  queryBox.expandByPoint(from);
+  queryBox.expandByPoint(to);
+  queryBox.expandByScalar(1);
+  result.length = 0;
+  seen.clear();
+
+  const minX = Math.floor(queryBox.min.x / gridSize);
+  const maxX = Math.floor(queryBox.max.x / gridSize);
+  const minZ = Math.floor(queryBox.min.z / gridSize);
+  const maxZ = Math.floor(queryBox.max.z / gridSize);
+
+  for (let cellX = minX; cellX <= maxX; cellX += 1) {
+    for (let cellZ = minZ; cellZ <= maxZ; cellZ += 1) {
+      const cellMeshes = grid.get(buildTrackSamplerCellKey(cellX, cellZ));
+
+      if (!cellMeshes) {
+        continue;
+      }
+
+      for (const mesh of cellMeshes) {
+        if (seen.has(mesh)) {
+          continue;
+        }
+
+        seen.add(mesh);
+        result.push(mesh);
+      }
+    }
+  }
+
+  return result.length > 0 ? result : fallbackMeshes;
+}
+
+function buildTrackSamplerCellKey(cellX, cellZ) {
+  return `${cellX},${cellZ}`;
 }
 
 function loadGltf(url, textureUrls = {}) {
@@ -401,6 +518,7 @@ function extractDynamicObjectsFromCollisionMeta(trackRoot, collisionAsset) {
       continue;
     }
 
+    tagDynamicRenderNode(renderNode, dynamicName);
     seen.add(name);
     result.push({
       name,
@@ -433,6 +551,248 @@ function extractDynamicObjectsFromCollisionMeta(trackRoot, collisionAsset) {
   }
 
   return result;
+}
+
+function tagDynamicRenderNode(renderNode, dynamicName) {
+  renderNode.traverse?.((node) => {
+    node.userData.trackDynamicObject = true;
+    node.userData.trackDynamicName = dynamicName;
+  });
+}
+
+function batchStaticTrackRenderMeshes(trackRoot, dynamicObjects = []) {
+  if (!trackRoot) {
+    return null;
+  }
+
+  const excludedNodes = buildExcludedRenderNodeSet(dynamicObjects);
+  const rootInverse = new THREE.Matrix4();
+  const localMatrix = new THREE.Matrix4();
+  const localBox = new THREE.Box3();
+  const localCenter = new THREE.Vector3();
+  const groups = new Map();
+  let candidateCount = 0;
+  let skippedCount = 0;
+
+  trackRoot.updateWorldMatrix(true, true);
+  rootInverse.copy(trackRoot.matrixWorld).invert();
+
+  trackRoot.traverse((node) => {
+    if (!isStaticTrackBatchCandidate(node, excludedNodes)) {
+      if (node.isMesh) {
+        skippedCount += 1;
+      }
+      return;
+    }
+
+    const geometry = node.geometry;
+    const material = node.material;
+    const signature = buildGeometryBatchSignature(geometry);
+
+    if (!signature) {
+      skippedCount += 1;
+      return;
+    }
+
+    if (!geometry.boundingBox) {
+      geometry.computeBoundingBox();
+    }
+
+    if (!geometry.boundingBox || geometry.boundingBox.isEmpty()) {
+      skippedCount += 1;
+      return;
+    }
+
+    localMatrix.multiplyMatrices(rootInverse, node.matrixWorld);
+    localBox.copy(geometry.boundingBox).applyMatrix4(localMatrix);
+    localBox.getCenter(localCenter);
+
+    const cellX = Math.floor(localCenter.x / TRACK_BATCH_GRID_SIZE);
+    const cellZ = Math.floor(localCenter.z / TRACK_BATCH_GRID_SIZE);
+    const key = [
+      material.uuid,
+      signature,
+      cellX,
+      cellZ,
+    ].join("|");
+    let group = groups.get(key);
+
+    if (!group) {
+      group = {
+        material,
+        cellX,
+        cellZ,
+        entries: [],
+      };
+      groups.set(key, group);
+    }
+
+    group.entries.push({
+      node,
+      matrix: localMatrix.clone(),
+    });
+    candidateCount += 1;
+  });
+
+  if (candidateCount === 0 || groups.size === 0) {
+    return null;
+  }
+
+  const batchRoot = new THREE.Group();
+  batchRoot.name = "track_static_render_batches";
+  batchRoot.userData.trackStaticBatchRoot = true;
+  let batchCount = 0;
+  let batchedMeshCount = 0;
+
+  for (const group of groups.values()) {
+    if (group.entries.length < TRACK_BATCH_MIN_MESHES) {
+      continue;
+    }
+
+    const geometries = group.entries.map((entry) => {
+      const clonedGeometry = entry.node.geometry.clone();
+      clonedGeometry.applyMatrix4(entry.matrix);
+      return clonedGeometry;
+    });
+    const mergedGeometry = mergeGeometries(geometries, false);
+
+    for (const geometry of geometries) {
+      geometry.dispose();
+    }
+
+    if (!mergedGeometry) {
+      continue;
+    }
+
+    mergedGeometry.computeBoundingBox();
+    mergedGeometry.computeBoundingSphere();
+
+    const batchMesh = new THREE.Mesh(mergedGeometry, group.material);
+    batchMesh.name = [
+      "track_batch",
+      cleanTrackBatchName(group.material.name),
+      group.cellX,
+      group.cellZ,
+      batchCount,
+    ].join("_");
+    batchMesh.castShadow = false;
+    batchMesh.receiveShadow = false;
+    batchMesh.frustumCulled = true;
+    batchMesh.userData.trackStaticBatch = true;
+    batchMesh.userData.sourceMeshCount = group.entries.length;
+    batchRoot.add(batchMesh);
+
+    for (const entry of group.entries) {
+      entry.node.visible = false;
+      entry.node.userData.batchedIntoStaticTrackMesh = true;
+    }
+
+    batchCount += 1;
+    batchedMeshCount += group.entries.length;
+  }
+
+  if (batchCount === 0) {
+    return null;
+  }
+
+  trackRoot.add(batchRoot);
+  console.info("Static track render batching ready.", {
+    candidates: candidateCount,
+    batchedMeshes: batchedMeshCount,
+    batches: batchCount,
+    skipped: skippedCount,
+    gridSize: TRACK_BATCH_GRID_SIZE,
+  });
+
+  return {
+    candidates: candidateCount,
+    batchedMeshes: batchedMeshCount,
+    batches: batchCount,
+    skipped: skippedCount,
+  };
+}
+
+function buildExcludedRenderNodeSet(dynamicObjects) {
+  const excludedNodes = new Set();
+
+  for (const dynamicObject of dynamicObjects) {
+    dynamicObject.renderNode?.traverse?.((node) => {
+      excludedNodes.add(node);
+    });
+  }
+
+  return excludedNodes;
+}
+
+function isStaticTrackBatchCandidate(node, excludedNodes) {
+  if (
+    !node.isMesh ||
+    !node.geometry ||
+    !node.visible ||
+    node.userData?.trackStaticBatch ||
+    node.userData?.trackStaticBatchRoot ||
+    excludedNodes.has(node)
+  ) {
+    return false;
+  }
+
+  if (
+    node.isSkinnedMesh ||
+    node.morphTargetInfluences ||
+    Array.isArray(node.material) ||
+    !node.material ||
+    node.material.transparent
+  ) {
+    return false;
+  }
+
+  const drawRange = node.geometry.drawRange;
+  if (
+    drawRange &&
+    Number.isFinite(drawRange.count) &&
+    drawRange.count !== Infinity
+  ) {
+    const indexCount =
+      node.geometry.index?.count ??
+      node.geometry.getAttribute?.("position")?.count ??
+      Infinity;
+
+    if (drawRange.start !== 0 || drawRange.count < indexCount) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function buildGeometryBatchSignature(geometry) {
+  const position = geometry.getAttribute?.("position");
+
+  if (!position || Object.keys(geometry.morphAttributes ?? {}).length > 0) {
+    return null;
+  }
+
+  const attributes = Object.entries(geometry.attributes ?? {})
+    .map(([name, attribute]) => {
+      const arrayName = attribute?.array?.constructor?.name ?? "Array";
+      return [
+        name,
+        attribute?.itemSize ?? 0,
+        attribute?.normalized ? 1 : 0,
+        arrayName,
+      ].join(":");
+    })
+    .sort()
+    .join(",");
+  const indexName = geometry.index?.array?.constructor?.name ?? "no-index";
+  return `${indexName}|${attributes}`;
+}
+
+function cleanTrackBatchName(name) {
+  return (name || "material")
+    .replace(/[^a-z0-9_]+/gi, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40) || "material";
 }
 
 function buildTrackNodeLookup(trackRoot) {
@@ -749,6 +1109,8 @@ function prepareTrackMaterials(
   getTrackTexture,
   environmentState,
 ) {
+  const materialCache = new Map();
+
   root.traverse((obj) => {
     if (!obj.isMesh) {
       return;
@@ -764,19 +1126,54 @@ function prepareTrackMaterials(
       : [obj.material];
 
     const usesVertexColors = Boolean(obj.geometry?.getAttribute("color"));
-    const mappedMaterials = sourceMaterials.map((sourceMaterial) =>
-      createTrackMaterial(
+    const mappedMaterials = sourceMaterials.map((sourceMaterial) => {
+      if (!sourceMaterial) {
+        return sourceMaterial;
+      }
+
+      const cacheKey = buildTrackMaterialCacheKey(
         sourceMaterial,
         trackMaterialInfo,
-        getTrackTexture,
         usesVertexColors,
-        environmentState,
-      ),
-    );
+      );
+      let material = materialCache.get(cacheKey);
+
+      if (!material) {
+        material = createTrackMaterial(
+          sourceMaterial,
+          trackMaterialInfo,
+          getTrackTexture,
+          usesVertexColors,
+          environmentState,
+        );
+        materialCache.set(cacheKey, material);
+      }
+
+      return material;
+    });
 
     obj.material =
       mappedMaterials.length === 1 ? mappedMaterials[0] : mappedMaterials;
   });
+}
+
+function buildTrackMaterialCacheKey(
+  sourceMaterial,
+  trackMaterialInfo,
+  usesVertexColors,
+) {
+  const materialInfo = resolveTrackMaterialInfo(
+    sourceMaterial.name,
+    trackMaterialInfo,
+  );
+  return [
+    sourceMaterial.name ?? "",
+    materialInfo?.shaderId ?? "shader:none",
+    materialInfo?.alpha ?? "alpha:none",
+    pickTrackTextureName(materialInfo) ?? "diffuse:none",
+    pickTrackDetailTextureName(materialInfo) ?? "detail:none",
+    usesVertexColors ? "vc:1" : "vc:0",
+  ].join("|");
 }
 
 function createTrackMaterial(
@@ -820,8 +1217,9 @@ function createTrackMaterial(
       map: diffuseTexture,
       color: 0xffffff,
       vertexColors: usesVertexColors,
-      transparent: true,
+      transparent: false,
       alphaTest: 0.35,
+      depthWrite: true,
       side: THREE.DoubleSide,
     });
   }

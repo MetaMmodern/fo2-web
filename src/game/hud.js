@@ -32,6 +32,17 @@ export function createHud(
     frame: "-- ms",
     sim: "-- ms",
     render: "-- ms",
+    renderDetail: {
+      scene: "--",
+      overlay: "--",
+      postprocess: "--",
+      calls: "--",
+      triangles: "--",
+      fullscreenPasses: "--",
+      bloomPasses: "--",
+      geometries: "--",
+      textures: "--",
+    },
     physics: {
       mode: "--",
       grounded: "--",
@@ -54,6 +65,14 @@ export function createHud(
       suspension: "--",
       simSteps: "--",
       simBacklog: "--",
+      stepVehicle: "--",
+      worldStep: "--",
+      dynamicProps: "--",
+      dynamicSync: "--",
+      dynamicSyncUpdated: "--",
+      dynamicSyncSkipped: "--",
+      clearance: "--",
+      wheelVisuals: "--",
       speed: "--",
       y: "--",
       vy: "--",
@@ -259,6 +278,56 @@ export function createHud(
         .add(runtimeDebug.physicsIsolation, "gravity")
         .name("Gravity")
         .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "staticWorld")
+        .name("Static world")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "dynamicProps")
+        .name("Dynamic props")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "surfaceSampler")
+        .name("Surface sampler")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "clearanceGuard")
+        .name("Clearance guard")
+        .listen();
+      isolationFolder
+        .add(runtimeDebug.physicsIsolation, "wheelVisuals")
+        .name("Wheel visuals")
+        .listen();
+    }
+    if (runtimeDebug.renderIsolation) {
+      const renderIsolationFolder = runtimeFolder.addFolder("Render isolation");
+      if (
+        typeof runtimeDebug.renderAllOn === "function" &&
+        typeof runtimeDebug.renderAllOff === "function"
+      ) {
+        renderIsolationFolder.add(runtimeDebug, "renderAllOn").name("All ON");
+        renderIsolationFolder.add(runtimeDebug, "renderAllOff").name("All OFF");
+      }
+      renderIsolationFolder
+        .add(runtimeDebug.renderIsolation, "track")
+        .name("Track")
+        .listen();
+      renderIsolationFolder
+        .add(runtimeDebug.renderIsolation, "vehicle")
+        .name("Vehicle")
+        .listen();
+      renderIsolationFolder
+        .add(runtimeDebug.renderIsolation, "environmentOverlay")
+        .name("Environment overlay")
+        .listen();
+      renderIsolationFolder
+        .add(runtimeDebug.renderIsolation, "postprocess")
+        .name("Postprocess")
+        .listen();
+      renderIsolationFolder
+        .add(runtimeDebug.renderIsolation, "sunOcclusion")
+        .name("Sun occlusion")
+        .listen();
     }
   } else {
     addInfoBlock(runtimeFolder, [
@@ -275,6 +344,7 @@ export function createHud(
   ]);
 
   const perfSummaryFolder = perfGui.addFolder("Frame");
+  const perfRenderFolder = perfGui.addFolder("Render");
   const perfPhysicsFolder = perfGui.addFolder("Physics");
   const perfWorldFolder = perfGui.addFolder("World");
   perfGui.add(perfActions, "copyAll").name("Copy all");
@@ -285,6 +355,62 @@ export function createHud(
     frame: makeReadonlyMetric(perfSummaryFolder, perfState, "frame", "Frame"),
     sim: makeReadonlyMetric(perfSummaryFolder, perfState, "sim", "Sim"),
     render: makeReadonlyMetric(perfSummaryFolder, perfState, "render", "Render"),
+    renderDetail: {
+      scene: makeReadonlyMetric(
+        perfRenderFolder,
+        perfState.renderDetail,
+        "scene",
+        "Scene pass",
+      ),
+      overlay: makeReadonlyMetric(
+        perfRenderFolder,
+        perfState.renderDetail,
+        "overlay",
+        "Overlay",
+      ),
+      postprocess: makeReadonlyMetric(
+        perfRenderFolder,
+        perfState.renderDetail,
+        "postprocess",
+        "Postprocess",
+      ),
+      calls: makeReadonlyMetric(
+        perfRenderFolder,
+        perfState.renderDetail,
+        "calls",
+        "Draw calls",
+      ),
+      triangles: makeReadonlyMetric(
+        perfRenderFolder,
+        perfState.renderDetail,
+        "triangles",
+        "Triangles",
+      ),
+      fullscreenPasses: makeReadonlyMetric(
+        perfRenderFolder,
+        perfState.renderDetail,
+        "fullscreenPasses",
+        "Fullscreen passes",
+      ),
+      bloomPasses: makeReadonlyMetric(
+        perfRenderFolder,
+        perfState.renderDetail,
+        "bloomPasses",
+        "Bloom passes",
+      ),
+      geometries: makeReadonlyMetric(
+        perfRenderFolder,
+        perfState.renderDetail,
+        "geometries",
+        "Geometries",
+      ),
+      textures: makeReadonlyMetric(
+        perfRenderFolder,
+        perfState.renderDetail,
+        "textures",
+        "Textures",
+      ),
+    },
     physics: {
       speed: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "speed", "Speed"),
       gear: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "gear", "Gear"),
@@ -398,6 +524,54 @@ export function createHud(
         "simBacklog",
         "Sim backlog",
       ),
+      stepVehicle: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "stepVehicle",
+        "Step vehicle",
+      ),
+      worldStep: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "worldStep",
+        "World step",
+      ),
+      dynamicProps: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "dynamicProps",
+        "Dynamic props",
+      ),
+      dynamicSync: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "dynamicSync",
+        "Dynamic sync",
+      ),
+      dynamicSyncUpdated: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "dynamicSyncUpdated",
+        "Dyn sync updated",
+      ),
+      dynamicSyncSkipped: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "dynamicSyncSkipped",
+        "Dyn sync skipped",
+      ),
+      clearance: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "clearance",
+        "Clearance",
+      ),
+      wheelVisuals: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "wheelVisuals",
+        "Wheel visuals",
+      ),
       y: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "y", "Y"),
       vy: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "vy", "VY"),
     },
@@ -508,9 +682,8 @@ export function updateHudTelemetry(
     frameMs = null,
     simMs = null,
     renderMs = null,
-    chaseMs = null,
+    renderDebug = null,
     physicsDebug = null,
-    worldDebug = null,
   },
 ) {
   hud.state.telemetry.speed = `${Math.round(speedKph)} km/h`;
@@ -522,36 +695,8 @@ export function updateHudTelemetry(
   hud.state.perf.render = Number.isFinite(renderMs)
     ? `${renderMs.toFixed(1)} ms`
     : "-- ms";
-  applyPerfDebugValues(
-    hud.state.perf.physics,
-    parseDebugPairs(physicsDebug),
-    {
-      mode: "m",
-      grounded: "g",
-      toi: "toi",
-      gear: "gear",
-      rpm: "rpm",
-      throttle: "thr",
-      steer: "st",
-      steerRaw: "sraw",
-      steerFiltered: "sf",
-      steerLimit: "slim",
-      steerTarget: "stgt",
-      steerLeft: "sl",
-      steerRight: "sr",
-      yawRate: "yr",
-      lateralSpeed: "lat",
-      drive: "drv",
-      wheelContacts: "wc",
-      impulse: "imp",
-      suspension: "sus",
-      simSteps: "ss",
-      simBacklog: "sb",
-      speed: "spd",
-      y: "y",
-      vy: "vy",
-    },
-  );
+  applyRenderDebugState(hud.state.perf.renderDetail, renderDebug);
+  applyPhysicsDebugState(hud.state.perf.physics, physicsDebug);
   hud.state.perf.physics.speed = Number.isFinite(speedKph)
     ? `${Math.round(speedKph)} km/h`
     : "--";
@@ -560,22 +705,12 @@ export function updateHudTelemetry(
     0,
     9000,
   );
-  applyPerfDebugValues(
-    hud.state.perf.world,
-    parseDebugPairs(worldDebug),
-    {
-      enabled: "on",
-      colliders: "col",
-      meshes: "mesh",
-      triangles: "tri",
-      dynamic: "dyn",
-      categories: "cats",
-      minY: "minY",
-      maxY: "maxY",
-    },
-  );
+  applyWorldDebugState(hud.state.perf.world, physicsDebug?.staticWorld);
 
   for (const controller of Object.values(hud.controllers.perf.physics)) {
+    controller.updateDisplay();
+  }
+  for (const controller of Object.values(hud.controllers.perf.renderDetail)) {
     controller.updateDisplay();
   }
   for (const controller of Object.values(hud.controllers.perf.world)) {
@@ -673,34 +808,99 @@ function makeReadonlySliderMetric(
   return controller;
 }
 
-function parseDebugPairs(debugText) {
-  if (typeof debugText !== "string" || debugText.trim().length === 0) {
-    return {};
+function applyRenderDebugState(target, renderDebug) {
+  if (!renderDebug) {
+    setMissingMetrics(target);
+    return;
   }
 
-  return Object.fromEntries(
-    debugText
-      .trim()
-      .split(/\s+/)
-      .map((segment) => {
-        const splitIndex = segment.indexOf("=");
-        if (splitIndex <= 0) {
-          return null;
-        }
-
-        return [
-          segment.slice(0, splitIndex),
-          segment.slice(splitIndex + 1),
-        ];
-      })
-      .filter(Boolean),
-  );
+  target.scene = formatMetricMs(renderDebug.sceneMs);
+  target.overlay = formatMetricMs(renderDebug.overlayMs);
+  target.postprocess = formatMetricMs(renderDebug.postprocessMs);
+  target.calls = formatMetricNumber(renderDebug.calls, 0);
+  target.triangles = formatMetricNumber(renderDebug.triangles, 0);
+  target.fullscreenPasses = formatMetricNumber(renderDebug.fullscreenPasses, 0);
+  target.bloomPasses = formatMetricNumber(renderDebug.bloomPasses, 0);
+  target.geometries = formatMetricNumber(renderDebug.geometries, 0);
+  target.textures = formatMetricNumber(renderDebug.textures, 0);
 }
 
-function applyPerfDebugValues(target, values, fieldMap) {
-  for (const [targetKey, sourceKey] of Object.entries(fieldMap)) {
-    target[targetKey] = values[sourceKey] ?? "--";
+function applyPhysicsDebugState(target, debugState) {
+  if (!debugState) {
+    setMissingMetrics(target);
+    return;
   }
+
+  target.mode = debugState.mode ?? "--";
+  target.grounded = debugState.grounded ? "1" : "0";
+  target.toi = formatMetricNumber(debugState.groundToi, 2);
+  target.gear = formatMetricNumber(debugState.gear, 0);
+  target.rpm = formatMetricNumber(debugState.engineRpm, 0);
+  target.throttle = formatMetricNumber(debugState.throttle, 1);
+  target.steer = formatMetricNumber(debugState.steer, 1);
+  target.steerRaw = formatMetricNumber(debugState.steerRaw, 2);
+  target.steerFiltered = formatMetricNumber(debugState.steerState, 2);
+  target.steerLimit = formatMetricNumber(debugState.steerLimit, 2);
+  target.steerTarget = formatMetricNumber(debugState.steerTarget, 2);
+  target.steerLeft = formatMetricNumber(debugState.steerLeftDeg, 1);
+  target.steerRight = formatMetricNumber(debugState.steerRightDeg, 1);
+  target.yawRate = formatMetricNumber(debugState.yawRateDeg, 1);
+  target.lateralSpeed = formatMetricNumber(debugState.speedRight, 2);
+  target.drive = formatMetricNumber(debugState.engineForce, 0);
+  target.wheelContacts = formatMetricNumber(debugState.wheelContacts, 0);
+  target.impulse = formatMetricNumber(debugState.forwardImpulse, 0);
+  target.suspension = formatMetricNumber(debugState.suspensionForce, 0);
+  target.simSteps = formatMetricNumber(debugState.simSteps, 0);
+  target.simBacklog = formatMetricNumber(debugState.simBacklogMs, 1);
+  target.y = formatMetricNumber(debugState.chassisPosition?.y, 2);
+  target.vy = formatMetricNumber(debugState.chassisVelocity?.y, 2);
+  target.stepVehicle = formatMetricMs(debugState.perf?.stepVehicleMs);
+  target.worldStep = formatMetricMs(debugState.perf?.worldStepMs);
+  target.dynamicProps = formatMetricMs(debugState.perf?.dynamicPropsMs);
+  target.dynamicSync = formatMetricMs(debugState.perf?.dynamicSyncMs);
+  target.dynamicSyncUpdated = formatMetricNumber(
+    debugState.perf?.dynamicSyncUpdated,
+    0,
+  );
+  target.dynamicSyncSkipped = formatMetricNumber(
+    (debugState.perf?.dynamicSyncSkippedDormant ?? 0) +
+      (debugState.perf?.dynamicSyncSkippedSleeping ?? 0),
+    0,
+  );
+  target.clearance = formatMetricMs(debugState.perf?.clearanceMs);
+  target.wheelVisuals = formatMetricMs(debugState.perf?.wheelVisualsMs);
+}
+
+function applyWorldDebugState(target, world) {
+  if (!world) {
+    setMissingMetrics(target);
+    return;
+  }
+
+  const minY = Array.isArray(world.boundsMin) ? world.boundsMin[1] : null;
+  const maxY = Array.isArray(world.boundsMax) ? world.boundsMax[1] : null;
+  target.enabled = (world.runtimeEnabled ?? world.enabled) ? "1" : "0";
+  target.colliders = formatMetricNumber(world.colliderCount, 0);
+  target.meshes = formatMetricNumber(world.meshCount, 0);
+  target.triangles = formatMetricNumber(world.triangleCount, 0);
+  target.dynamic = `${world.dynamicBodyCount ?? 0}/${world.dynamicObjectCount ?? 0}`;
+  target.categories = world.dynamicCategorySummary || "--";
+  target.minY = formatMetricNumber(minY, 2);
+  target.maxY = formatMetricNumber(maxY, 2);
+}
+
+function setMissingMetrics(target) {
+  for (const key of Object.keys(target)) {
+    target[key] = "--";
+  }
+}
+
+function formatMetricNumber(value, digits = 1) {
+  return Number.isFinite(value) ? value.toFixed(digits) : "--";
+}
+
+function formatMetricMs(value) {
+  return Number.isFinite(value) ? `${value.toFixed(1)} ms` : "-- ms";
 }
 
 function formatPerfSummary(perfState) {
@@ -710,6 +910,8 @@ function formatPerfSummary(perfState) {
     `Frame=${perfState.frame}`,
     `Sim=${perfState.sim}`,
     `Render=${perfState.render}`,
+    "",
+    formatPerfGroup("Render", perfState.renderDetail),
     "",
     formatPerfGroup("Physics", perfState.physics),
     "",

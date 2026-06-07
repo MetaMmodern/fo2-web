@@ -352,22 +352,37 @@ export function createColorFilterPass(renderer, assetUrls) {
 
   return {
     render(scene, camera, overlay = null) {
+      const stats = {
+        sceneMs: 0,
+        overlayMs: 0,
+        postprocessMs: 0,
+        fullscreenPasses: 0,
+        bloomPasses: bloomState.bloomPasses,
+      };
+      const sceneStart = nowMs();
       renderer.setRenderTarget(renderTarget);
       renderer.render(scene, camera);
+      stats.sceneMs = nowMs() - sceneStart;
       if (overlay?.scene && overlay?.camera) {
+        const overlayStart = nowMs();
         const previousAutoClear = renderer.autoClear;
         renderer.autoClear = false;
         renderer.render(overlay.scene, overlay.camera);
         renderer.autoClear = previousAutoClear;
+        stats.overlayMs = nowMs() - overlayStart;
       }
 
+      const postStart = nowMs();
       renderFullscreen(luminanceMaterial, luminanceTarget);
+      stats.fullscreenPasses += 1;
       renderFullscreen(remapMaterial, filteredTarget);
+      stats.fullscreenPasses += 1;
 
       highpassMaterial.uniforms.sampleScale.value = bloomState.bloomDownsampled
         ? 2.0
         : 1.0;
       renderFullscreen(highpassMaterial, postTargets[0]);
+      stats.fullscreenPasses += 1;
 
       let currentTarget = postTargets[0];
       for (
@@ -379,32 +394,41 @@ export function createColorFilterPass(renderer, assetUrls) {
         box4Material.uniforms.sampleScale.value = passIndex + 1;
         const nextTarget = postTargets[1 + (passIndex % 2)];
         renderFullscreen(box4Material, nextTarget);
+        stats.fullscreenPasses += 1;
         currentTarget = nextTarget;
       }
 
       combineMaterial.uniforms.tBase.value = postTargets[0].texture;
       combineMaterial.uniforms.tBloom.value = currentTarget.texture;
       renderFullscreen(combineMaterial, postTargets[3]);
+      stats.fullscreenPasses += 1;
 
       copyMaterial.uniforms.tInput.value = currentTarget.texture;
       copyMaterial.uniforms.colorMul.value.set(1, 1, 1, 1);
       renderFullscreen(copyMaterial, postTargets[4]);
+      stats.fullscreenPasses += 1;
 
       box4Material.uniforms.tInput.value = postTargets[4].texture;
       box4Material.uniforms.sampleScale.value = 1.35;
       renderFullscreen(box4Material, postTargets[5]);
+      stats.fullscreenPasses += 1;
 
       copyMaterial.uniforms.tInput.value = postTargets[5].texture;
       copyMaterial.uniforms.colorMul.value.set(1, 1, 1, 1);
       renderFullscreen(copyMaterial, bloomFullTarget);
+      stats.fullscreenPasses += 1;
 
       maskMaterial.uniforms.tColor.value = bloomFullTarget.texture;
       maskMaterial.uniforms.tMask.value = postTargets[3].texture;
       renderFullscreen(maskMaterial, maskedTarget);
+      stats.fullscreenPasses += 1;
 
       finalMaterial.uniforms.tBloom.value = bloomFullTarget.texture;
       finalMaterial.uniforms.tMasked.value = maskedTarget.texture;
       renderFullscreen(finalMaterial, null);
+      stats.fullscreenPasses += 1;
+      stats.postprocessMs = nowMs() - postStart;
+      return stats;
     },
     setStrengths({ addStrength, subStrength }) {
       if (Number.isFinite(addStrength)) {
@@ -659,6 +683,10 @@ function createPostTarget() {
   target.texture.minFilter = THREE.LinearFilter;
   target.texture.magFilter = THREE.LinearFilter;
   return target;
+}
+
+function nowMs() {
+  return globalThis.performance?.now?.() ?? Date.now();
 }
 
 function sampleRampTexture(image, normalizedU) {
