@@ -68,6 +68,11 @@ export function createHud(
       stepVehicle: "--",
       worldStep: "--",
       dynamicProps: "--",
+      dynamicScanned: "--",
+      dynamicRelease: "--",
+      dynamicReleased: "--",
+      dynamicNearby: "--",
+      dynamicContactTests: "--",
       dynamicSync: "--",
       dynamicSyncUpdated: "--",
       dynamicSyncSkipped: "--",
@@ -542,6 +547,36 @@ export function createHud(
         "dynamicProps",
         "Dynamic props",
       ),
+      dynamicRelease: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "dynamicRelease",
+        "Dyn release",
+      ),
+      dynamicScanned: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "dynamicScanned",
+        "Dyn scanned",
+      ),
+      dynamicReleased: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "dynamicReleased",
+        "Dyn released",
+      ),
+      dynamicNearby: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "dynamicNearby",
+        "Dyn nearby",
+      ),
+      dynamicContactTests: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "dynamicContactTests",
+        "Dyn contacts",
+      ),
       dynamicSync: makeReadonlyMetric(
         perfPhysicsFolder,
         perfState.physics,
@@ -857,6 +892,20 @@ function applyPhysicsDebugState(target, debugState) {
   target.stepVehicle = formatMetricMs(debugState.perf?.stepVehicleMs);
   target.worldStep = formatMetricMs(debugState.perf?.worldStepMs);
   target.dynamicProps = formatMetricMs(debugState.perf?.dynamicPropsMs);
+  target.dynamicRelease = formatMetricMs(debugState.perf?.dynamicReleaseMs);
+  target.dynamicScanned = formatMetricNumber(
+    debugState.perf?.dynamicReleaseVisited,
+    0,
+  );
+  target.dynamicReleased = formatMetricNumber(
+    debugState.perf?.dynamicReleaseCount,
+    0,
+  );
+  target.dynamicNearby = formatMetricNumber(debugState.perf?.dynamicReleaseNearby, 0);
+  target.dynamicContactTests = formatMetricNumber(
+    debugState.perf?.dynamicReleaseContactTests,
+    0,
+  );
   target.dynamicSync = formatMetricMs(debugState.perf?.dynamicSyncMs);
   target.dynamicSyncUpdated = formatMetricNumber(
     debugState.perf?.dynamicSyncUpdated,

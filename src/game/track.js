@@ -484,6 +484,9 @@ function extractDynamicObjectsFromCollisionMeta(trackRoot, collisionAsset) {
     "concrete_block_superheavy",
     "fence_wood",
     "fence_metal",
+    "metal_wirefence",
+    "metal_pipes",
+    "sheetmetal_fence",
     "window",
     "explosive_gaspump",
     "metal_lightpole",
@@ -1196,18 +1199,21 @@ function createTrackMaterial(
   const detailTextureName = pickTrackDetailTextureName(materialInfo);
   const detailTexture = getTrackTexture(detailTextureName);
   const isAlphaMaterial = materialInfo?.alpha === 1;
-  const isWindowShader = materialInfo?.shaderId === 34;
+  const isWindowShader =
+    materialInfo?.shaderId === 34 || materialInfo?.shaderId === 35;
   const isLeafLikeShader =
     materialInfo?.shaderId === 20 || materialInfo?.shaderId === 21;
   if (isWindowShader) {
     return new THREE.MeshBasicMaterial({
       name: sourceMaterial.name,
       map: diffuseTexture,
-      color: 0xd7e4ea,
+      color: 0xffffff,
       vertexColors: usesVertexColors,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.28,
+      alphaTest: 0.02,
       depthWrite: false,
+      side: THREE.DoubleSide,
     });
   }
 

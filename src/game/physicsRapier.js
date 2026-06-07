@@ -42,6 +42,9 @@ const BODY_ROLL_TORQUE_SCALE = 0;
 const BODY_PITCH_TORQUE_SCALE = 0;
 const CHASSIS_GROUND_CLEARANCE = 0.12;
 const DRIVE_AERO_LIMIT_KPH = 220;
+const POLE_COLLIDER_MIN_RADIUS = 0.055;
+const POLE_COLLIDER_MAX_RADIUS = 0.28;
+const POLE_COLLIDER_RADIUS_SCALE = 1.25;
 
 export async function createDrivingSimulation({
   carId,
@@ -114,6 +117,11 @@ export async function createDrivingSimulation({
       let stepCount = 0;
       let stepVehicleMs = 0;
       let dynamicPropsMs = 0;
+      let dynamicReleaseVisited = 0;
+      let dynamicReleaseNearby = 0;
+      let dynamicReleaseContactTests = 0;
+      let dynamicReleaseCount = 0;
+      let dynamicReleaseMs = 0;
       let worldStepMs = 0;
       let clearanceMs = 0;
 
@@ -132,13 +140,18 @@ export async function createDrivingSimulation({
 
         if (isolation.dynamicProps) {
           const dynamicPropsStart = nowMs();
-          activateImpactedDynamicObjects(
+          const dynamicReleaseStats = activateImpactedDynamicObjects(
             world,
             dynamicObjectState,
             chassis,
             chassisColliders,
           );
           dynamicPropsMs += nowMs() - dynamicPropsStart;
+          dynamicReleaseVisited += dynamicReleaseStats.visited;
+          dynamicReleaseNearby += dynamicReleaseStats.nearby;
+          dynamicReleaseContactTests += dynamicReleaseStats.contactTests;
+          dynamicReleaseCount += dynamicReleaseStats.released;
+          dynamicReleaseMs += dynamicReleaseStats.releaseMs;
         }
 
         const worldStepStart = nowMs();
@@ -189,6 +202,11 @@ export async function createDrivingSimulation({
         frameMs: nowMs() - framePerfStart,
         stepVehicleMs,
         dynamicPropsMs,
+        dynamicReleaseVisited,
+        dynamicReleaseNearby,
+        dynamicReleaseContactTests,
+        dynamicReleaseCount,
+        dynamicReleaseMs,
         worldStepMs,
         clearanceMs,
         syncPoseMs,
@@ -788,8 +806,7 @@ function createDynamicSceneObjects(world, dynamicObjects) {
     if (category.bodyType === "dynamic") {
       bodyDesc
         .setLinearDamping(category.linearDamping)
-        .setAngularDamping(category.angularDamping)
-        .setAdditionalMass(category.mass);
+        .setAngularDamping(category.angularDamping);
     }
 
     const body = world.createRigidBody(bodyDesc);
@@ -807,7 +824,7 @@ function createDynamicSceneObjects(world, dynamicObjects) {
             COLLISION_GROUP_VEHICLE,
         ),
       )
-      .setDensity(1);
+      .setMass(category.mass);
     world.createCollider(colliderDesc, body);
 
     entries.push({
@@ -817,6 +834,7 @@ function createDynamicSceneObjects(world, dynamicObjects) {
       category,
       dormant: category.releaseOnImpact,
       runtimeEnabled: true,
+      halfExtents: halfExtents.clone(),
       renderParent: renderNode.parent ?? null,
       renderScale: renderNode.scale.clone(),
     });
@@ -889,11 +907,58 @@ function createDynamicObjectCollider(object, halfExtents, localCenter) {
       .setTranslation(localCenter.x, localCenter.y, localCenter.z);
   }
 
+  if (shouldUsePoleLikeDynamicCollider(object, halfExtents)) {
+    const radius = THREE.MathUtils.clamp(
+      Math.min(halfExtents.x, halfExtents.z) * POLE_COLLIDER_RADIUS_SCALE,
+      POLE_COLLIDER_MIN_RADIUS,
+      POLE_COLLIDER_MAX_RADIUS,
+    );
+    const halfHeight = Math.max(halfExtents.y, 0.2);
+    const center = getPoleLikeColliderCenter(object, halfExtents, localCenter, radius);
+
+    return RAPIER.ColliderDesc.cylinder(halfHeight, radius)
+      .setTranslation(center.x, center.y, center.z);
+  }
+
   return RAPIER.ColliderDesc.cuboid(
     Math.max(halfExtents.x, 0.04),
     Math.max(halfExtents.y, 0.04),
     Math.max(halfExtents.z, 0.04),
   ).setTranslation(localCenter.x, localCenter.y, localCenter.z);
+}
+
+function shouldUsePoleLikeDynamicCollider(object, halfExtents) {
+  if (object.dynamicName === "metal_lightpole" || object.dynamicName === "metal_pipes") {
+    return true;
+  }
+
+  const objectName = `${object.dynamicName ?? ""} ${object.name ?? ""}`.toLowerCase();
+  if (!objectName.includes("pole") && !objectName.includes("pipe")) {
+    return false;
+  }
+
+  const thinAxis = Math.min(halfExtents.x, halfExtents.z);
+  const wideAxis = Math.max(halfExtents.x, halfExtents.z);
+
+  return halfExtents.y >= 0.5 && thinAxis <= 0.18 && wideAxis <= 0.9;
+}
+
+function getPoleLikeColliderCenter(object, halfExtents, localCenter, radius) {
+  const center = localCenter.clone();
+
+  if (object.dynamicName !== "metal_lightpole") {
+    return center;
+  }
+
+  const axis = halfExtents.x >= halfExtents.z ? "x" : "z";
+  const halfLength = halfExtents[axis];
+  const offset = center[axis];
+
+  if (halfLength > radius * 3 && Math.abs(offset) > radius) {
+    center[axis] -= Math.sign(offset) * Math.max(halfLength - radius, 0);
+  }
+
+  return center;
 }
 
 function getDynamicCategoryConfig(dynamicName) {
@@ -930,13 +995,14 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "fixed",
         releaseOnImpact: true,
-        releaseMinSpeed: 1.25,
-        impulseScale: 0.2,
-        mass: 18,
-        linearDamping: 0.32,
-        angularDamping: 0.38,
-        friction: 0.85,
-        restitution: 0.04,
+        releaseOnProximity: true,
+        releaseMinSpeed: 0.7,
+        impulseScale: 0.34,
+        mass: 8,
+        linearDamping: 0.16,
+        angularDamping: 0.2,
+        friction: 0.55,
+        restitution: 0.02,
       };
     case "metal_barrel":
     case "cardboard_box":
@@ -956,17 +1022,21 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "fixed",
         releaseOnImpact: true,
+        releaseOnProximity: true,
         releaseMinSpeed: 0.2,
-        impulseScale: 0.42,
-        mass: 3,
-        linearDamping: 0.12,
-        angularDamping: 0.16,
-        friction: 0.18,
-        restitution: 0.02,
+        impulseScale: 0.7,
+        mass: 1.2,
+        linearDamping: 0.04,
+        angularDamping: 0.06,
+        friction: 0.04,
+        restitution: 0,
       };
     case "plastic_light":
     case "fence_wood":
     case "fence_metal":
+    case "metal_wirefence":
+    case "metal_pipes":
+    case "sheetmetal_fence":
     case "explosive_gaspump":
     case "metal_lightpole":
     case "metal_structure_tilt":
@@ -974,15 +1044,27 @@ function getDynamicCategoryConfig(dynamicName) {
       return {
         bodyType: "fixed",
         releaseOnImpact: true,
-        releaseMinSpeed: 0.9,
-        impulseScale: 0.2,
-        mass: 18,
-        linearDamping: 0.32,
-        angularDamping: 0.38,
-        friction: 0.82,
-        restitution: 0.05,
+        releaseOnProximity: true,
+        releaseMinSpeed: 0.55,
+        impulseScale: 0.36,
+        mass: 10,
+        linearDamping: 0.14,
+        angularDamping: 0.18,
+        friction: 0.5,
+        restitution: 0.02,
       };
     case "metal_obstacle":
+      return {
+        bodyType: "dynamic",
+        releaseOnImpact: false,
+        releaseMinSpeed: 0,
+        impulseScale: 0.26,
+        mass: 12,
+        linearDamping: 0.18,
+        angularDamping: 0.24,
+        friction: 0.55,
+        restitution: 0.02,
+      };
     case "concrete_block_superheavy":
       return {
         bodyType: "dynamic",
@@ -1016,8 +1098,16 @@ function activateImpactedDynamicObjects(
   chassis,
   chassisColliders,
 ) {
+  const stats = {
+    visited: 0,
+    nearby: 0,
+    contactTests: 0,
+    released: 0,
+    releaseMs: 0,
+  };
+
   if (!Array.isArray(dynamicObjectState) || dynamicObjectState.length === 0) {
-    return;
+    return stats;
   }
 
   const chassisTranslation = chassis.translation();
@@ -1025,6 +1115,8 @@ function activateImpactedDynamicObjects(
   const chassisSpeed = horizontalSpeed(chassisVelocity);
 
   for (const entry of dynamicObjectState) {
+    stats.visited += 1;
+
     if (!entry.dormant || !entry.body || !entry.collider) {
       continue;
     }
@@ -1041,20 +1133,30 @@ function activateImpactedDynamicObjects(
     if (dx * dx + dy * dy + dz * dz > 64) {
       continue;
     }
+    stats.nearby += 1;
 
-    let touchingChassis = false;
+    let touchingChassis = shouldReleaseDynamicObjectOnApproach(
+      entry,
+      chassisTranslation,
+      chassisVelocity,
+      chassisSpeed,
+      translation,
+    );
 
-    for (const chassisCollider of chassisColliders) {
-      if (!chassisCollider || chassisCollider.handle === entry.collider.handle) {
-        continue;
-      }
+    if (!touchingChassis) {
+      for (const chassisCollider of chassisColliders) {
+        if (!chassisCollider || chassisCollider.handle === entry.collider.handle) {
+          continue;
+        }
 
-      world.contactPair(entry.collider, chassisCollider, () => {
-        touchingChassis = true;
-      });
+        stats.contactTests += 1;
+        world.contactPair(entry.collider, chassisCollider, () => {
+          touchingChassis = true;
+        });
 
-      if (touchingChassis) {
-        break;
+        if (touchingChassis) {
+          break;
+        }
       }
     }
 
@@ -1062,27 +1164,77 @@ function activateImpactedDynamicObjects(
       continue;
     }
 
-    entry.dormant = false;
-    entry.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-    entry.body.setLinearDamping(entry.category.linearDamping);
-    entry.body.setAngularDamping(entry.category.angularDamping);
-    entry.body.setAdditionalMass(entry.category.mass, true);
-    entry.body.recomputeMassPropertiesFromColliders();
-
-    const impulse = chassisVelocity
-      .clone()
-      .multiplyScalar(
-        Math.max(
-          entry.category.mass * (entry.category.impulseScale ?? 0.18),
-          1.2,
-        ),
-      );
-    entry.body.applyImpulseAtPoint(
-      vectorFromThree(impulse),
-      { x: translation.x, y: translation.y + 0.25, z: translation.z },
-      true,
-    );
+    const releaseStart = nowMs();
+    releaseDynamicObject(entry, chassisVelocity, translation);
+    stats.releaseMs += nowMs() - releaseStart;
+    stats.released += 1;
   }
+
+  return stats;
+}
+
+function shouldReleaseDynamicObjectOnApproach(
+  entry,
+  chassisTranslation,
+  chassisVelocity,
+  chassisSpeed,
+  objectTranslation,
+) {
+  if (!entry.category.releaseOnProximity || chassisSpeed < 0.5) {
+    return false;
+  }
+
+  const halfExtents = entry.halfExtents ?? TMP_VEC;
+  const triggerDistance =
+    Math.max(halfExtents.x, halfExtents.z, 0.5) + Math.min(chassisSpeed * 0.1, 5);
+  const triggerRadius = Math.max(halfExtents.x, halfExtents.z, 0.75) + 1.15;
+  TMP_VEC_B.set(
+    objectTranslation.x - chassisTranslation.x,
+    0,
+    objectTranslation.z - chassisTranslation.z,
+  );
+
+  const distanceSq = TMP_VEC_B.lengthSq();
+  if (distanceSq > triggerDistance * triggerDistance) {
+    return false;
+  }
+
+  TMP_VEC_C.copy(chassisVelocity);
+  TMP_VEC_C.y = 0;
+  if (TMP_VEC_C.lengthSq() < 1e-6) {
+    return false;
+  }
+
+  TMP_VEC_C.normalize();
+  const forwardDistance = TMP_VEC_B.dot(TMP_VEC_C);
+  if (forwardDistance < -0.25 || forwardDistance > triggerDistance) {
+    return false;
+  }
+
+  const lateralDistanceSq =
+    Math.max(distanceSq - forwardDistance * forwardDistance, 0);
+  return lateralDistanceSq <= triggerRadius * triggerRadius;
+}
+
+function releaseDynamicObject(entry, chassisVelocity, translation) {
+  entry.dormant = false;
+  entry.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+  entry.body.setLinearDamping(entry.category.linearDamping);
+  entry.body.setAngularDamping(entry.category.angularDamping);
+
+  const impulse = chassisVelocity
+    .clone()
+    .multiplyScalar(
+      Math.max(
+        entry.category.mass * (entry.category.impulseScale ?? 0.18),
+        1.2,
+      ),
+    );
+  entry.body.applyImpulseAtPoint(
+    vectorFromThree(impulse),
+    { x: translation.x, y: translation.y + 0.25, z: translation.z },
+    true,
+  );
 }
 
 function syncDynamicSceneObjects(dynamicObjectState) {
