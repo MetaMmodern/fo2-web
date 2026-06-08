@@ -4,8 +4,9 @@ Purpose: record the post-worker-reset baseline and the next smallest safe physic
 
 ## Confirmed from existing repo findings and source data
 
-- Native vehicle runtime note remains:
-  - `FUN_0042c650` runs `100` fixed `0.01` substeps after wheel/contact reset and contact resolution.
+- Native vehicle runtime note updated 2026-06-08:
+  - `Vehicle_ResetPoseAndRunPhysicsSubsteps` (`FUN_0042c650`) runs `100` fixed `0.01` substeps after wheel/contact reset and contact resolution, but its confirmed xrefs are reset/spawn/catch-up paths.
+  - Normal steady-state driving advances fixed `0.01` ticks through `UpdateCamera` (`0x004725c0`) according to the due tick count, not `100` vehicle ticks per rendered frame.
 - Native collision bootstrap note remains:
   - car runtime setup reads `CollisionFull*`, `CollisionBottom*`, and `CollisionTop*` from `body.ini`.
 - Car-side body collision data is already present in repo:
@@ -45,7 +46,7 @@ Purpose: record the post-worker-reset baseline and the next smallest safe physic
 
 ## Implementation direction
 
-- Do not jump straight to `100` substeps on the current web port.
+- Do not jump straight to `100` substeps per rendered frame on the current web port. Use `100` fixed `0.01` ticks only as a reset/spawn settle analogue if that path is needed.
 - Next safe slice after the grounded-attitude step:
   - use `CollisionFull* / Bottom* / Top*` from `body.ini` for chassis/body blocking against collision geometry
 - After that:

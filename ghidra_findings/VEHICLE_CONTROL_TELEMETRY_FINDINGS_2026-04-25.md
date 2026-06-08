@@ -2,6 +2,12 @@
 
 Date: `2026-04-25`
 
+Correction 2026-06-08:
+- `vehicle + 0x1dfc` is now confirmed as nitro use/drain control from `Vehicle_AccumulateAerodynamicAndInputForces`.
+- `vehicle + 0x1df8` is brake control; `Vehicle_SetBrakeControl` @ `0x0042d3a0` writes this field.
+- `vehicle + 0x1e00` is handbrake/rear-brake additive control consumed by `Vehicle_ComputeBrakeAndHandbrakeWheelTorques`.
+- `vehicle + 0x1e04` is signed steer.
+
 ## Scope
 
 Add a low-risk next telemetry batch after camera validation by logging the
@@ -18,7 +24,7 @@ the remaining candidates:
 
 - `vehicle + 0x1df4`: applied throttle
 - `vehicle + 0x1df8`: applied brake
-- `vehicle + 0x1dfc`: candidate channel, not validated yet
+- `vehicle + 0x1dfc`: nitro use/drain control
 - `vehicle + 0x1e00`: applied handbrake
 - `vehicle + 0x1e04`: applied signed steer
 
@@ -35,7 +41,7 @@ The telemetry mod now logs:
 - `vehicle_applied_throttle`
 - `vehicle_applied_brake`
 - `vehicle_applied_handbrake`
-- `vehicle_control_candidate_1dfc`
+- `vehicle_applied_nitro`
 - `vehicle_applied_steer`
 - `vehicle_frame_delta_ms`
 - `vehicle_frame_delta_seconds`
@@ -51,7 +57,7 @@ Runtime validation:
   idle.
 - The same test confirmed `vehicle+0x1e04` mirrors signed applied steer exactly
   during stationary left/right steering.
-- `vehicle+0x1dfc` remained `0` and is still unresolved.
+- `vehicle+0x1dfc` remained `0` in that stationary test because nitro was not active; later decompilation confirms it as the nitro use/drain channel.
 
 ## Validation Plan
 
@@ -67,7 +73,7 @@ In a short in-race test:
 
 Confirmed from decompilation call paths:
 
-- `Vehicle_FinalizeSubstepAndUpdateAttachments` @ `0x0042b5f0` calls `Gearbox_UpdateShiftStateAndOutputShaft` once per vehicle finalize step.
+- `Vehicle_FinalizeSubstepAndUpdateAttachments` @ `0x0042b660` calls `Gearbox_UpdateShiftState` @ `0x004421d0` once per vehicle finalize step.
 - `Player_WriteVehicleControls` @ `0x0046fc40` reads and writes gearbox runtime state on the vehicle object:
   - `vehicle + 0x634`: applied/current gear
   - `vehicle + 0x63c`: requested gear

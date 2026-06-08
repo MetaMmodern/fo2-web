@@ -211,6 +211,13 @@ export function createHud(
   }
 
   if (runtimeDebug) {
+    if (runtimeDebug.physicsMode && typeof runtimeDebug.setPhysicsMode === "function") {
+      runtimeFolder
+        .add(runtimeDebug, "physicsMode", ["Rapier", "Original JS"])
+        .name("Physics mode")
+        .onChange((mode) => runtimeDebug.setPhysicsMode(mode))
+        .listen();
+    }
     runtimeFolder.add(runtimeDebug, "paused").name("Paused").listen();
     runtimeFolder
       .add(runtimeDebug, "autoPauseAfterLoad")

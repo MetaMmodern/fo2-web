@@ -2,12 +2,16 @@
 
 Purpose: record the current source-truth diagnosis for the remaining "stiff / rigid / speed-killing" steering behavior in the Rapier port.
 
+## Superseding correction 2026-06-08
+
+Later Ghidra work corrected the role of `0x00441ae0`: it is now named `Drivetrain_ApplyThrottleControlClamp` and is called with `vehicle+0x1df4` throttle/drive input, not signed steering. Signed steer is `vehicle+0x1e04`. The section below about a second native rack steering clamp should therefore be treated as superseded until a real steering-rack clamp call is separately recovered.
+
 ## Scope
 
 Reviewed:
 
 - `SetPlayerControllerSteeringValues` @ `0x00469f50`
-- `SteeringRack_ApplyRequestedSteerAngle` @ `0x00441ae0`
+- superseded older label `SteeringRack_ApplyRequestedSteerAngle` @ `0x00441ae0`; current name `Drivetrain_ApplyThrottleControlClamp`, not steering
 - existing notes in:
   - `reference/FlatOut-2-decomp-main/docs/DRIVING_RUNTIME_FINDINGS_2026-04-04.md`
   - `reference/FlatOut-2-decomp-main/research/ghidra_migration_bundle/docs/ghidra_findings/DRIVING_RUNTIME_CONTROL_FINDINGS_2026-03-31.md`
@@ -45,7 +49,7 @@ Confirmed implication:
 
 ### 2. Native rack steering has a second runtime clamp layer
 
-`SteeringRack_ApplyRequestedSteerAngle` does not only map requested steer directly to wheel angle.
+Superseded 2026-06-08: the following subsection was based on the old `SteeringRack_ApplyRequestedSteerAngle` label for `0x00441ae0`. That address is now classified as `Drivetrain_ApplyThrottleControlClamp`, not a steering-rack function.
 
 Confirmed behavior:
 

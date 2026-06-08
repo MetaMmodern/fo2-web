@@ -5,6 +5,20 @@ Purpose: capture the frame-by-frame runtime control path for local player input,
 Binary:
 - `reference/FlatOut2.exe`
 
+## Superseding correction 2026-06-08
+
+Later Ghidra and raw-EXE vtable checks corrected several labels in this note:
+
+- `0x0046f510` is confirmed from raw bytes as the local-player vtable slot 1 live driving input shaper. It is not currently a defined Ghidra function, but it spans `0x0046f510..0x0046fa3e` and calls `Player_WriteVehicleControls` at `0x0046fa34`.
+- Normal steady-state driving runs fixed `0.01` ticks through `UpdateCamera` @ `0x004725c0`. The `100 * 0.01` loop at `0x0042c650` is a reset/spawn settle path, not the normal per-render-frame update.
+- Vehicle control map is now confirmed as:
+  - `vehicle+0x1df4` throttle/drive
+  - `vehicle+0x1df8` brake
+  - `vehicle+0x1dfc` nitro
+  - `vehicle+0x1e00` handbrake/rear-brake additive
+  - `vehicle+0x1e04` signed steer
+- `0x00441ae0` is now named `Drivetrain_ApplyThrottleControlClamp`; the previous steering-rack label was wrong because the call site passes `vehicle+0x1df4`.
+
 ## Confirmed runtime call path
 
 ### Local player path
@@ -26,7 +40,7 @@ Binary:
     - shift requests via `player+0x664`, `FUN_00441f10`, and `FUN_00442160`
   - Calls `FUN_00429250(vehicle, dt_ms)` every frame.
 
-- unnamed function at `0x0046f510`
+- live driving input shaper at `0x0046f510`
   - Recovered from direct binary disassembly because Ghidra did not define a function there.
   - This is the main local input shaping block for steer / gas / brake / handbrake before `FUN_0046fa50`.
   - Confirmed behavior:
@@ -77,11 +91,11 @@ Binary:
   - AI per-frame control writer.
   - Uses AI/path state already prepared on the AI player object.
   - Writes per-frame vehicle controls directly:
-    - steer -> `vehicle+0x1df4`
-    - handbrake-like channel -> `vehicle+0x1df8`
-    - brake -> `vehicle+0x1dfc`
-    - throttle / reverse -> `vehicle+0x1e04`
-    - clutch-like channel -> `vehicle+0x1e00`
+    - throttle/drive -> `vehicle+0x1df4`
+    - brake -> `vehicle+0x1df8`
+    - nitro -> `vehicle+0x1dfc`
+    - handbrake/rear-brake additive -> `vehicle+0x1e00`
+    - signed steer -> `vehicle+0x1e04`
   - Also calls `FUN_00442160` for gear changes.
   - Confirmed behavior:
     - AI writes the same vehicle control channels as the local-player path
@@ -98,7 +112,7 @@ Binary:
   - Stores `dt_ms`, `dt_seconds`, and prior velocity snapshots for the deeper simulation.
 
 - `FUN_0042c650` @ `0x0042c650`
-  - Main vehicle simulation entry traced here.
+  - Reset/spawn settle simulation entry, not the normal steady-state driving tick.
   - Confirmed behavior:
     - clears per-step accumulators
     - resets wheel/contact state
@@ -111,15 +125,15 @@ Binary:
       - engine / physics solve `FUN_00564410(0.01, ...)`
       - `FUN_0042b660`
   - Confirmed fact:
-    - the native car update is not one coarse frame-sized arcade integration
+    - the reset/spawn settle path is not one coarse frame-sized arcade integration
     - it is a repeated fixed-step solve
   - Implementation implication:
-    - any web port running one large step per frame will overshoot acceleration, steering response, and stability.
+    - do not run these 100 settle substeps every rendered frame; normal runtime uses due fixed `0.01` ticks through `UpdateCamera`
 
 ## Steering-specific runtime behavior
 
 - `FUN_00441ae0` @ `0x00441ae0`
-  - Wheel-steer clamp stage after the main car steer value is written.
+  - Superseded label: this is now `Drivetrain_ApplyThrottleControlClamp`, reached with `vehicle+0x1df4` throttle/drive.
   - Confirmed behavior:
     - uses requested car steer input
     - applies an additional dynamic cap based on downstream wheel/vehicle state fields
@@ -128,8 +142,10 @@ Binary:
 - `FUN_00429be0` @ `0x00429be0`
   - Main wheel/tire force application stage traced in this pass.
   - Confirmed behavior:
-    - uses `vehicle+0x1df4` as steer input
-    - uses `vehicle+0x1df8` and `vehicle+0x1dfc` in brake / drag style branches
+    - uses `vehicle+0x1df4` as throttle/drive input
+    - uses `vehicle+0x1df8` brake and `vehicle+0x1e00` handbrake/rear-brake additive through brake torque setup
+    - uses `vehicle+0x1dfc` as nitro use/drain
+    - uses `vehicle+0x1e04` as signed steer input in steering-related assist terms
     - accumulates force into `vehicle+0x2a0/0x2a4/0x2a8`
     - accumulates torque into `vehicle+0x2b0/0x2b4/0x2b8`
     - uses wheel contact state, wheel offsets, chassis velocity, and steering angle every substep
@@ -186,7 +202,7 @@ Binary:
   - Confirmed behavior includes:
     - rotational drag based on rotational velocity magnitude
     - anisotropic drag tied to car axes and coefficients near `field_0x1cf0..1cfc`
-    - steer propagation via `FUN_00441ae0(..., vehicle+0x348, vehicle+0x1df4)`
+    - throttle/drive control propagation via `Drivetrain_ApplyThrottleControlClamp(..., vehicle+0x348, vehicle+0x1df4)`
 
 ### Still unresolved in this pass
 

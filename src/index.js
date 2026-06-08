@@ -29,7 +29,10 @@ import {
   setVehicleLightState,
   setVehicleSunVisibility,
 } from "./game/materials";
-import { createDrivingSimulation } from "./game/physicsRapier";
+import {
+  createDrivingSimulation,
+  DRIVING_SIMULATION_MODES,
+} from "./game/drivingSimulation";
 import { createColorFilterPass } from "./game/postprocessing";
 import {
   createChaseCamera,
@@ -63,6 +66,7 @@ const cameraDebug = {
 const runtimeDebug = {
   paused: false,
   autoPauseAfterLoad: false,
+  physicsMode: DRIVING_SIMULATION_MODES.original,
   collisionFramesVisible: false,
   renderGeometryVisible: true,
   renderIsolation: {
@@ -102,6 +106,15 @@ const runtimeDebug = {
   },
   togglePause() {
     runtimeDebug.paused = !runtimeDebug.paused;
+  },
+  setPhysicsMode(mode) {
+    if (!Object.values(DRIVING_SIMULATION_MODES).includes(mode)) {
+      return;
+    }
+    runtimeDebug.physicsMode = mode;
+    if (hasLoadedRace()) {
+      queueTransition(() => reloadDrivingSimulation());
+    }
   },
   toggleCollisionFrames() {
     runtimeDebug.collisionFramesVisible = !runtimeDebug.collisionFramesVisible;
@@ -1042,8 +1055,10 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       carRoot,
       assetUrls: vehicleAssetUrls,
       input: drivingInput,
+      simulationMode: runtimeDebug.physicsMode,
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
       dynamicObjects: sceneState.dynamicObjects,
+      trackContactSampler: sceneState.contactSampler,
       trackFloorSampler: sceneState.sceneSampler,
       debugOptions: runtimeDebug.physicsIsolation,
     });
@@ -1073,8 +1088,10 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
       carRoot: sceneState.carRoot,
       assetUrls: buildVehicleAssetUrls(car, skin),
       input: drivingInput,
+      simulationMode: runtimeDebug.physicsMode,
       collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
       dynamicObjects: sceneState.dynamicObjects,
+      trackContactSampler: sceneState.contactSampler,
       trackFloorSampler: sceneState.sceneSampler,
       debugOptions: runtimeDebug.physicsIsolation,
     });
@@ -1086,6 +1103,30 @@ async function loadSceneSelection({ reloadTrack, reloadCar }) {
     setRenderGeometryVisibility(runtimeDebug.renderGeometryVisible);
     updateVehicleLights();
   }
+}
+
+async function reloadDrivingSimulation() {
+  const car = getCarById(selection.carId);
+  const skin = getSkinById(car, selection.skinId);
+
+  if (!car || !skin || !sceneState.carRoot) {
+    return;
+  }
+
+  sceneState.drivingSimulation?.dispose?.();
+  drivingInput.debugClear();
+  sceneState.drivingSimulation = await createDrivingSimulation({
+    carId: car.id,
+    carRoot: sceneState.carRoot,
+    assetUrls: buildVehicleAssetUrls(car, skin),
+    input: drivingInput,
+    simulationMode: runtimeDebug.physicsMode,
+    collisionRoot: sceneState.collisionAsset?.root ?? sceneState.trackRoot,
+    dynamicObjects: sceneState.dynamicObjects,
+    trackContactSampler: sceneState.contactSampler,
+    trackFloorSampler: sceneState.sceneSampler,
+    debugOptions: runtimeDebug.physicsIsolation,
+  });
 }
 
 function disposeLoadedRace() {

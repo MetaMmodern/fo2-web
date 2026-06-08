@@ -123,17 +123,21 @@ Source of truth notes:
 - `Drivetrain_UpdateWheelRatesAndAutoShift` @ `0x004414f0` — Refreshes wheel-rate aggregate and gearbox recommendation/ratio terms each update; RPM↔wheel coupling anchor.
   - Confirmed 2026-05-01: writes `wheel + 0x31c = param_1 / (wheel + 0x30c)` across all wheels and updates aggregate candidate `vehicle + 0x3a4`; direct `+0x31c` was flat-zero in one validated runtime capture, so do not treat as guaranteed standalone wheel omega without path validation.
 - `GearNode_AccumulateAngularVelocityAndTorque` @ `0x004416b0` — Accumulates child gear-node angular/torque terms into `node + 0x38/+0x3c` (scaled by `node + 0x20`); key anchor for drivetrain-side wheel-rate reconstruction probes.
-- `0x0046f510` — Unnamed local-player steering/input shaping block recovered from disassembly; applies speed-bucket steering limits, analog centering, and final clamp before `FUN_0046fa50`.
+- `0x0046f510` — Local-player vtable slot 1 live driving input shaper at `Player` vtable entry `0x0066d3fc`. Confirmed from raw `reference/FlatOut2.exe` bytes. Ghidra does not define it as a function, but raw code spans `0x0046f510..0x0046fa3e`; it integrates live player throttle/brake/nitro/handbrake-like channels, applies speed/config-based steering shaping, clamps player control fields, writes steer delta at `player+0x6b8`, then calls `Player_WriteVehicleControls` at `0x0046fa34`.
 - `FUN_0046fa50` @ `0x0046fa50` — Post-input drive helper: writes control channels into vehicle state and manages auto-shift / shift cooldown behavior.
 - `AIPlayer_WriteVehicleControls` @ `0x00409520` — AI per-frame control writer; emits steer/throttle/brake/handbrake/gear requests into the same vehicle control channels used by the local player.
-- `FUN_00429250` @ `0x00429250` — Vehicle input normalization step; clamps input channels and stores per-frame timing/velocity snapshots.
-- `FUN_0042c650` @ `0x0042c650` — Main vehicle simulation entry traced here; clears step accumulators, resolves wheel contact state, then runs 100 fixed `0.01` substeps.
-- `FUN_00429640` @ `0x00429640` — Chassis/drag/steering propagation stage within each vehicle substep.
-- `FUN_00429be0` @ `0x00429be0` — Main wheel/tire force and yaw-torque accumulation stage within each substep.
+- `Vehicle_UpdateControlClampsAndFrameDelta` @ `0x00429250` — Vehicle input normalization step; clamps `vehicle+0x1df4` throttle/drive, `+0x1df8` brake, `+0x1e00` handbrake/rear-brake add to `[0,1]`, clamps `+0x1e04` signed steer to `[-1,1]`, and stores per-frame timing/velocity snapshots.
+- `Vehicle_ResetPoseAndRunPhysicsSubsteps` @ `0x0042c650` — Spawn/reset vehicle settle path. Clears step accumulators, resolves wheel contact state, then unconditionally runs `100` fixed `0.01` substeps. Confirmed 2026-06-08 xrefs are reset/catch-up callers (`AIPlayer_ResetToTrackSegmentSpawn`, `Player_ResetVehicleToTrackSpawn`, `PlayerHost_ResetVehiclesForRaceStart`, `FUN_004e3290`); do not treat this as the normal per-frame driving tick.
+- `PlayerHost_AdvanceRaceSimulationTicks` @ `0x00472d30` — Host-level race tick driver. Confirmed 2026-06-08: receives tick count-like `param_2`, advances `PlayerHost.nTimer_0x2087c`, writes fixed-step context fields (`+0x207c4 = 0.01`, `+0x207c8 ~= 100`, `+0x207cc = 10`), runs player vtable slot 4 (`Player_UpdateLocalDrivingControls`) before calling `UpdateCamera(oldTimer, param_2, activeFlag)`.
+- `UpdateCamera` @ `0x004725c0` — Steady-state player-host update loop. Confirmed 2026-06-08: loops `param_3` simulation ticks, chunks each pass to at most `10` ticks for event/environment work, and each tick runs player VFT slots 5-8, `Vehicle_AccumulateAerodynamicAndInputForces`, `Vehicle_AccumulateWheelTireAndSteeringForces`, `Drivetrain_DistributeTorqueToDrivenWheels`, then physics integration with fixed `0.01`. This is the normal 100 Hz driving cadence anchor.
+- `Player_UpdateLocalDrivingControls` @ `0x0046c8e0` — Local-player control sampling/shaping vtable slot 4 (`Player` vtable base `0x0066d3f8`, slot `+0x10`). Reads controller state, handles reset/recover interactions, writes player-side control fields, and calls `Vehicle_UpdateControlClampsAndFrameDelta`.
+- `Player_PerTickPreVehicleForceUpdate` @ `0x0046d5c0` — Local-player vtable slot 5 (`0x0066d40c`) called inside each `UpdateCamera` simulation tick before vehicle force accumulation. Confirmed one layer down: calls `Player_UpdatePositionAndVelocity` @ `0x0046b8c0`, `FUN_0046c070` track-progress update, `FUN_0046c850` reset/flag timer, then slot 1 live driving input shaper at `0x0046f510`.
+- `Player_PerTickFinalizeVehicleUpdate` @ `0x0046dc20` — Local-player vtable slot 9 (`0x0066d41c`) called after world integration; thin wrapper around `Vehicle_FinalizeSubstepAndUpdateAttachments(param_1, false)` when a vehicle is present.
+- `Vehicle_AccumulateAerodynamicAndInputForces` @ `0x00429640` — Chassis/drag/control propagation stage within each vehicle substep. Calls suspension load resolution, brake/handbrake torque setup, throttle-control clamp, and wheel callbacks before tire forces.
+- `Vehicle_AccumulateWheelTireAndSteeringForces` @ `0x00429be0` — Main wheel/tire force and yaw-torque accumulation stage within each substep.
   - Confirmed 2026-04-26 telemetry anchors: per-wheel runtime blocks start at `vehicle + 0x0a00` with stride `0x03a0`; contact flag is `wheel + 0x334`, contact pointer is `wheel + 0x348`, and the validated vertical-load/unload proxy is `wheel + 0x330`.
   - Confirmed 2026-05-01 runtime behavior: `wheel + 0x32c` behaves as a robust rotational phase signal; combined with `wheel + 0x320` (brake torque from `0x0042c540`) it cleanly exposes rear lock during handbrake.
-- `FUN_00441ae0` @ `0x00441ae0` — Wheel steer-angle clamp stage after car-level steer input is computed.
-  - Confirmed 2026-04-14: applies a second rack-side dynamic steer cap from live vehicle/runtime fields at `+0x300/+0x304/+0x370/+0x374`; final wheel steer is not determined by player input shaping alone.
+- `Drivetrain_ApplyThrottleControlClamp` @ `0x00441ae0` — Drive/throttle-side control clamp reached from `Vehicle_AccumulateAerodynamicAndInputForces` with `vehicle+0x1df4`. Earlier `SteeringRack` label was wrong; signed steering channel is `vehicle+0x1e04`.
 - `FUN_00441f10` @ `0x00441f10` — Auto gear-selection helper based on projected forward speed and runtime threshold arrays at gearbox `+0x9c/+0xa0`; includes explicit reverse/neutral/launch cases.
   - Confirmed 2026-04-14 constants/units:
     - converts m/s-style projected speed to km/h with `FLOAT_0067dd6c = 3.6`
@@ -143,7 +147,7 @@ Source of truth notes:
 - `FUN_00442160` @ `0x00442160` — Shift request/state-machine entry; validates requested gear in `[-1, numGears]`, writes requested gear to gearbox `+0x48`, and arms the timed shift state at `+0x4c/+0x50`.
 - `FUN_004421d0` @ `0x004421d0` — Timed shift-state integrator; applies the requested gear once the engage window `+0xc0` is reached and returns to idle after the full engage+release window `+0xc0 + +0xbc`.
 - `FUN_00441c40` @ `0x00441c40` — Gearbox handling loader; copies ratio/threshold data into runtime offsets `+0x5c..+0x98`, sets `numGears` at `+0x58`, and seeds clutch/auto-shift timing fields from loaded gearbox data.
-- `FUN_0042b5f0` @ `0x0042b5f0` — Vehicle finalize-substep stage; calls `Gearbox_UpdateShiftStateAndOutputShaft` each finalize pass.
+- `Vehicle_FinalizeSubstepAndUpdateAttachments` @ `0x0042b660` — Vehicle finalize-substep stage; samples wheel contacts, runs wheel callbacks, calls `Gearbox_UpdateShiftState`, computes angular acceleration feedback, and performs post-step attachment/event/body updates.
 - `FUN_0046fc40` @ `0x0046fc40` — Local player control writer with confirmed vehicle-side gearbox/control offsets:
   - `vehicle+0x634` current/applied gear
   - `vehicle+0x63c` requested gear
@@ -151,8 +155,16 @@ Source of truth notes:
   - `vehicle+0x64c` number of gears
   - `vehicle+0x5d8` engine-speed-like runtime scalar
   - `vehicle+0x648`, `vehicle+0x6e4` speed-related shift/reverse logic terms
+  - `vehicle+0x1df4` throttle/drive control
+  - `vehicle+0x1df8` brake control
+  - `vehicle+0x1dfc` nitro use/drain control
+  - `vehicle+0x1e00` handbrake/rear-brake additive control
+  - `vehicle+0x1e04` signed steer control
 - `FUN_00454b50` @ `0x00454b50` — Builds the runtime engine curve table from `PeakPower*`, `PeakTorque*`, `RedLineRpm`, `RpmLimit`, and `ZeroPowerRpm`.
 - `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` — Driven-wheel torque distribution and differential dispatch stage.
+- `PhysicsWorld_StepActiveBodiesAndContacts` @ `0x0056c850` — World-level active-body/contact-island step used by normal `UpdateCamera` after all per-vehicle force accumulation. Handles active body callbacks/contact flags, island/contact processing, integration, and sleep/activation bookkeeping.
+- `PhysicsBody_IntegrateForcesAndPose` @ `0x00564410` — Body-level force/pose integration helper used by the reset settle loop at `Vehicle_ResetPoseAndRunPhysicsSubsteps`.
+- `Vehicle_UpdateAngularAccelerationFeedback` @ `0x00422e30` — Vehicle post-step angular acceleration/feedback update called from `Vehicle_FinalizeSubstepAndUpdateAttachments` on normal runtime finalization.
   - Confirmed 2026-04-14 torque scalar:
     - nonlinear scale computed as `c*0.3 + c^3*0.7` (`FLOAT_0067dc14 = 0.3`, `FLOAT_0067dc60 = 0.7`)
     - result written to runtime fields `+0x1a8` and `+0x1aa` before differential left/right solve
@@ -188,7 +200,7 @@ Source of truth notes:
   - suspension geometry
   - differential / throttle / brake / speed curves
 - The original runtime does local and AI control generation first, then hands normalized inputs into a fixed-step vehicle simulation loop. It is not one ad hoc frame-sized arcade update.
-- The traced vehicle simulation entry runs `100` fixed `0.01` substeps via `FUN_0042c650`; missing that structure will materially change steering, acceleration, and stability.
+- Normal runtime driving advances at fixed `0.01` simulation ticks via the player-host update loop at `UpdateCamera` (`0x004725c0`). The `100` fixed `0.01` loop in `Vehicle_ResetPoseAndRunPhysicsSubsteps` (`0x0042c650`) is a spawn/reset settle path, not evidence that normal rendering frames execute 100 vehicle ticks.
 - `SpeedLimit` is currently only confirmed in `Car_ReadHandling` and `SetCarStats`, not in the traced runtime simulation path, so do not assume it is an in-race hard speed cap.
 - The native game distinguishes floor/body/ray/camera collision concepts; those should not be collapsed into one generic mesh-contact rule in the long term.
 
