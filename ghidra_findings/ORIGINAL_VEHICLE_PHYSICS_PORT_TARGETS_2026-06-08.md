@@ -78,6 +78,8 @@ Porting implication: this slot is required for local-player feel. It is the miss
 - adds suspension force to chassis force accumulator `vehicle+0x2a0/+0x2a4/+0x2a8`
 - adds corresponding torque to `vehicle+0x2b0/+0x2b4/+0x2b8`
 - blends paired wheel load terms through `vehicle+0x1de8`
+- confirmed 2026-06-09: this is not only a tire-grip load scalar. The native stage physically pushes the chassis and creates pitch/roll torque before tire forces are accumulated.
+- confirmed 2026-06-09 offset map: reads contact flag at `wheel+0x334`, reads suspension compression/velocity from `vehicle+0x18a4/+0x18a8 + i*0x40`, uses spring/damper terms in `vehicle+0x188c..0x18b0 + i*0x40`, and writes final resolved load to `wheel+0x344`.
 
 `Vehicle_ComputeBrakeAndHandbrakeWheelTorques`:
 
@@ -89,6 +91,8 @@ Porting implication: this slot is required for local-player feel. It is the miss
 
 - consumes per-wheel runtime blocks at `vehicle + 0x0a00 + index * 0x3a0`
 - reads contact flags/pointers and contact normal/material terms
+- confirmed 2026-06-09: contact flag is `wheel+0x334`, contact pointer is `wheel+0x348`, aggregate contact profile reads use contact pointer offsets `+0x4c/+0x50/+0x54`, and per-wheel tire force scaling reads contact pointer offsets `+0x44/+0x48`
+- confirmed 2026-06-09: the main per-wheel contact loop also reads `ABS(wheel+0x378)` as a tire-force multiplier candidate; telemetry has already logged this field as dynamic during braking/sliding/high-load cases
 - computes contact-point velocity from chassis linear/angular velocity
 - accumulates chassis force at `vehicle + 0x2a0/+0x2a4/+0x2a8`
 - accumulates chassis torque at `vehicle + 0x2b0/+0x2b4/+0x2b8`
@@ -114,9 +118,10 @@ Porting implication: this slot is required for local-player feel. It is the miss
 `Vehicle_SampleWheelGroundContacts`:
 
 - builds a broad query box around the four wheel travel ranges
-- queries the environment/collision structure through `FUN_005630d0`
-- tests per-wheel rays/sweeps through `FUN_005639e0`
+- queries the environment/collision structure through `CollisionSpatial_QueryTransformedAabbTriangles` @ `0x005630d0`
+- tests per-wheel rays/sweeps through `CollisionSpatial_RaycastTriangleSoup` @ `0x005639e0`
 - writes wheel contact flags, contact normals/positions/material pointer terms, compression/displacement, and contact material slots used by the next tick's suspension and tire-force stages
+- confirmed 2026-06-09 offset map: writes contact flag `wheel+0x334`, contact pointer `wheel+0x348`, contact vector `wheel+0x34c/+0x350/+0x354`, contact material slot `vehicle+0x28ac+i*4`, suspension predictor state `wheel+0x74`, compression/displacement `vehicle+0x18a4+i*0x40`, velocity `vehicle+0x18a8+i*0x40`, and overshoot/bump `vehicle+0x18b4+i*0x40`.
 
 `Gearbox_UpdateShiftState`:
 
@@ -148,6 +153,8 @@ Minimum Ghidra-derived functions needed before tuning:
 - `Differential_SolveLeftRightWheelTorques` @ `0x004408d0`
 - `Vehicle_FinalizeSubstepAndUpdateAttachments` @ `0x0042b660`
 - `Vehicle_SampleWheelGroundContacts` @ `0x0042bcc0`
+- `CollisionSpatial_QueryTransformedAabbTriangles` @ `0x005630d0`
+- `CollisionSpatial_RaycastTriangleSoup` @ `0x005639e0`
 - `Gearbox_UpdateShiftState` @ `0x004421d0`
 - `Vehicle_UpdateAngularAccelerationFeedback` @ `0x00422e30`
 
@@ -158,9 +165,23 @@ Likely deferrable for a first one-car feel prototype:
 - stunt-only event branches
 - dynamic prop wake/contact island details in `PhysicsWorld_StepActiveBodiesAndContacts`, as long as static ground/wheel contacts are supplied coherently
 
+## Collision Engine Follow-Up 2026-06-09
+
+- `Vehicle_SampleWheelGroundContacts` is the immediate missing vehicle-contact bridge. It is not a generic Rapier mesh raycast in native code; it uses the authored environment collision structure through `CollisionSpatial_QueryTransformedAabbTriangles`, then tests each wheel ray/sweep against candidate triangles through `CollisionSpatial_RaycastTriangleSoup`.
+- The full world collision step is now split into stable anchors:
+  - `PhysicsWorld_BuildPotentialContactPairs` @ `0x00565f10`
+  - `PhysicsWorld_GenerateContactManifolds` @ `0x005692b0`
+  - `PhysicsIsland_SolveContactsAndIntegrateBodies` @ `0x00573780`
+  - `PhysicsWorld_UpdateBodyBroadphaseBounds` @ `0x0056ea50`
+- Porting implication: for vehicle feel, porting the static wheel-contact path should come before replacing Rapier wholesale. For full cone/wall/body parity, the original collision engine is recoverable but includes a broadphase, manifold generator, island solver, activation/sleep flags, dynamic-object live-set transitions, and vehicle damage queues.
+- Suspension correction 2026-06-09: current `Original JS` computes wheel compression/load, but the native path also applies spring/damper force and lever-arm torque to the chassis accumulators. If the web solver only uses load as a tire-force multiplier and lerps body height, springs will appear nonfunctional even with correct contact hits.
+- Airborne correction 2026-06-09: `PhysicsBody_IntegratePoseFromVelocities` @ `0x00564640` integrates and normalizes the body quaternion from angular velocity and accumulated torque, then applies damping. No native upright/default-air reset was found in this path, so web behavior that reorients the car while airborne should be treated as a port-side artifact to remove.
+
 ## Open Items
 
 - The exact producer of `PlayerHost_AdvanceRaceSimulationTicks.param_2` still needs a clean caller trace. Confirmed call-site xrefs include `0x004de64a` and `0x0048e0b0`, but Ghidra did not resolve those directly to decompilable containing functions in this session.
 - `0x0046f510` is classified from raw bytes, not decompiled C. If implementation needs exact bit-level parity, define the function in Ghidra or use an external x86 disassembler for a full instruction-level transcript before porting.
 - `Vehicle_AccumulateWheelTireAndSteeringForces` needs a second pass focused on naming wheel-block offsets and scalar constants before implementation.
+- 2026-06-09 tire-force follow-up confirmed that native force accumulation is not a simple combined-slip ellipse. It separates contact-basis and wheel-basis forces using contact `+0x44`, `+0x48`, aggregate contact `+0x4c/+0x50/+0x54`, and `ABS(wheel+0x378)`, then applies tail yaw/counter-steer assist through `SteeringRack_GetCounterSteerAssistIndex` @ `0x00441990`. The current web driven-wheel lateral-release change is therefore an approximation pending the exact `wheel+0x378` producer and assist branches.
+- 2026-06-09 donut follow-up confirmed the remaining native drivetrain path is important: `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` calls `Differential_SolveLeftRightWheelTorques` @ `0x004408d0`, which consumes wheel `+0x398` and writes left/right torque outputs at diff `+0x50/+0x54/+0x58`. Web equal-torque splitting is not enough for one-wheel spin/donut parity.
 - `PhysicsWorld_StepActiveBodiesAndContacts` is broad engine infrastructure. For a web port, it may be better to implement a smaller vehicle-specific integrator/query path than to port the whole world island solver.

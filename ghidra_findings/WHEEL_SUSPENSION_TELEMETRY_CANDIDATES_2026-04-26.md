@@ -93,6 +93,11 @@ it is currently the best wheel-load signal.
 The previous `wheel_i_contact_flag` at `wheel + 0x344` did not behave like a
 simple boolean during runtime logging.
 
+Follow-up Ghidra correction on 2026-06-09: `wheel + 0x344` is the final
+resolved suspension load written by `Vehicle_ResolveWheelSuspensionLoads`
+@ `0x0042b8c0`, not a contact flag. This explains why it behaved like a
+float-like runtime quantity in earlier captures.
+
 CSV `phase1_basic.20260426-092422.csv` used a structured validation run:
 straight/brake, dirt/curbs, tilted slope, handbrake slide, and a real jump.
 
@@ -137,6 +142,8 @@ With per-wheel block base `vehicle + 0x0a00 + index*0x03a0`, this means:
 
 - contact flag is `wheel + 0x334`
 - contact pointer is `wheel + 0x348`
+- final suspension load is `wheel + 0x344`, written by
+  `Vehicle_ResolveWheelSuspensionLoads` after the spring/damper force solve
 
 The contact pointer is then consumed for floats at `+0x44`, `+0x48`, `+0x4c`,
 `+0x50`, and `+0x54`. These are not semantically named yet, but they appear in

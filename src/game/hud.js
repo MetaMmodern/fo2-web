@@ -58,7 +58,21 @@ export function createHud(
       steerLeft: "--",
       steerRight: "--",
       yawRate: "--",
+      pitch: "--",
+      roll: "--",
+      pitchRate: "--",
+      rollRate: "--",
       lateralSpeed: "--",
+      surfaceType: "--",
+      surfaceGrip: "--",
+      surfaceXFriction: "--",
+      surfaceZFriction: "--",
+      traction: "--",
+      slipLongAvg: "--",
+      slipLatAvg: "--",
+      rearSlipLong: "--",
+      rearWheelSpeed: "--",
+      rearGroundSpeed: "--",
       drive: "--",
       wheelContacts: "--",
       impulse: "--",
@@ -499,11 +513,95 @@ export function createHud(
         "yawRate",
         "Yaw deg/s",
       ),
+      pitch: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "pitch",
+        "Pitch deg",
+      ),
+      roll: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "roll",
+        "Roll deg",
+      ),
+      pitchRate: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "pitchRate",
+        "Pitch deg/s",
+      ),
+      rollRate: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "rollRate",
+        "Roll deg/s",
+      ),
       lateralSpeed: makeReadonlyMetric(
         perfPhysicsFolder,
         perfState.physics,
         "lateralSpeed",
         "Lat speed",
+      ),
+      surfaceType: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "surfaceType",
+        "Surface",
+      ),
+      surfaceGrip: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "surfaceGrip",
+        "Surface grip",
+      ),
+      surfaceXFriction: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "surfaceXFriction",
+        "Surface X",
+      ),
+      surfaceZFriction: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "surfaceZFriction",
+        "Surface Z",
+      ),
+      traction: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "traction",
+        "Traction",
+      ),
+      slipLongAvg: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "slipLongAvg",
+        "Slip long",
+      ),
+      slipLatAvg: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "slipLatAvg",
+        "Slip lat",
+      ),
+      rearSlipLong: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "rearSlipLong",
+        "Rear slip",
+      ),
+      rearWheelSpeed: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "rearWheelSpeed",
+        "Rear wheel",
+      ),
+      rearGroundSpeed: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "rearGroundSpeed",
+        "Rear ground",
       ),
       drive: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "drive", "Drive"),
       wheelContacts: makeReadonlyMetric(
@@ -887,7 +985,21 @@ function applyPhysicsDebugState(target, debugState) {
   target.steerLeft = formatMetricNumber(debugState.steerLeftDeg, 1);
   target.steerRight = formatMetricNumber(debugState.steerRightDeg, 1);
   target.yawRate = formatMetricNumber(debugState.yawRateDeg, 1);
+  target.pitch = formatMetricNumber(debugState.pitchDeg, 1);
+  target.roll = formatMetricNumber(debugState.rollDeg, 1);
+  target.pitchRate = formatMetricNumber(debugState.pitchRateDeg, 1);
+  target.rollRate = formatMetricNumber(debugState.rollRateDeg, 1);
   target.lateralSpeed = formatMetricNumber(debugState.speedRight, 2);
+  target.surfaceType = debugState.surfaceType ?? "--";
+  target.surfaceGrip = formatMetricNumber(debugState.surfaceGrip, 2);
+  target.surfaceXFriction = formatMetricNumber(debugState.surfaceXFriction, 2);
+  target.surfaceZFriction = formatMetricNumber(debugState.surfaceZFriction, 2);
+  target.traction = debugState.traction ?? "--";
+  target.slipLongAvg = formatMetricNumber(debugState.slipLongAvg, 2);
+  target.slipLatAvg = formatMetricNumber(debugState.slipLatAvg, 2);
+  target.rearSlipLong = formatMetricNumber(debugState.rearSlipLongAvg, 2);
+  target.rearWheelSpeed = formatMetricNumber(debugState.rearWheelSpeed, 2);
+  target.rearGroundSpeed = formatMetricNumber(debugState.rearGroundSpeed, 2);
   target.drive = formatMetricNumber(debugState.engineForce, 0);
   target.wheelContacts = formatMetricNumber(debugState.wheelContacts, 0);
   target.impulse = formatMetricNumber(debugState.forwardImpulse, 0);

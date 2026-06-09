@@ -108,6 +108,7 @@ Source of truth notes:
 Source of truth notes:
 - `ghidra_findings/DRIVING_COLLISION_FINDINGS_2026-03-31.md:1`
 - `ghidra_findings/DRIVING_RUNTIME_CONTROL_FINDINGS_2026-03-31.md:1`
+- `ghidra_findings/ORIGINAL_COLLISION_ENGINE_PORT_ASSESSMENT_2026-06-09.md:1`
 
 ### Core anchors
 
@@ -134,8 +135,11 @@ Source of truth notes:
 - `Player_PerTickPreVehicleForceUpdate` @ `0x0046d5c0` — Local-player vtable slot 5 (`0x0066d40c`) called inside each `UpdateCamera` simulation tick before vehicle force accumulation. Confirmed one layer down: calls `Player_UpdatePositionAndVelocity` @ `0x0046b8c0`, `FUN_0046c070` track-progress update, `FUN_0046c850` reset/flag timer, then slot 1 live driving input shaper at `0x0046f510`.
 - `Player_PerTickFinalizeVehicleUpdate` @ `0x0046dc20` — Local-player vtable slot 9 (`0x0066d41c`) called after world integration; thin wrapper around `Vehicle_FinalizeSubstepAndUpdateAttachments(param_1, false)` when a vehicle is present.
 - `Vehicle_AccumulateAerodynamicAndInputForces` @ `0x00429640` — Chassis/drag/control propagation stage within each vehicle substep. Calls suspension load resolution, brake/handbrake torque setup, throttle-control clamp, and wheel callbacks before tire forces.
+- `Vehicle_ResolveWheelSuspensionLoads` @ `0x0042b8c0` — Native per-wheel spring/damper load resolver. Confirmed 2026-06-09: consumes contact flags at `wheel + 0x334` and the suspension runtime block at `vehicle + 0x188c + i*0x40`; writes final resolved suspension load to `wheel + 0x344`, accumulates chassis force at `vehicle + 0x2a0/+0x2a4/+0x2a8`, accumulates torque at `vehicle + 0x2b0/+0x2b4/+0x2b8`, and blends paired axle loads through `vehicle + 0x1de8`.
 - `Vehicle_AccumulateWheelTireAndSteeringForces` @ `0x00429be0` — Main wheel/tire force and yaw-torque accumulation stage within each substep.
   - Confirmed 2026-04-26 telemetry anchors: per-wheel runtime blocks start at `vehicle + 0x0a00` with stride `0x03a0`; contact flag is `wheel + 0x334`, contact pointer is `wheel + 0x348`, and the validated vertical-load/unload proxy is `wheel + 0x330`.
+  - Corrected 2026-06-09: `wheel + 0x344` is the resolved suspension load written by `Vehicle_ResolveWheelSuspensionLoads`, not a contact flag.
+  - Confirmed 2026-06-09 tire-force pass: aggregate contact profile reads use contact pointer offsets `+0x4c/+0x50/+0x54`; per-wheel force scaling reads contact pointer offsets `+0x44/+0x48`; the loop also uses `ABS(wheel + 0x378)` as a tire-force multiplier candidate.
   - Confirmed 2026-05-01 runtime behavior: `wheel + 0x32c` behaves as a robust rotational phase signal; combined with `wheel + 0x320` (brake torque from `0x0042c540`) it cleanly exposes rear lock during handbrake.
 - `Drivetrain_ApplyThrottleControlClamp` @ `0x00441ae0` — Drive/throttle-side control clamp reached from `Vehicle_AccumulateAerodynamicAndInputForces` with `vehicle+0x1df4`. Earlier `SteeringRack` label was wrong; signed steering channel is `vehicle+0x1e04`.
 - `FUN_00441f10` @ `0x00441f10` — Auto gear-selection helper based on projected forward speed and runtime threshold arrays at gearbox `+0x9c/+0xa0`; includes explicit reverse/neutral/launch cases.
@@ -163,7 +167,14 @@ Source of truth notes:
 - `FUN_00454b50` @ `0x00454b50` — Builds the runtime engine curve table from `PeakPower*`, `PeakTorque*`, `RedLineRpm`, `RpmLimit`, and `ZeroPowerRpm`.
 - `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` — Driven-wheel torque distribution and differential dispatch stage.
 - `PhysicsWorld_StepActiveBodiesAndContacts` @ `0x0056c850` — World-level active-body/contact-island step used by normal `UpdateCamera` after all per-vehicle force accumulation. Handles active body callbacks/contact flags, island/contact processing, integration, and sleep/activation bookkeeping.
+- `PhysicsWorld_BuildPotentialContactPairs` @ `0x00565f10` — Broadphase/potential-pair builder. Walks body overlap links, filters flags/masks/sleep state, queues contact pairs, and activates dynamic objects into the live set.
+- `PhysicsWorld_GenerateContactManifolds` @ `0x005692b0` — World contact-manifold generation. Consumes potential body pairs, emits contact records/damage visual contacts, handles active dynamic body triangle contacts, collision callbacks, and queued body hit data.
+- `PhysicsIsland_SolveContactsAndIntegrateBodies` @ `0x00573780` — Per-island contact solver/integration stage called by `PhysicsWorld_StepActiveBodiesAndContacts`; prepares body solver rows, resolves queued contacts, and integrates active bodies.
+- `PhysicsWorld_UpdateBodyBroadphaseBounds` @ `0x0056ea50` — Updates body broadphase integer AABBs from body transforms and collision shape bounds, then reinserts changed bounds into spatial axes.
+- `CollisionSpatial_QueryTransformedAabbTriangles` @ `0x005630d0` — Static collision spatial query used by `Vehicle_SampleWheelGroundContacts`; traverses authored collision tree data and writes triangle/contact candidates into the caller buffer.
+- `CollisionSpatial_RaycastTriangleSoup` @ `0x005639e0` — Triangle-soup ray/sweep tester used by wheel ground sampling and reset settle; writes hit point/normal/material id and supports a fallback static query for near-zero ray direction.
 - `PhysicsBody_IntegrateForcesAndPose` @ `0x00564410` — Body-level force/pose integration helper used by the reset settle loop at `Vehicle_ResetPoseAndRunPhysicsSubsteps`.
+- `PhysicsBody_IntegratePoseFromVelocities` @ `0x00564640` — Low-level body pose integrator called by `PhysicsBody_IntegrateForcesAndPose` and `PhysicsIsland_SolveContactsAndIntegrateBodies`. Confirmed 2026-06-09: integrates linear velocity and quaternion orientation from accumulated force/torque/angular velocity, normalizes the quaternion, rebuilds the matrix, and applies damping. No airborne upright/default attitude reset is present in this path.
 - `Vehicle_UpdateAngularAccelerationFeedback` @ `0x00422e30` — Vehicle post-step angular acceleration/feedback update called from `Vehicle_FinalizeSubstepAndUpdateAttachments` on normal runtime finalization.
   - Confirmed 2026-04-14 torque scalar:
     - nonlinear scale computed as `c*0.3 + c^3*0.7` (`FLOAT_0067dc14 = 0.3`, `FLOAT_0067dc60 = 0.7`)
@@ -203,6 +214,8 @@ Source of truth notes:
 - Normal runtime driving advances at fixed `0.01` simulation ticks via the player-host update loop at `UpdateCamera` (`0x004725c0`). The `100` fixed `0.01` loop in `Vehicle_ResetPoseAndRunPhysicsSubsteps` (`0x0042c650`) is a spawn/reset settle path, not evidence that normal rendering frames execute 100 vehicle ticks.
 - `SpeedLimit` is currently only confirmed in `Car_ReadHandling` and `SetCarStats`, not in the traced runtime simulation path, so do not assume it is an in-race hard speed cap.
 - The native game distinguishes floor/body/ray/camera collision concepts; those should not be collapsed into one generic mesh-contact rule in the long term.
+- Full original collision parity is possible in principle but is a larger engine port than the current vehicle-feel pass: it needs authored static collision tree queries, body broadphase, manifold generation, island solving, sleep/activation, dynamic-object live-set management, and vehicle damage/contact queues.
+- Short-term vehicle-feel parity should port `Vehicle_SampleWheelGroundContacts` plus the static spatial query/raycast path before attempting the whole world solver. That gives the custom vehicle solver native-style ground normals/materials/compression without requiring a full Rapier replacement.
 
 ### Track / Dynamic-Object collision anchors
 
@@ -765,6 +778,13 @@ These keys are present in `.rdata` and appear in the large environment setup fun
 - `HorizonTexture` @ `0x0067c1a8`
 
 ---
+
+## Vehicle Drivetrain Follow-Up 2026-06-09
+
+- `Differential_SolveLeftRightWheelTorques` @ `0x004408d0` — Driven-axle left/right torque solver; consumes wheel state terms including wheel `+0x398`, maintains side-selection state at diff `+0x44`, and writes outputs at diff `+0x50/+0x54/+0x58`.
+- `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` — Drivetrain torque dispatch; applies nonlinear driven torque scalar `c*0.3 + c^3*0.7` and calls the native differential solver rather than equal-splitting wheel torque.
+- `Drivetrain_UpdateWheelRatesAndAutoShift` @ `0x004414f0` — Refreshes per-wheel rate terms and aggregate driven wheel rate before gear recommendation/dispatch; part of the missing engine RPM to wheel speed coupling path.
+- `Vehicle_ComputeBrakeAndHandbrakeWheelTorques` @ `0x0042c540` — Per-wheel brake/handbrake torque writer before tire-force accumulation; writes front wheel brake torque to `vehicle+0xd20/+0x10c0` and rear torque to `vehicle+0x1460/+0x1800`.
 
 ## Next extraction targets (visual only)
 

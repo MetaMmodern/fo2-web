@@ -110,3 +110,66 @@ Remaining limit: wheel force, drivetrain, gearbox finalization, and contact samp
 Limit: prop interaction is intentionally loose and does not yet use the Rapier dynamic-body path. It is meant as a temporary bridge until the custom vehicle authority can drive a Rapier helper body or the original object collision path is ported.
 
 Performance correction: routing `Original JS` wheel/body rays through `contactSampler` and enabling body probes in the default loop caused severe frame time spikes on full tracks. The default `Original JS` path now uses the render-scene floor sampler again, while `bodyContacts` and `customDynamicObjects` remain opt-in experiments.
+
+## Ghidra Collision Follow-Up 2026-06-09
+
+- Confirmed the native wheel-ground contact path is its own porting target, not just a generic physics-engine raycast:
+  - `Vehicle_SampleWheelGroundContacts` @ `0x0042bcc0`
+  - `CollisionSpatial_QueryTransformedAabbTriangles` @ `0x005630d0`
+  - `CollisionSpatial_RaycastTriangleSoup` @ `0x005639e0`
+- Confirmed the full original collision engine is larger than the current vehicle solver pass:
+  - `PhysicsWorld_BuildPotentialContactPairs` @ `0x00565f10`
+  - `PhysicsWorld_GenerateContactManifolds` @ `0x005692b0`
+  - `PhysicsIsland_SolveContactsAndIntegrateBodies` @ `0x00573780`
+  - `PhysicsWorld_UpdateBodyBroadphaseBounds` @ `0x0056ea50`
+- Implementation implication: the next practical step is to port original static wheel-contact sampling into `Original JS` mode first. Removing Rapier completely may be possible later, but full object/collision parity requires the broadphase, contact manifold, island solver, live-set activation, and vehicle damage/contact queue paths documented in `ORIGINAL_COLLISION_ENGINE_PORT_ASSESSMENT_2026-06-09.md`.
+
+## Original JS Contact/Suspension Pass 2026-06-09
+
+- Updated `Original JS` wheel contacts to prefer suspension-axis `raycast` sweeps instead of only vertical floor samples.
+- Wheels now become grounded only after compression is positive, which better matches the native contact/compression dependency.
+- Replaced the old static-ish wheel load scalar with a spring/damper load derived from shipped default compression, bump/rebound damping, and per-wheel compression velocity.
+- Suspension force now contributes to chassis acceleration and pitch/roll attitude instead of only scaling tire forces and wheel visuals.
+- Gravity now remains active while grounded, making springs responsible for supporting the chassis.
+- Tire force response now uses saturated slip/load sensitivity and a stronger rear handbrake grip reduction to make drift behavior less binary after dynamic suspension loads are introduced.
+
+Limit: this is still a staged web implementation using the existing extracted track sampler. Exact parity still needs deeper porting of `Vehicle_SampleWheelGroundContacts` and `Vehicle_ResolveWheelSuspensionLoads` offsets/constants.
+
+### Roll Correction 2026-06-09
+
+- Fixed a regression where the car could tip onto the right side and stay there:
+  - the first suspension pass added a simplified pitch/roll torque accumulator that does not exist as a separate native visual stage
+  - Ghidra confirms native suspension torque is part of the physics accumulator path, while post-step angular feedback reads integrated angular deltas
+  - the web solver temporarily derived bounded visual pitch/roll from current compression deltas instead of accumulating it
+  - anti-roll force sign was corrected so axle imbalance is resisted rather than amplified
+
+### Suspension Load And Airborne Integration Pass 2026-06-09
+
+- Replaced the compression-only attitude target with angular-rate integration:
+  - suspension force now returns a local pitch/roll torque proxy from wheel lever arms
+  - `pitchRate` and `rollRate` integrate each fixed substep and are damped separately for grounded vs airborne state
+  - airborne damping is intentionally weak, so the car preserves angular inertia instead of returning to a default attitude
+- Added a native-style resolved load blend:
+  - per-wheel spring/damper load is still computed in the JS solver
+  - left/right axle loads are blended before tire force accumulation, matching the `wheel+0x344` post-resolution role found in `Vehicle_ResolveWheelSuspensionLoads`
+- Added angular impulses for body wall/object impacts so contacts can perturb pitch/roll/yaw, not only linear velocity.
+- Regression guard after runtime test:
+  - sanitized wheel contact normals before using them for ground orientation and suspension force
+  - gated raw suspension roll torque at low speed so spawn/first-contact imbalance cannot roll the car onto its side
+  - added HUD fields for pitch, roll, pitch rate, and roll rate
+- Straight-line rollover correction:
+  - runtime HUD showed `Roll=26.5` and `Roll Rate=75.3 deg/s` during full-throttle straight-line driving with zero steering
+  - disabled suspension-generated roll torque entirely; the proxy lever-arm torque is not faithful enough to use as roll authority
+  - grounded roll rate and extra roll angle are now clamped more tightly, while airborne roll inertia remains less constrained
+  - roll should now come from ground-normal alignment, bounded compression alignment, and explicit impacts until the native body angular solver is ported more directly
+- Contact/suspension parity follow-up:
+  - `Original JS` now accepts `trackContactSampler` and uses the extracted collision/contact sampler for wheel contact rays when available, falling back to the scene sampler on misses
+  - per-wheel state now tracks native-style suspension displacement, velocity, and overshoot terms alongside compression
+  - first-contact compression velocity is clamped separately from sustained contact velocity to avoid damping spikes when a wheel reacquires the ground
+  - spring/damper final load clamp was lowered to reduce two-wheel high-speed instability while native `Vehicle_ResolveWheelSuspensionLoads` is still approximated
+- Performance correction:
+  - using the extracted collision/contact sampler for every wheel ray every fixed substep caused `stepVehicle` spikes around hundreds of milliseconds on normal tracks
+  - default `Original JS` wheel sampling is back on the faster scene sampler
+  - the heavier extracted contact sampler is now opt-in through the existing `Surface sampler` physics isolation toggle
+
+Limit: this is still not a byte-level port of `Vehicle_ResolveWheelSuspensionLoads`. The remaining exact-parity work is to replace the JS spring/damper constants and contact sampler with the recovered `vehicle+0x188c..0x18b4` runtime block semantics and native static triangle query.
