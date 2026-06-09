@@ -115,20 +115,29 @@ Source of truth notes:
 - `FUN_00431b50` @ `0x00431b50` — Car runtime setup: loads `panels.ini`, `body.bgm`, `crash.dat`; resolves wheel/tire anchors; reads `CollisionFull*`, `CollisionBottom*`, and `CollisionTop*`.
 - `FUN_00414ea0` @ `0x00414ea0` — Collision sound bootstrap: loads `data/sound/collision_sounds.bed`; registers `CollisionSoundTypes` and fixed event groups including `SuspensionBottomOut`.
 - `FUN_0043aa30` @ `0x0043aa30` — Tire dynamics config consumer for `Data.Physics.TireDynamics`.
+- `VehiclePhysics_LoadHandlingAndDrivetrain` @ `0x00439a10` — Vehicle physics initialization order anchor. Loads differential, gearbox, wheel-pair/suspension handling, tire dynamics, and steering assist lookup before runtime driving.
+- `FUN_00439a90` @ `0x00439a90` — Constructs the native suspension/runtime wheel blocks after handling load. Populates `vehicle + 0x1888 + i*0x40` from the wheel geometry group at `vehicle + 0x1d24 + i*0x44`; the user-facing block range is `vehicle + 0x188c..0x18b0 + i*0x40`.
+- `WheelPair_LoadTireAndSuspensionHandling` @ `0x004404b0` — Copies front/rear tire and suspension handling blocks into runtime wheel-pair structures.
+- `Wheel_LoadTireDynamics` @ `0x0043aa30` — Reads `Data.Physics.TireDynamics` and writes the `vehicle+0x1e5c` material/profile tire table with `0x58` byte stride.
+- `SteeringRack_BuildAssistLookupTable` @ `0x00441db0` — Builds steering/counter-steer assist lookup breakpoints after tire dynamics are loaded.
+- `SteeringRack_GetCounterSteerAssistIndex` @ `0x00441990` — Counter-steer/yaw assist lookup used by steering self-aligning torque and the tail of `Vehicle_AccumulateWheelTireAndSteeringForces`.
 - `FUN_00469f50` @ `0x00469f50` — Registers `Data.Physics.Car.Steering_PC` defaults and speed-limited steering behavior.
   - Confirmed 2026-04-14: steering bootstrap uses speed buckets `20/90/200/300` plus analog/digital min/max rates, centering, and steering-speed-rate tables before steer reaches the vehicle runtime.
 - `FUN_00454c60` @ `0x00454c60` — Reads the larger car physics tree: differential, throttle/brake/speed curves, gearbox, suspension, tires, and engine.
 - `FUN_0046c8e0` @ `0x0046c8e0` — Local-player per-frame control path: samples controller state, shapes steer/gas/brake/handbrake inputs, then calls the vehicle step.
-- `Differential_SolveLeftRightWheelTorques` @ `0x004408d0` — Driven-axle left/right torque solver; key anchor for one-wheel spin and donut slip outcomes.
+- `Differential_SolveLeftRightWheelTorques` @ `0x004408d0` — Driven-axle left/right torque solver; key anchor for one-wheel spin and donut slip outcomes. Confirmed 2026-06-09: child gear nodes at diff `+0x8/+0xc` are converted to wheel object bases with `childNode - 0xf0`; the solver reads left/right `wheel + 0x398` at `0x00440918` and `0x0044091e`.
 - `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` — Applies nonlinear driven torque scalar (`c*0.3 + c^3*0.7`) before differential split.
 - `Drivetrain_UpdateWheelRatesAndAutoShift` @ `0x004414f0` — Refreshes wheel-rate aggregate and gearbox recommendation/ratio terms each update; RPM↔wheel coupling anchor.
   - Confirmed 2026-05-01: writes `wheel + 0x31c = param_1 / (wheel + 0x30c)` across all wheels and updates aggregate candidate `vehicle + 0x3a4`; direct `+0x31c` was flat-zero in one validated runtime capture, so do not treat as guaranteed standalone wheel omega without path validation.
+- `FUN_0043c060` @ `0x0043c060` — Live wheel visual/suspension callback at wheel vtable slot `0x0066a97c`; confirmed producer for drivetrain-read `wheel + 0x398`. It zeros `wheel + 0x398` when inactive or when normalized compression `wheel+0x34c / wheel+0x354` is below/equal to `FLOAT_0067dd38`; otherwise it accumulates callback timestep into `wheel + 0x398` at `0x0043c444..0x0043c44a`, then updates visual wheel rotation/transform.
+- `FUN_0043bf40` @ `0x0043bf40` — Wheel state/reset callback at vtable data `0x0066a968`; zeroes `wheel + 0x398` at `0x0043bf67` along with related wheel visual state fields.
+- `0x0043b970` — Raw wheel constructor code not currently defined by Ghidra as a function; installs wheel vtable `0x0066a95c` at `0x0043b97f` and initializes `wheel + 0x398 = 0` at `0x0043b9fa`.
 - `GearNode_AccumulateAngularVelocityAndTorque` @ `0x004416b0` — Accumulates child gear-node angular/torque terms into `node + 0x38/+0x3c` (scaled by `node + 0x20`); key anchor for drivetrain-side wheel-rate reconstruction probes.
 - `0x0046f510` — Local-player vtable slot 1 live driving input shaper at `Player` vtable entry `0x0066d3fc`. Confirmed from raw `reference/FlatOut2.exe` bytes. Ghidra does not define it as a function, but raw code spans `0x0046f510..0x0046fa3e`; it integrates live player throttle/brake/nitro/handbrake-like channels, applies speed/config-based steering shaping, clamps player control fields, writes steer delta at `player+0x6b8`, then calls `Player_WriteVehicleControls` at `0x0046fa34`.
 - `FUN_0046fa50` @ `0x0046fa50` — Post-input drive helper: writes control channels into vehicle state and manages auto-shift / shift cooldown behavior.
 - `AIPlayer_WriteVehicleControls` @ `0x00409520` — AI per-frame control writer; emits steer/throttle/brake/handbrake/gear requests into the same vehicle control channels used by the local player.
 - `Vehicle_UpdateControlClampsAndFrameDelta` @ `0x00429250` — Vehicle input normalization step; clamps `vehicle+0x1df4` throttle/drive, `+0x1df8` brake, `+0x1e00` handbrake/rear-brake add to `[0,1]`, clamps `+0x1e04` signed steer to `[-1,1]`, and stores per-frame timing/velocity snapshots.
-- `Vehicle_ResetPoseAndRunPhysicsSubsteps` @ `0x0042c650` — Spawn/reset vehicle settle path. Clears step accumulators, resolves wheel contact state, then unconditionally runs `100` fixed `0.01` substeps. Confirmed 2026-06-08 xrefs are reset/catch-up callers (`AIPlayer_ResetToTrackSegmentSpawn`, `Player_ResetVehicleToTrackSpawn`, `PlayerHost_ResetVehiclesForRaceStart`, `FUN_004e3290`); do not treat this as the normal per-frame driving tick.
+- `Vehicle_ResetPoseAndRunPhysicsSubsteps` @ `0x0042c650` — Spawn/reset vehicle settle path. Clears step accumulators, resets the per-wheel runtime slot at `vehicle + 0x18b4 + i*0x40`, resolves wheel contact state, then unconditionally runs `100` fixed `0.01` substeps. Confirmed 2026-06-08 xrefs are reset/catch-up callers (`AIPlayer_ResetToTrackSegmentSpawn`, `Player_ResetVehicleToTrackSpawn`, `PlayerHost_ResetVehiclesForRaceStart`, `FUN_004e3290`); do not treat this as the normal per-frame driving tick.
 - `PlayerHost_AdvanceRaceSimulationTicks` @ `0x00472d30` — Host-level race tick driver. Confirmed 2026-06-08: receives tick count-like `param_2`, advances `PlayerHost.nTimer_0x2087c`, writes fixed-step context fields (`+0x207c4 = 0.01`, `+0x207c8 ~= 100`, `+0x207cc = 10`), runs player vtable slot 4 (`Player_UpdateLocalDrivingControls`) before calling `UpdateCamera(oldTimer, param_2, activeFlag)`.
 - `UpdateCamera` @ `0x004725c0` — Steady-state player-host update loop. Confirmed 2026-06-08: loops `param_3` simulation ticks, chunks each pass to at most `10` ticks for event/environment work, and each tick runs player VFT slots 5-8, `Vehicle_AccumulateAerodynamicAndInputForces`, `Vehicle_AccumulateWheelTireAndSteeringForces`, `Drivetrain_DistributeTorqueToDrivenWheels`, then physics integration with fixed `0.01`. This is the normal 100 Hz driving cadence anchor.
 - `Player_UpdateLocalDrivingControls` @ `0x0046c8e0` — Local-player control sampling/shaping vtable slot 4 (`Player` vtable base `0x0066d3f8`, slot `+0x10`). Reads controller state, handles reset/recover interactions, writes player-side control fields, and calls `Vehicle_UpdateControlClampsAndFrameDelta`.
@@ -196,6 +205,20 @@ Source of truth notes:
 - `CollisionSoundTypes` @ `0x00669540`
 - `SuspensionBottomOut` @ `0x00669510`
 - `Data.Physics.TireDynamics` @ `0x0066a940`
+- `RollingResistance` @ `0x0066a92c`
+- `InducedDragCoeff` @ `0x0066a918`
+- `PneumaticTrail` @ `0x0066a908`
+- `PneumaticOffset` @ `0x0066a8f8`
+- `ZStiffness` @ `0x0066a8ec`
+- `XStiffness` @ `0x0066a8e0`
+- `ZFriction` @ `0x0066a8c8`
+- `XFriction` @ `0x0066a8bc`
+- `FrictionBoost` @ `0x0066a8ac`
+- `SlideUnderSteer` @ `0x0066a89c`
+- `SlideControl` @ `0x0066a88c`
+- `UnderSteer` @ `0x0066a880`
+- `SlowDown` @ `0x0066a874`
+- `AntiSpin` @ `0x0066a868`
 - `Data.Physics.Car.Steering_PC` @ `0x0066d798`
 - `FrontSuspensionLift` @ `0x0066b5a0`
 - `RearSuspensionLift` @ `0x0066b554`
@@ -781,7 +804,8 @@ These keys are present in `.rdata` and appear in the large environment setup fun
 
 ## Vehicle Drivetrain Follow-Up 2026-06-09
 
-- `Differential_SolveLeftRightWheelTorques` @ `0x004408d0` — Driven-axle left/right torque solver; consumes wheel state terms including wheel `+0x398`, maintains side-selection state at diff `+0x44`, and writes outputs at diff `+0x50/+0x54/+0x58`.
+- `Differential_SolveLeftRightWheelTorques` @ `0x004408d0` — Driven-axle left/right torque solver; consumes wheel state terms including `wheel + 0x398` from the live wheel callback path, maintains side-selection state at diff `+0x44`, and writes outputs at diff `+0x50/+0x54/+0x58`.
+- `FUN_0043c060` @ `0x0043c060` — Producer for `wheel + 0x398`; accumulates timestep into the field only while active/compressed above `FLOAT_0067dd38`, otherwise clears it.
 - `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` — Drivetrain torque dispatch; applies nonlinear driven torque scalar `c*0.3 + c^3*0.7` and calls the native differential solver rather than equal-splitting wheel torque.
 - `Drivetrain_UpdateWheelRatesAndAutoShift` @ `0x004414f0` — Refreshes per-wheel rate terms and aggregate driven wheel rate before gear recommendation/dispatch; part of the missing engine RPM to wheel speed coupling path.
 - `Vehicle_ComputeBrakeAndHandbrakeWheelTorques` @ `0x0042c540` — Per-wheel brake/handbrake torque writer before tire-force accumulation; writes front wheel brake torque to `vehicle+0xd20/+0x10c0` and rear torque to `vehicle+0x1460/+0x1800`.

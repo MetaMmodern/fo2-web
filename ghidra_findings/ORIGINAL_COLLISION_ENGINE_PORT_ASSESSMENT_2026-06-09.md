@@ -242,7 +242,19 @@ Follow-up implementation in `src/game/physics.js`:
 - `blendResolvedAxleLoads` blends left/right axle loads before tire force accumulation, matching the native observation that `Vehicle_ResolveWheelSuspensionLoads` writes final per-wheel load to `wheel + 0x344`.
 - Body-wall and dynamic-object contact responses now add angular impulses, so impacts can change pitch/roll/yaw instead of only pushing the chassis linearly.
 
-Porting implication: the web solver is now structurally closer to the native body path found at `PhysicsBody_IntegratePoseFromVelocities` @ `0x00564640`, but still uses approximate JS constants for inertia, damping, and the suspension runtime block. Exact parity still requires porting the `vehicle + 0x188c..0x18b4` suspension block construction and native triangle contact query.
+Porting implication: the web solver is now structurally closer to the native body path found at `PhysicsBody_IntegratePoseFromVelocities` @ `0x00564640`, but still uses approximate JS constants for inertia, damping, and the suspension runtime block. Exact parity still requires porting the `FUN_00439a90` suspension block constructor, the `vehicle + 0x18b4` reset slot, and the native triangle contact query.
+
+## Unified Body Orientation Correction 2026-06-09
+
+Implementation correction in `src/game/physics.js`:
+
+- removed the web-only split between grounded orientation alignment and airborne quaternion integration
+- removed the compression-derived visual pitch/roll limiter from the active solve path
+- changed suspension load resolution to accumulate a world-space force and torque at each wheel lever arm
+- changed wall/body contact angular feedback to write the same body angular velocity vector
+- wheel visuals now place tires from the wheel contact point plus contact normal/radius when grounded, instead of using the previous signed body-local suspension offset
+
+Reason: the confirmed native body path at `PhysicsBody_IntegratePoseFromVelocities` @ `0x00564640` integrates one rigid-body quaternion from angular velocity and does not contain a separate airborne attitude mode or a grounded visual attitude painter. The previous web split could make the car appear glued to wheel/body transforms and could hide real spring response behind rendered pitch/roll correction.
 
 ## Tire Force Reaction Slice 2026-06-09
 
@@ -302,7 +314,8 @@ Follow-up Ghidra check after web testing still failed to produce standing donuts
   - updates per-wheel rate terms from wheel radius fields before gear recommendation
   - refreshes aggregate driven wheel rate, part of the missing engine RPM to wheel speed coupling path
 - `Differential_SolveLeftRightWheelTorques` @ `0x004408d0`
-  - consumes wheel state terms including a wheel `+0x398` candidate
+  - consumes wheel state terms including `wheel + 0x398`, produced by `Wheel_UpdateVisualSuspensionAndSpinTimer` @ `0x0043c060`
+  - converts child gear nodes back to wheel bases with `childNode - 0xf0`, then reads `wheel + 0x398` at `0x00440918` and `0x0044091e`
   - writes differential outputs at `+0x50/+0x54/+0x58`
   - contains stateful side-selection logic at diff `+0x44`, which is likely relevant to one-wheel spin and burnout/donut onset
 - `Vehicle_ComputeBrakeAndHandbrakeWheelTorques` @ `0x0042c540`
@@ -315,4 +328,47 @@ Implementation correction in `src/game/physics.js`:
 - replaced the monotonic tire slip response with a peak-and-fall response so excessive wheelspin reduces force instead of producing ever-more forward bite
 - removed the web-only yaw torque suppression that scaled tire lever-arm yaw down to `8..55%`; current range is `35..100%`
 
-Limit: this is still not the full native drivetrain/differential port. Exact donut parity requires porting the differential state machine and the wheel `+0x378/+0x398` producers rather than tuning web-side slip proxies.
+Limit: this is still not the full native drivetrain/differential port. Exact donut parity requires porting the differential state machine and the `wheel + 0x398` compression/contact spin-time callback path rather than tuning web-side slip proxies; `+0x378` is already confirmed as `SlideControl`.
+
+## Exhaustive Driving RE Cross-Link 2026-06-09
+
+Focused note: `ghidra_findings/DRIVING_EXHAUSTIVE_RE_PASS_2026-06-09.md`.
+
+The vehicle-contact and collision conclusion remains unchanged, but the tire/material side is now more concrete:
+
+- `Wheel_LoadTireDynamics` @ `0x0043aa30` builds the `vehicle+0x1e5c` tire/material profile table from `Data.Physics.TireDynamics`.
+- `Vehicle_SampleWheelGroundContacts` @ `0x0042bcc0` maps raycast material ids through environment material data and writes `wheel+0x348` to a `0x58`-stride profile in that table.
+- `Vehicle_AccumulateWheelTireAndSteeringForces` @ `0x00429be0` consumes profile offsets `+0x44/+0x48/+0x4c/+0x50/+0x54`.
+
+Porting implication: a Rapier-backed temporary query can still be used if needed, but it should produce native-style material/profile contact records. A generic `normal + distance + grip` contact is structurally insufficient for final driving parity.
+
+## Collision Port Scope Update 2026-06-09
+
+The available in-repo ROMU/reference source can speed up collision work where it already names recovered subsystem boundaries and data contracts, but it does not currently replace the need to decompile the native world solver if the target is full wall/cone/dynamic-object parity.
+
+Confirmed useful source/repo assets:
+
+- Existing extracted static collision assets under `src/data/tracks/**/geometry/collision.glb` and `collision.meta.json`.
+- Prior extraction findings in `TRACK_CDB2_INITIAL_FORMAT_FINDINGS_2026-04-10.md`.
+- Recovered high-level driving/collision anchors in `reference/FlatOut-2-decomp-main/source/decomp2/decomp2/DrivingSystem.*`.
+
+Still required for a full original collision port:
+
+- Strict `Vehicle_SampleWheelGroundContacts` parity against the extracted static collision structures, including material id to tire profile mapping.
+- The physics broadphase/pair build:
+  - `PhysicsWorld_BuildPotentialContactPairs` @ `0x00565f10`
+  - `PhysicsWorld_UpdateBodyBroadphaseBounds` @ `0x0056ea50`
+- Contact manifold generation:
+  - `PhysicsWorld_GenerateContactManifolds` @ `0x005692b0`
+- Island/contact solve and body integration:
+  - `PhysicsIsland_SolveContactsAndIntegrateBodies` @ `0x00573780`
+  - `PhysicsBody_IntegrateForcesAndPose` @ `0x00564410`
+  - `PhysicsBody_IntegratePoseFromVelocities` @ `0x00564640`
+- Dynamic-object activation, sleeping, breakable/damage queues, and vehicle damage bridge:
+  - `Vehicle_ProcessCollisionDamageStep` @ `0x004293c0`
+  - `Vehicle_ApplyCollisionDamageAndDeformation` @ `0x00426670`
+
+Practical conclusion:
+
+- For driving feel, a full collision-engine port is not the immediate blocker. The highest-value collision step is native-style wheel ground contact records: point, normal, compression, material/profile pointer, and load inputs.
+- For exact cones/walls/movable props, there is still substantial decompilation and implementation work. The ROMU/reference source helps as an index, but the current repo does not appear to contain a ready C++ port of the contact manifold/island solver that can be directly translated.

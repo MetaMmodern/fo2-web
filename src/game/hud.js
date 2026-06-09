@@ -73,6 +73,10 @@ export function createHud(
       rearSlipLong: "--",
       rearWheelSpeed: "--",
       rearGroundSpeed: "--",
+      rearWheel398: "--",
+      diffBiasRear: "--",
+      diffRateLeftRear: "--",
+      diffRateRightRear: "--",
       drive: "--",
       wheelContacts: "--",
       impulse: "--",
@@ -603,6 +607,30 @@ export function createHud(
         "rearGroundSpeed",
         "Rear ground",
       ),
+      rearWheel398: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "rearWheel398",
+        "Rear 398",
+      ),
+      diffBiasRear: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "diffBiasRear",
+        "Diff bias R",
+      ),
+      diffRateLeftRear: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "diffRateLeftRear",
+        "Diff L rate",
+      ),
+      diffRateRightRear: makeReadonlyMetric(
+        perfPhysicsFolder,
+        perfState.physics,
+        "diffRateRightRear",
+        "Diff R rate",
+      ),
       drive: makeReadonlyMetric(perfPhysicsFolder, perfState.physics, "drive", "Drive"),
       wheelContacts: makeReadonlyMetric(
         perfPhysicsFolder,
@@ -1000,6 +1028,10 @@ function applyPhysicsDebugState(target, debugState) {
   target.rearSlipLong = formatMetricNumber(debugState.rearSlipLongAvg, 2);
   target.rearWheelSpeed = formatMetricNumber(debugState.rearWheelSpeed, 2);
   target.rearGroundSpeed = formatMetricNumber(debugState.rearGroundSpeed, 2);
+  target.rearWheel398 = formatMetricNumber(debugState.rearWheel398, 2);
+  target.diffBiasRear = formatMetricNumber(debugState.diffBiasRear, 2);
+  target.diffRateLeftRear = formatMetricNumber(debugState.diffRateLeftRear, 2);
+  target.diffRateRightRear = formatMetricNumber(debugState.diffRateRightRear, 2);
   target.drive = formatMetricNumber(debugState.engineForce, 0);
   target.wheelContacts = formatMetricNumber(debugState.wheelContacts, 0);
   target.impulse = formatMetricNumber(debugState.forwardImpulse, 0);

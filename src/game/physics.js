@@ -4,8 +4,8 @@ import { loadDrivingConfig } from "./drivingConfig";
 
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const WORLD_FORWARD = new THREE.Vector3(0, 0, -1);
-const LOCAL_RIGHT = new THREE.Vector3(1, 0, 0);
-const LOCAL_BACK = new THREE.Vector3(0, 0, 1);
+const WORLD_RIGHT = new THREE.Vector3(1, 0, 0);
+const LOCAL_TIRE_SPIN_AXIS = new THREE.Vector3(1, 0, 0);
 const TMP_FORWARD = new THREE.Vector3();
 const TMP_RIGHT = new THREE.Vector3();
 const TMP_UP = new THREE.Vector3();
@@ -30,13 +30,24 @@ const MAX_FRAME_DELTA = 0.1;
 const CONTACT_RAY_HEIGHT = 2.8;
 const CONTACT_RAY_DISTANCE = 4.6;
 const CONTACT_SKIN = 0.035;
+const TMP_WHEEL_RAY_OPTIONS = {
+  rayDistance: 0,
+  minUpDot: -0.25,
+};
+const TMP_WHEEL_SAMPLE_OPTIONS = {
+  rayHeight: CONTACT_RAY_HEIGHT,
+  rayDistance: CONTACT_RAY_DISTANCE,
+  minUpDot: -0.2,
+};
 const BODY_COLLISION_SKIN = 0.08;
 const BODY_WALL_PROBE_HEIGHT = 0.45;
 const RESET_FALL_Y = -30;
 const DEFAULT_GRAVITY = 18;
 const PITCH_INERTIA_SCALE = 0.82;
-const GROUNDED_ANGULAR_DAMPING = 5.5;
-const AIRBORNE_ANGULAR_DAMPING = 0.32;
+const BODY_ANGULAR_DAMPING = 0.92;
+const WHEEL_SPIN_COMPRESSION_THRESHOLD = 0.01;
+const WHEEL_SPIN_TIMER_WARMUP_SECONDS = 0.35;
+const WHEEL_SPIN_TIMER_SCALE = 1 / WHEEL_SPIN_TIMER_WARMUP_SECONDS;
 
 const DEFAULT_STEERING = {
   Sensitivity: 0.5,
@@ -271,12 +282,25 @@ function normalizeDrivingConfig(rawConfig, carRoot) {
     gearboxEndRatio,
     drivenReverseWheelRadius,
   );
+  const frontSuspensionBlock = buildSuspensionRuntimeBlock(
+    suspension,
+    "Front",
+    massBase * massFudge,
+    DEFAULT_GRAVITY,
+  );
+  const rearSuspensionBlock = buildSuspensionRuntimeBlock(
+    suspension,
+    "Rear",
+    massBase * massFudge,
+    DEFAULT_GRAVITY,
+  );
 
   return {
     steering,
     bodyCollision,
     localTireDynamics,
     surfaceDynamics: rawConfig.surfaceDynamics ?? {},
+    contactProfiles: buildContactProfiles(rawConfig.surfaceDynamics ?? {}),
     massKg: massBase * massFudge,
     bodyHalfExtents: bodyBounds.halfExtents,
     bodyOffset: bodyBounds.offset,
@@ -317,11 +341,8 @@ function normalizeDrivingConfig(rawConfig, carRoot) {
       reboundDamp: pickScalar(suspension.FrontReboundDamp, 0.8),
       rollbar: pickScalar(suspension.FrontRollbarStiffness, 0.12),
       defaultCompression: pickScalar(suspension.FrontDefaultCompression, 0.08),
-      springRate: deriveSuspensionSpringRate(
-        massBase * massFudge,
-        DEFAULT_GRAVITY,
-        pickScalar(suspension.FrontDefaultCompression, 0.08),
-      ),
+      springRate: frontSuspensionBlock.springRate,
+      suspensionBlock: frontSuspensionBlock,
     },
     rearWheel: {
       radius: rearRadius,
@@ -335,11 +356,8 @@ function normalizeDrivingConfig(rawConfig, carRoot) {
       reboundDamp: pickScalar(suspension.RearReboundDamp, 0.75),
       rollbar: pickScalar(suspension.RearRollbarStiffness, 0.12),
       defaultCompression: pickScalar(suspension.RearDefaultCompression, 0.1),
-      springRate: deriveSuspensionSpringRate(
-        massBase * massFudge,
-        DEFAULT_GRAVITY,
-        pickScalar(suspension.RearDefaultCompression, 0.1),
-      ),
+      springRate: rearSuspensionBlock.springRate,
+      suspensionBlock: rearSuspensionBlock,
     },
     tireConfig: {
       optimalSlipRatio: pickScalar(tires.OptimalSlipRatio, 0.15),
@@ -424,6 +442,43 @@ function deriveSuspensionSpringRate(massKg, gravity, defaultCompression) {
   return staticWheelLoad / Math.max(defaultCompression, 0.035);
 }
 
+function buildSuspensionRuntimeBlock(suspension, prefix, massKg, gravity) {
+  const defaultCompression = pickScalar(
+    suspension?.[`${prefix}DefaultCompression`],
+    prefix === "Front" ? 0.08 : 0.1,
+  );
+  const springRate = deriveSuspensionSpringRate(
+    massKg,
+    gravity,
+    defaultCompression,
+  );
+  const maxLength = pickScalar(suspension?.[`${prefix}MaxLength`], 0.65);
+  const bumperLength = pickScalar(suspension?.[`${prefix}BumperLength`], 0.03);
+  const bumperConst = pickScalar(suspension?.[`${prefix}BumperConst`], 0);
+
+  return {
+    minLength: pickScalar(suspension?.[`${prefix}MinLength`], 0),
+    maxLength,
+    restLength: pickScalar(
+      suspension?.[`${prefix}RestLength`],
+      prefix === "Front" ? 0.24 : 0.26,
+    ),
+    defaultCompression,
+    springRate,
+    bumpDamp: pickScalar(suspension?.[`${prefix}BumpDamp`], 0.4),
+    reboundDamp: pickScalar(suspension?.[`${prefix}ReboundDamp`], 0.7),
+    bumperLength,
+    bumperConst,
+    bumperRestitution: pickScalar(
+      suspension?.[`${prefix}BumperRestitution`],
+      0,
+    ),
+    rollbar: pickScalar(suspension?.[`${prefix}RollbarStiffness`], 0.12),
+    forceCap: ((massKg * gravity) / 4) * 3.25,
+    overshootStart: Math.max(maxLength - bumperLength, maxLength * 0.92),
+  };
+}
+
 function resolveDifferential(nodePath, differentials, fallback) {
   if (typeof nodePath !== "string") {
     return fallback;
@@ -460,8 +515,7 @@ function buildWheelLayout(carRoot, config) {
     const anchor = carRoot.getObjectByName(wheel.name);
     const tire = carRoot.getObjectByName(`${wheel.name}_tire`);
     const wheelConfig = wheel.front ? config.frontWheel : config.rearWheel;
-
-    return {
+    const wheelEntry = {
       ...wheel,
       localPosition:
         anchor?.position?.clone?.() ??
@@ -473,9 +527,45 @@ function buildWheelLayout(carRoot, config) {
       tire,
       tireBasePosition: tire?.position?.clone?.() ?? new THREE.Vector3(),
       tireBaseQuaternion: tire?.quaternion?.clone?.() ?? new THREE.Quaternion(),
+      brakeVisualParts: collectBrakeVisualParts(tire),
       wheelConfig,
     };
+    wheelEntry.contactRecord = {
+      wheel: wheelEntry,
+      anchorWorld: new THREE.Vector3(),
+      suspensionUp: new THREE.Vector3(),
+      hit: null,
+    };
+    return wheelEntry;
   });
+}
+
+function collectBrakeVisualParts(tire) {
+  if (!tire?.traverse) {
+    return [];
+  }
+
+  const parts = [];
+  tire.traverse((node) => {
+    if (node === tire || !node.name) {
+      return;
+    }
+
+    const name = node.name.toLowerCase();
+    if (
+      !name.includes("caliper") &&
+      !name.includes("brake") &&
+      !name.includes("disc") &&
+      !name.includes("disk") &&
+      !name.includes("rotor")
+    ) {
+      return;
+    }
+
+    node.userData.baseQuaternion = node.quaternion.clone();
+    parts.push(node);
+  });
+  return parts;
 }
 
 function createInitialState(carRoot, config, wheelLayout) {
@@ -532,6 +622,11 @@ function createInitialState(carRoot, config, wheelLayout) {
       surfaceGrip: 1,
       surfaceXFriction: 1,
       surfaceZFriction: 1,
+      materialSlot: 0,
+      contactProfile: null,
+      contactProfileIndex: 0,
+      contactVector: new THREE.Vector3(),
+      tireForceMultiplier: 0.6,
       compression: 0,
       previousCompression: 0,
       compressionVelocity: 0,
@@ -540,15 +635,30 @@ function createInitialState(carRoot, config, wheelLayout) {
       nativeOvershoot: 0,
       suspensionOffset: 0,
       suspensionForce: 0,
+      spinContactTimer: 0,
       spinAngle: 0,
       angularVelocity: 0,
       driveTorque: 0,
       brakeTorque: 0,
       tireReactionTorque: 0,
+      wheelRate: 0,
       steerAngle: 0,
       load: 0,
     })),
+    differentialState: {
+      front: createDifferentialRuntimeState(),
+      rear: createDifferentialRuntimeState(),
+    },
     cameraState: { ...DEFAULT_CAMERA_STATE },
+  };
+}
+
+function createDifferentialRuntimeState() {
+  return {
+    sideState: 0,
+    averageRate: 0,
+    leftRate: 0,
+    rightRate: 0,
   };
 }
 
@@ -559,8 +669,14 @@ function updatePlayerControls(state, input, config, dt) {
   const rawBrake = THREE.MathUtils.clamp(input?.brake ?? 0, 0, 1);
   const rawHandbrake = THREE.MathUtils.clamp(input?.handbrake ?? 0, 0, 1);
   const rawSteer = THREE.MathUtils.clamp(input?.steer ?? 0, -1, 1);
+  const brakePressed = rawBrake > 0.1;
+  const brakeJustPressed = brakePressed && !state.previousBrakePressed;
+  const horizontalSpeedMs = horizontalKph / 3.6;
   const wantsReverse =
-    rawBrake > 0.1 && rawThrottle < 0.1 && forwardSpeed < 1.75;
+    brakeJustPressed &&
+    rawThrottle < 0.1 &&
+    forwardSpeed < 1.1 &&
+    horizontalSpeedMs < 1.6;
 
   if (rawThrottle > 0.1) {
     state.reverseLatched = false;
@@ -616,6 +732,7 @@ function updatePlayerControls(state, input, config, dt) {
   }
 
   updateSteeringControlState(state, config, rawSteer, rawHandbrake, horizontalKph, dt);
+  state.previousBrakePressed = brakePressed;
 }
 
 function resolveBodyBounds(bodyCollision, carRoot) {
@@ -863,7 +980,7 @@ function runVehicleSubstep(
   const right = TMP_RIGHT.copy(state.rightDir);
   const previousGrounded = state.grounded;
   let totalForce = new THREE.Vector3();
-  let totalYawTorque = 0;
+  let totalTorque = new THREE.Vector3();
 
   updateSteeringRack(wheelLayout, state, config, dt);
 
@@ -885,8 +1002,10 @@ function runVehicleSubstep(
       right,
     );
     totalForce.add(suspensionSolve.force);
-    applySuspensionAngularImpulse(state, config, suspensionSolve.torque, dt);
+    totalTorque.add(suspensionSolve.torque);
     blendResolvedAxleLoads(state, config);
+    updateWheelSpinContactTimers(state, config, dt);
+    distributeDriveTorqueToWheels(state, config, dt);
 
     if (runtimeDebug.tireForces) {
       groundedContacts.forEach((contact) => {
@@ -903,12 +1022,19 @@ function runVehicleSubstep(
         );
 
         totalForce.add(wheelForce.force);
-        totalYawTorque += wheelForce.yawTorque;
+        totalTorque.addScaledVector(
+          wheelState.contactNormal ?? state.groundNormal ?? WORLD_UP,
+          wheelForce.yawTorque,
+        );
       });
     }
 
+    updateDrivetrainWheelRatesAndRpm(state, config, dt);
     state.grounded = true;
   } else {
+    updateWheelSpinContactTimers(state, config, dt);
+    distributeDriveTorqueToWheels(state, config, dt);
+    updateDrivetrainWheelRatesAndRpm(state, config, dt);
     state.grounded = false;
   }
 
@@ -926,11 +1052,7 @@ function runVehicleSubstep(
 
   const acceleration = totalForce.multiplyScalar(1 / Math.max(config.massKg, 1));
   state.velocity.addScaledVector(acceleration, dt);
-  state.yawRate += (totalYawTorque / Math.max(config.massKg * 1.2, 1)) * dt;
-  state.yawRate *= state.grounded ? 0.985 : 0.995;
-  state.yawRate = THREE.MathUtils.clamp(state.yawRate, -1.4, 1.4);
-  state.yaw += state.yawRate * dt;
-  integrateVehicleAngularState(state, config, dt);
+  integrateVehicleAngularState(carRoot, state, config, totalTorque, dt);
 
   stabilizeIdleState(state, dt);
   carRoot.position.addScaledVector(state.velocity, dt);
@@ -939,7 +1061,6 @@ function runVehicleSubstep(
     resolveTrackBodyContacts(carRoot, config, state, trackFloorSampler);
   }
   interactWithDynamicObjects(carRoot, config, state, dynamicObjectState, trackFloorSampler, dt);
-  applyVehicleOrientation(carRoot, state);
   updatePlanarBasisFromQuaternion(state, carRoot.quaternion);
 
   if (!previousGrounded && state.grounded) {
@@ -1008,7 +1129,9 @@ function sampleWheelContacts(
   const suspensionUp = TMP_UP.copy(WORLD_UP).applyQuaternion(carRoot.quaternion).normalize();
   const suspensionDown = TMP_D.copy(suspensionUp).negate();
 
-  return wheelLayout.map((wheel) => {
+  const contacts = [];
+
+  for (const wheel of wheelLayout) {
     TMP_A.copy(wheel.localPosition).applyQuaternion(carRoot.quaternion);
     TMP_B.copy(carRoot.position).add(TMP_A);
     const wheelConfig = wheel.wheelConfig;
@@ -1021,38 +1144,32 @@ function sampleWheelContacts(
     const rayOrigin = TMP_C
       .copy(TMP_B)
       .addScaledVector(suspensionUp, sweepLead);
-    const rayHit = primarySampler.raycast?.(rayOrigin, suspensionDown, {
-      rayDistance: sweepDistance,
-      minUpDot: -0.25,
-    });
-    let hit = rayHit;
+    let hit = null;
 
-    if (!hit) {
-      hit = primarySampler.sample?.(TMP_B, {
-        rayHeight: CONTACT_RAY_HEIGHT,
-        rayDistance: CONTACT_RAY_DISTANCE,
-        minUpDot: -0.2,
-      });
+    if (primarySampler.raycast) {
+      TMP_WHEEL_RAY_OPTIONS.rayDistance = sweepDistance;
+      hit = primarySampler.raycast(rayOrigin, suspensionDown, TMP_WHEEL_RAY_OPTIONS);
+    } else if (primarySampler.sample) {
+      hit = primarySampler.sample(TMP_B, TMP_WHEEL_SAMPLE_OPTIONS);
     }
 
     if (!hit && trackFloorSampler && trackFloorSampler !== primarySampler) {
-      hit = trackFloorSampler.raycast?.(rayOrigin, suspensionDown, {
-        rayDistance: sweepDistance,
-        minUpDot: -0.25,
-      }) ?? trackFloorSampler.sample?.(TMP_B, {
-        rayHeight: CONTACT_RAY_HEIGHT,
-        rayDistance: CONTACT_RAY_DISTANCE,
-        minUpDot: -0.2,
-      });
+      if (trackFloorSampler.raycast) {
+        TMP_WHEEL_RAY_OPTIONS.rayDistance = sweepDistance;
+        hit = trackFloorSampler.raycast(rayOrigin, suspensionDown, TMP_WHEEL_RAY_OPTIONS);
+      } else if (trackFloorSampler.sample) {
+        hit = trackFloorSampler.sample(TMP_B, TMP_WHEEL_SAMPLE_OPTIONS);
+      }
     }
 
-    return {
-      wheel,
-      anchorWorld: TMP_B.clone(),
-      suspensionUp: suspensionUp.clone(),
-      hit,
-    };
-  });
+    const record = wheel.contactRecord;
+    record.anchorWorld.copy(TMP_B);
+    record.suspensionUp.copy(suspensionUp);
+    record.hit = hit;
+    contacts.push(record);
+  }
+
+  return contacts;
 }
 
 function updateWheelContactState(state, sampledContacts, config, dt) {
@@ -1067,6 +1184,11 @@ function updateWheelContactState(state, sampledContacts, config, dt) {
     wheelState.suspensionOffset = 0;
     wheelState.load = 0;
     wheelState.suspensionForce = 0;
+    wheelState.materialSlot = 0;
+    wheelState.contactProfile = null;
+    wheelState.contactProfileIndex = 0;
+    wheelState.contactVector.set(0, 0, 0);
+    wheelState.tireForceMultiplier = 0.6;
   }
 
   const groundedContacts = [];
@@ -1106,7 +1228,11 @@ function updateWheelContactState(state, sampledContacts, config, dt) {
       : THREE.MathUtils.clamp(rawCompressionVelocity, -1.5, 1.5);
     wheelState.nativeDisplacement = compression;
     wheelState.nativeVelocity = wheelState.compressionVelocity;
-    wheelState.nativeOvershoot = Math.max(compression - configWheel.maxLength * 0.92, 0);
+    wheelState.nativeOvershoot = Math.max(
+      compression -
+        (configWheel.suspensionBlock?.overshootStart ?? configWheel.maxLength * 0.92),
+      0,
+    );
     wheelState.suspensionOffset = -compression;
     wheelState.contactPoint.copy(contact.hit.point);
     const contactNormal = TMP_D
@@ -1118,10 +1244,16 @@ function updateWheelContactState(state, sampledContacts, config, dt) {
 
     wheelState.contactNormal.copy(contactNormal);
     wheelState.surfaceType = normalizeSurfaceType(contact.hit.surfaceType);
+    wheelState.materialSlot = Number.isFinite(contact.hit.materialSlot)
+      ? contact.hit.materialSlot
+      : resolveContactProfileIndex(wheelState.surfaceType);
+    wheelState.contactProfileIndex = wheelState.materialSlot;
     const surfaceProfile = computeSurfaceProfile(config, wheelState.surfaceType);
+    wheelState.contactProfile = surfaceProfile;
     wheelState.surfaceGrip = surfaceProfile.grip;
     wheelState.surfaceXFriction = surfaceProfile.xFriction;
     wheelState.surfaceZFriction = surfaceProfile.zFriction;
+    wheelState.tireForceMultiplier = Math.abs(surfaceProfile.slideControl ?? 0.6);
     wheelState.load = computeWheelLoad(
       compression,
       configWheel,
@@ -1131,6 +1263,7 @@ function updateWheelContactState(state, sampledContacts, config, dt) {
       wheelState.nativeOvershoot,
     );
     wheelState.suspensionForce = wheelState.load;
+    wheelState.contactVector.copy(contact.hit.point).sub(contact.anchorWorld);
     surfaceGripSum += surfaceProfile.grip;
     normalSum.add(contactNormal);
     groundedContacts.push(contact);
@@ -1138,7 +1271,6 @@ function updateWheelContactState(state, sampledContacts, config, dt) {
 
   if (groundedContacts.length === 0) {
     state.surfaceGrip = 0.92;
-    state.groundNormal.copy(WORLD_UP);
     return groundedContacts;
   }
 
@@ -1169,11 +1301,6 @@ function computeGroundedBodyY(groundedContacts, state, wheelLayout) {
   return totalY / Math.max(groundedContacts.length, 1);
 }
 
-function alignVehicleToGround(carRoot, state, desiredGroundY, dt) {
-  const follow = 1 - Math.exp(-18 * dt);
-  carRoot.position.y = THREE.MathUtils.lerp(carRoot.position.y, desiredGroundY, follow);
-}
-
 function accumulateSuspensionForces(groundedContacts, state, config, forward, right) {
   const force = new THREE.Vector3();
   const torque = new THREE.Vector3();
@@ -1191,13 +1318,13 @@ function accumulateSuspensionForces(groundedContacts, state, config, forward, ri
       const axleDelta =
         (frontLeft.compression - frontRight.compression) *
         configWheel.springRate *
-        configWheel.rollbar;
+        (configWheel.suspensionBlock?.rollbar ?? configWheel.rollbar);
       antiRollForce = contact.wheel.side < 0 ? axleDelta : -axleDelta;
     } else if (!contact.wheel.front && rearLeft.grounded && rearRight.grounded) {
       const axleDelta =
         (rearLeft.compression - rearRight.compression) *
         configWheel.springRate *
-        configWheel.rollbar;
+        (configWheel.suspensionBlock?.rollbar ?? configWheel.rollbar);
       antiRollForce = contact.wheel.side < 0 ? axleDelta : -axleDelta;
     }
 
@@ -1205,20 +1332,29 @@ function accumulateSuspensionForces(groundedContacts, state, config, forward, ri
     const forceDirection = TMP_C
       .copy(wheelState.contactNormal ?? contact.suspensionUp ?? WORLD_UP)
       .normalize();
+    const wheelForce = TMP_D.copy(forceDirection).multiplyScalar(suspensionForce);
 
-    force.addScaledVector(forceDirection, suspensionForce);
-    const localZ = contact.wheel.localPosition.z - config.centerOfMass.z;
+    force.add(wheelForce);
     const localX = contact.wheel.localPosition.x - config.centerOfMass.x;
-    const verticalForce =
-      suspensionForce *
-      THREE.MathUtils.clamp(
-        forceDirection.dot(contact.suspensionUp ?? state.groundNormal ?? WORLD_UP),
-        -1,
-        1,
-      );
+    const localY = contact.wheel.localPosition.y - config.centerOfMass.y;
+    const localZ = contact.wheel.localPosition.z - config.centerOfMass.z;
+    const bodyUp = TMP_E.copy(WORLD_UP).applyQuaternion(
+      TMP_QUAT.copy(state.orientationOffset).premultiply(
+        TMP_QUAT_B.setFromAxisAngle(WORLD_UP, state.yaw),
+      ),
+    );
+    if (bodyUp.lengthSq() < 1e-8) {
+      bodyUp.copy(WORLD_UP);
+    } else {
+      bodyUp.normalize();
+    }
+    const leverArm = TMP_F
+      .copy(right)
+      .multiplyScalar(localX)
+      .addScaledVector(bodyUp, localY)
+      .addScaledVector(forward, -localZ);
 
-    torque.x += -localZ * verticalForce;
-    torque.z += localX * verticalForce;
+    torque.add(TMP_G.crossVectors(leverArm, wheelForce));
     wheelState.suspensionForce = suspensionForce;
     wheelState.load = suspensionForce;
   }
@@ -1256,84 +1392,56 @@ function blendAxleLoads(leftWheel, rightWheel, blend) {
   rightWheel.suspensionForce = rightWheel.load;
 }
 
-function applySuspensionAngularImpulse(state, config, torque, dt) {
-  if (!torque) {
-    return;
-  }
-
+function integrateVehicleAngularState(carRoot, state, config, torque, dt) {
+  const forward = TMP_FORWARD.copy(WORLD_FORWARD).applyQuaternion(carRoot.quaternion);
+  const right = TMP_RIGHT.copy(WORLD_RIGHT).applyQuaternion(carRoot.quaternion);
+  const up = TMP_UP.copy(WORLD_UP).applyQuaternion(carRoot.quaternion);
   const pitchInertia = Math.max(
     config.massKg * Math.max(state.wheelbase, 1) * PITCH_INERTIA_SCALE,
     1,
   );
-  state.pitchRate += THREE.MathUtils.clamp(torque.x / pitchInertia, -18, 18) * dt;
-}
-
-function integrateVehicleAngularState(state, config, dt) {
-  const damping = state.grounded ? GROUNDED_ANGULAR_DAMPING : AIRBORNE_ANGULAR_DAMPING;
-  const dampingFactor = Math.exp(-damping * dt);
-
-  state.pitchRate *= dampingFactor;
-  state.rollRate *= dampingFactor;
-  state.pitchRate = THREE.MathUtils.clamp(state.pitchRate, -2.4, 2.4);
-  state.rollRate = THREE.MathUtils.clamp(
-    state.rollRate,
-    state.grounded ? -0.9 : -2.8,
-    state.grounded ? 0.9 : 2.8,
+  const yawInertia = Math.max(
+    config.massKg * Math.max(state.wheelbase * state.trackWidth, 1) * 0.42,
+    1,
   );
-  state.pitch = THREE.MathUtils.clamp(state.pitch + state.pitchRate * dt, -0.55, 0.55);
-  state.roll = THREE.MathUtils.clamp(
-    state.roll + state.rollRate * dt,
-    state.grounded ? -0.22 : -0.68,
-    state.grounded ? 0.22 : 0.68,
+  const rollInertia = Math.max(
+    config.massKg * Math.max(state.trackWidth, 1) * 0.36,
+    1,
   );
+  const angularAcceleration = TMP_A.set(0, 0, 0);
 
-  if (state.grounded) {
-    limitGroundedAttitudeToWheelCompression(state, dt);
+  if (torque && torque.lengthSq() > 1e-10) {
+    angularAcceleration
+      .addScaledVector(right, torque.dot(right) / pitchInertia)
+      .addScaledVector(up, torque.dot(up) / yawInertia)
+      .addScaledVector(forward, torque.dot(forward) / rollInertia);
+    state.angularVelocity.addScaledVector(angularAcceleration, dt);
   }
-}
 
-function limitGroundedAttitudeToWheelCompression(state, dt) {
-  const frontLeft = findWheelState(state, "placeholder_tire_fl");
-  const frontRight = findWheelState(state, "placeholder_tire_fr");
-  const rearLeft = findWheelState(state, "placeholder_tire_rl");
-  const rearRight = findWheelState(state, "placeholder_tire_rr");
-  const frontAvg =
-    (frontLeft.grounded ? frontLeft.compression : 0) +
-    (frontRight.grounded ? frontRight.compression : 0);
-  const rearAvg =
-    (rearLeft.grounded ? rearLeft.compression : 0) +
-    (rearRight.grounded ? rearRight.compression : 0);
-  const leftAvg =
-    (frontLeft.grounded ? frontLeft.compression : 0) +
-    (rearLeft.grounded ? rearLeft.compression : 0);
-  const rightAvg =
-    (frontRight.grounded ? frontRight.compression : 0) +
-    (rearRight.grounded ? rearRight.compression : 0);
-  const frontCount = Number(frontLeft.grounded) + Number(frontRight.grounded);
-  const rearCount = Number(rearLeft.grounded) + Number(rearRight.grounded);
-  const leftCount = Number(frontLeft.grounded) + Number(rearLeft.grounded);
-  const rightCount = Number(frontRight.grounded) + Number(rearRight.grounded);
-  const pitchDelta =
-    frontCount > 0 && rearCount > 0
-      ? frontAvg / frontCount - rearAvg / rearCount
-      : 0;
-  const rollDelta =
-    leftCount > 0 && rightCount > 0
-      ? leftAvg / leftCount - rightAvg / rightCount
-      : 0;
-  const pitchDeadZone = 0.006;
-  const rollDeadZone = 0.006;
-  const targetPitch =
-    Math.abs(pitchDelta) <= pitchDeadZone
-      ? 0
-      : THREE.MathUtils.clamp(pitchDelta / Math.max(state.wheelbase, 1), -0.08, 0.08);
-  const targetRoll =
-    Math.abs(rollDelta) <= rollDeadZone
-      ? 0
-      : THREE.MathUtils.clamp(rollDelta / Math.max(state.trackWidth, 1), -0.16, 0.16);
+  state.angularVelocity.multiplyScalar(Math.exp(-BODY_ANGULAR_DAMPING * dt));
+  if (state.angularVelocity.lengthSq() > 36) {
+    state.angularVelocity.setLength(6);
+  }
 
-  state.pitch = dampToward(state.pitch, targetPitch, 2.8, dt);
-  state.roll = dampToward(state.roll, targetRoll, 2.8, dt);
+  const angularSpeed = state.angularVelocity.length();
+  if (angularSpeed > 1e-6) {
+    TMP_QUAT.setFromAxisAngle(
+      TMP_B.copy(state.angularVelocity).multiplyScalar(1 / angularSpeed),
+      angularSpeed * dt,
+    );
+    carRoot.quaternion.premultiply(TMP_QUAT).normalize();
+  }
+
+  forward.copy(WORLD_FORWARD).applyQuaternion(carRoot.quaternion).normalize();
+  right.copy(WORLD_RIGHT).applyQuaternion(carRoot.quaternion).normalize();
+  up.copy(WORLD_UP).applyQuaternion(carRoot.quaternion).normalize();
+  state.yaw = extractYaw(carRoot.quaternion);
+  state.orientationOffset.copy(computeOrientationOffset(carRoot.quaternion, state.yaw));
+  state.yawRate = state.angularVelocity.dot(WORLD_UP);
+  state.pitchRate = state.angularVelocity.dot(right);
+  state.rollRate = -state.angularVelocity.dot(forward);
+  state.pitch = Math.atan2(forward.y, Math.max(horizontalSpeed(forward), 1e-5));
+  state.roll = Math.atan2(up.x, Math.max(up.y, 1e-5));
 }
 
 function correctSuspensionPenetration(carRoot, state, groundedContacts, config, dt) {
@@ -1347,7 +1455,8 @@ function correctSuspensionPenetration(carRoot, state, groundedContacts, config, 
     const wheelConfig = contact.wheel.wheelConfig;
     maxPenetration = Math.max(
       maxPenetration,
-      wheelState.compression - wheelConfig.maxLength * 0.92,
+      wheelState.compression -
+        (wheelConfig.suspensionBlock?.overshootStart ?? wheelConfig.maxLength * 0.92),
     );
   }
 
@@ -1391,9 +1500,12 @@ function accumulateWheelForces(
   const longitudinalSpeed = wheelVelocity.dot(wheelForward);
   const lateralSpeed = wheelVelocity.dot(wheelRight);
   const surfaceProfile = computeSurfaceProfile(config, wheelState.surfaceType);
+  wheelState.contactProfile = surfaceProfile;
+  wheelState.contactProfileIndex = resolveContactProfileIndex(surfaceProfile.type);
   wheelState.surfaceGrip = surfaceProfile.grip;
   wheelState.surfaceXFriction = surfaceProfile.xFriction;
   wheelState.surfaceZFriction = surfaceProfile.zFriction;
+  wheelState.tireForceMultiplier = Math.abs(surfaceProfile.slideControl ?? 0.6);
   const driveTorque = computeDriveTorqueForWheel(contact.wheel, state, config, groundedCount);
   const brakeTorque = computeBrakeTorqueForWheel(contact.wheel, state, config);
   const wheelRadius = contact.wheel.wheelConfig.radius;
@@ -1574,6 +1686,14 @@ function accumulateWheelForces(
     state.throttleAxis,
     state.handbrakeAxis,
   );
+  const drivenLongitudinalRelease = computeDrivenWheelLongitudinalRelease(
+    contact.wheel,
+    config,
+    longitudinalSlip,
+    state.throttleAxis,
+    state.steerState,
+    horizontalSpeed(state.velocity),
+  );
   const combinedSlipScale = computeCombinedSlipScale(
     config,
     longitudinalSlip,
@@ -1581,17 +1701,21 @@ function accumulateWheelForces(
     contact.wheel.front,
     state.handbrakeAxis,
   );
+  const profileForceScale = computeContactProfileForceScale(surfaceProfile, wheelState);
   const tractionForce =
     longitudinalGrip *
     wheelState.load *
     THREE.MathUtils.lerp(0.35, 1, launchForceBlend) *
-    combinedSlipScale;
+    drivenLongitudinalRelease *
+    combinedSlipScale *
+    profileForceScale.longitudinal;
   const lateralForce =
     lateralGrip *
     wheelState.load *
     THREE.MathUtils.lerp(0.55, 1, steeringForceBlend) *
     rearDrivenSpinRelease *
-    combinedSlipScale;
+    combinedSlipScale *
+    profileForceScale.lateral;
 
   const tireReactionTorque = tractionForce * wheelRadius;
   wheelState.tireReactionTorque = tireReactionTorque;
@@ -1602,10 +1726,21 @@ function accumulateWheelForces(
     420,
   );
   wheelState.spinAngle += wheelState.angularVelocity * dt;
+  wheelState.wheelRate = wheelState.angularVelocity;
 
   const force = new THREE.Vector3()
     .addScaledVector(wheelForward, tractionForce)
     .addScaledVector(wheelRight, lateralForce);
+  applyContactPlaneScrubForce(
+    force,
+    wheelVelocity,
+    contactNormal,
+    wheelState,
+    state,
+    config,
+    surfaceProfile,
+    contact.wheel.front,
+  );
 
   const rollingDirection =
     Math.abs(longitudinalSpeed) > 0.15
@@ -1644,40 +1779,165 @@ function accumulateWheelForces(
   return { force, yawTorque };
 }
 
-function computeDriveTorqueForWheel(wheel, state, config, groundedCount) {
-  const driven =
-    (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
+function applyContactPlaneScrubForce(
+  force,
+  wheelVelocity,
+  contactNormal,
+  wheelState,
+  state,
+  config,
+  surfaceProfile,
+  frontWheel,
+) {
+  const planarVelocity = TMP_E.copy(wheelVelocity).projectOnPlane(contactNormal);
+  const speed = planarVelocity.length();
 
-  if (!driven || groundedCount === 0) {
-    return 0;
+  if (speed < 0.05) {
+    return;
   }
 
+  const brakeDemand = THREE.MathUtils.clamp(state.brakeAxis, 0, 1);
+  const handbrakeDemand = frontWheel
+    ? THREE.MathUtils.clamp(state.handbrakeAxis, 0, 1) * 0.08
+    : THREE.MathUtils.clamp(state.handbrakeAxis, 0, 1);
+  const reverseCounterDemand =
+    state.throttleAxis < -0.05 && wheelVelocity.dot(state.forwardDir) > 0
+      ? THREE.MathUtils.clamp(-state.throttleAxis, 0, 1)
+      : 0;
+  const coastDemand =
+    Math.abs(state.throttleAxis) < 0.05 &&
+    brakeDemand < 0.05 &&
+    handbrakeDemand < 0.05
+      ? THREE.MathUtils.clamp(inverseLerp(0.25, 4, speed), 0, 0.35)
+      : 0;
+  const demand = Math.max(brakeDemand, handbrakeDemand, reverseCounterDemand, coastDemand);
+
+  if (demand <= 0.01) {
+    return;
+  }
+
+  const kineticGrip =
+    Math.max(surfaceProfile.grip, 0.35) *
+    Math.max((surfaceProfile.xFriction + surfaceProfile.zFriction) * 0.5, 0.35);
+  const rearHandbrakeScale =
+    !frontWheel && handbrakeDemand > 0.05
+      ? THREE.MathUtils.lerp(0.55, 0.82, 1 - handbrakeDemand)
+      : 1;
+  const maxScrubForce =
+    wheelState.load *
+    kineticGrip *
+    THREE.MathUtils.lerp(0.08, 0.72, demand) *
+    rearHandbrakeScale;
+  const speedScale = THREE.MathUtils.clamp(speed / 3, 0.12, 1);
+
+  force.addScaledVector(
+    planarVelocity.normalize(),
+    -maxScrubForce * speedScale,
+  );
+}
+
+function updateWheelSpinContactTimers(state, config, dt) {
+  for (const wheelState of state.wheelStates) {
+    const wheelConfig = wheelState.front ? config.frontWheel : config.rearWheel;
+    const normalizedCompression =
+      wheelState.grounded
+        ? wheelState.compression / Math.max(wheelConfig.maxLength, 1e-4)
+        : 0;
+
+    if (!wheelState.grounded || normalizedCompression <= WHEEL_SPIN_COMPRESSION_THRESHOLD) {
+      wheelState.spinContactTimer = 0;
+    } else {
+      wheelState.spinContactTimer += dt;
+    }
+  }
+}
+
+function distributeDriveTorqueToWheels(state, config, dt) {
+  resetWheelDriveTorques(state);
+  precomputeWheelBrakeTorques(state, config);
+  distributeAxleDriveTorque(state, config, true, dt);
+  distributeAxleDriveTorque(state, config, false, dt);
+}
+
+function resetWheelDriveTorques(state) {
+  for (const wheelState of state.wheelStates) {
+    wheelState.driveTorque = 0;
+  }
+}
+
+function precomputeWheelBrakeTorques(state, config) {
+  for (const wheelState of state.wheelStates) {
+    const frontBrakeFactor = wheelState.front ? config.brakeBalance : 1 - config.brakeBalance;
+    const pedalBrake = config.brakeTorque * state.brakeAxis * frontBrakeFactor;
+    const handbrake =
+      !wheelState.front
+        ? config.handBrakeTorque * state.handbrakeAxis
+        : config.handBrakeTorque * state.handbrakeAxis * 0.02;
+
+    wheelState.brakeTorque = pedalBrake + handbrake;
+  }
+}
+
+function distributeAxleDriveTorque(state, config, frontAxle, dt) {
+  const driven = frontAxle ? config.frontTraction : config.rearTraction;
+
+  if (!driven) {
+    return;
+  }
+
+  const leftWheel = state.wheelStates.find(
+    (wheelState) => wheelState.front === frontAxle && wheelState.side < 0,
+  );
+  const rightWheel = state.wheelStates.find(
+    (wheelState) => wheelState.front === frontAxle && wheelState.side > 0,
+  );
+
+  if (!leftWheel || !rightWheel) {
+    return;
+  }
+
+  const differential = frontAxle
+    ? config.differentials.front
+    : config.differentials.rear;
+  const axleTorque = computeAxleDriveTorque(frontAxle, state, config, differential);
+  const split = solveDifferentialTorqueSplit(
+    state.differentialState[frontAxle ? "front" : "rear"],
+    differential,
+    leftWheel,
+    rightWheel,
+    axleTorque,
+    dt,
+  );
+
+  leftWheel.driveTorque = split.leftTorque;
+  rightWheel.driveTorque = split.rightTorque;
+}
+
+function computeAxleDriveTorque(frontAxle, state, config, differential) {
   const throttleMagnitude =
     state.gear < 0
       ? Math.abs(Math.min(state.throttleAxis, 0))
       : Math.max(state.throttleAxis, 0);
   const handbrakeDriveScale =
-    !wheel.front
+    !frontAxle
       ? THREE.MathUtils.lerp(1, 0, THREE.MathUtils.clamp(state.handbrakeAxis, 0, 1))
       : 1;
   const engineTorque =
     sampleEngineTorque(config.engine, state.engineRpm) * throttleMagnitude;
   const gearRatio = getCurrentGearRatio(state, config);
-  const differential = wheel.front
-    ? config.differentials.front
-    : config.differentials.rear;
   const torqueScale = sampleCurve(
     differential.throttleCurve,
     throttleMagnitude,
   );
-  const nonlinearThrottleScale = torqueScale * 0.3 + torqueScale * torqueScale * torqueScale * 0.7;
+  const nonlinearThrottleScale =
+    torqueScale * 0.3 + torqueScale * torqueScale * torqueScale * 0.7;
   const reverseDriveLimitScale =
     state.gear < 0
       ? computeReverseDriveLimitScale(state, config)
       : 1;
-  const maxTorque = pickScalar(differential.MaxTorque, 5500);
-  const wheelCount = countDrivenWheels(config);
-  const axleTorque =
+  const drivenAxleCount = Number(config.frontTraction) + Number(config.rearTraction);
+
+  return (
     engineTorque *
     gearRatio *
     config.gearbox.endRatio *
@@ -1685,13 +1945,145 @@ function computeDriveTorqueForWheel(wheel, state, config, groundedCount) {
     (state.gear < 0 ? -1 : 1) *
     handbrakeDriveScale *
     nonlinearThrottleScale *
-    reverseDriveLimitScale;
+    reverseDriveLimitScale /
+    Math.max(drivenAxleCount, 1)
+  );
+}
+
+function solveDifferentialTorqueSplit(
+  runtimeState,
+  differential,
+  leftWheel,
+  rightWheel,
+  axleTorque,
+  dt,
+) {
+  const maxTorque = pickScalar(differential.MaxTorque, 5500);
+  const inertia = Math.max(pickScalar(differential.Inertia, 0.06), 0.001);
+  const leftTimerScale = computeWheelSpinTimerDifferentialScale(leftWheel);
+  const rightTimerScale = computeWheelSpinTimerDifferentialScale(rightWheel);
+  const leftWheelRate = leftWheel.angularVelocity * leftTimerScale;
+  const rightWheelRate = rightWheel.angularVelocity * rightTimerScale;
+  const speedCurveInput = THREE.MathUtils.clamp(
+    Math.abs(leftWheelRate - rightWheelRate) * 0.012,
+    0,
+    1,
+  );
+  const speedCurve = sampleCurve(differential.speedCurve, speedCurveInput);
+  const brakeCurve = sampleCurve(
+    differential.brakeCurve,
+    THREE.MathUtils.clamp(
+      (Math.abs(leftWheel.brakeTorque ?? 0) + Math.abs(rightWheel.brakeTorque ?? 0)) /
+        Math.max(maxTorque * 2, 1),
+      0,
+      1,
+    ),
+  );
+  const lockStrength = THREE.MathUtils.clamp(
+    (0.22 + speedCurve * 0.55 + brakeCurve * 0.23) *
+      THREE.MathUtils.clamp(Math.abs(axleTorque) / Math.max(maxTorque, 1), 0, 1),
+    0,
+    1,
+  );
+  const sideDelta = leftWheelRate - rightWheelRate;
+  const targetBias = THREE.MathUtils.clamp(
+    -sideDelta * inertia * lockStrength,
+    -0.38,
+    0.38,
+  );
+
+  if (Math.abs(targetBias) < 0.015 || Math.abs(axleTorque) < 1) {
+    runtimeState.sideState = 0;
+  } else {
+    runtimeState.sideState = targetBias > 0 ? 1 : 2;
+  }
+
+  const bias = THREE.MathUtils.clamp(
+    dampToward(runtimeState.bias ?? 0, targetBias, 18, dt),
+    -0.42,
+    0.42,
+  );
+  runtimeState.bias = bias;
+  runtimeState.averageRate = (leftWheelRate + rightWheelRate) * 0.5;
+  runtimeState.leftRate = leftWheelRate;
+  runtimeState.rightRate = rightWheelRate;
+
+  const leftShare = THREE.MathUtils.clamp(0.5 + bias, 0.08, 0.92);
+  const rightShare = 1 - leftShare;
+
+  return {
+    leftTorque: THREE.MathUtils.clamp(axleTorque * leftShare, -maxTorque, maxTorque),
+    rightTorque: THREE.MathUtils.clamp(axleTorque * rightShare, -maxTorque, maxTorque),
+  };
+}
+
+function updateDrivetrainWheelRatesAndRpm(state, config, dt) {
+  let drivenRateSum = 0;
+  let drivenCount = 0;
+
+  for (const wheelState of state.wheelStates) {
+    wheelState.wheelRate = wheelState.angularVelocity ?? 0;
+    if (
+      (wheelState.front && config.frontTraction) ||
+      (!wheelState.front && config.rearTraction)
+    ) {
+      drivenRateSum += wheelState.wheelRate;
+      drivenCount += 1;
+    }
+  }
+
+  const averageDrivenRate = drivenCount > 0 ? drivenRateSum / drivenCount : 0;
+  state.drivetrainAverageWheelRate = averageDrivenRate;
+
+  if ((state.shiftTimer ?? 0) > 0 || state.gear === 0) {
+    return;
+  }
+
+  const gearRatio = getCurrentGearRatio(state, config);
+  const wheelProjectedRpm =
+    Math.abs(averageDrivenRate * gearRatio * config.gearbox.endRatio) *
+    (60 / (Math.PI * 2));
+  const idleRpm = config.engine.idleRpm;
+  const freeRevRpm =
+    idleRpm + Math.abs(state.throttleAxis) * (config.engine.redLineRpm - idleRpm);
+  const clutchCoupling = THREE.MathUtils.clamp(state.clutch ?? 1, 0, 1);
+  const targetRpm = THREE.MathUtils.lerp(
+    Math.max(idleRpm, freeRevRpm * 0.35),
+    Math.max(idleRpm, wheelProjectedRpm),
+    clutchCoupling,
+  );
+
+  state.engineRpm = THREE.MathUtils.clamp(
+    dampToward(state.engineRpm, targetRpm, 14, dt),
+    idleRpm,
+    config.engine.redLineRpm * 1.08,
+  );
+}
+
+function computeWheelSpinTimerDifferentialScale(wheelState) {
+  if (!wheelState.grounded) {
+    return 1;
+  }
+
+  if (wheelState.spinContactTimer >= WHEEL_SPIN_TIMER_WARMUP_SECONDS) {
+    return 1;
+  }
 
   return THREE.MathUtils.clamp(
-    axleTorque / Math.max(wheelCount, 1),
-    -maxTorque,
-    maxTorque,
+    wheelState.spinContactTimer * WHEEL_SPIN_TIMER_SCALE + 0.25,
+    0.25,
+    1,
   );
+}
+
+function computeDriveTorqueForWheel(wheel, state, config, groundedCount) {
+  const driven =
+    (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
+
+  if (!driven || groundedCount === 0) {
+    return 0;
+  }
+  return findWheelState(state, wheel.name)?.driveTorque ?? 0;
 }
 
 function computeReverseDriveLimitScale(state, config) {
@@ -1802,6 +2194,36 @@ function computeCombinedSlipScale(
   return THREE.MathUtils.clamp(1 / combined, 0.24, 1);
 }
 
+function computeContactProfileForceScale(surfaceProfile, wheelState) {
+  const offsets = surfaceProfile.nativeOffsets ?? {};
+  const slideControl = Math.abs(
+    wheelState.tireForceMultiplier ??
+      surfaceProfile.slideControl ??
+      offsets.profile48 ??
+      0.6,
+  );
+  const slowDown = THREE.MathUtils.clamp(
+    surfaceProfile.slowDown ?? offsets.profile50 ?? 0,
+    0,
+    1,
+  );
+  const underSteer = THREE.MathUtils.clamp(
+    surfaceProfile.underSteer ?? offsets.profile4c ?? 0,
+    0,
+    1,
+  );
+  const forceBlend = THREE.MathUtils.clamp(
+    THREE.MathUtils.lerp(0.72, 1.08, slideControl),
+    0.45,
+    1.15,
+  );
+
+  return {
+    longitudinal: forceBlend * THREE.MathUtils.lerp(1, 0.72, slowDown),
+    lateral: forceBlend * THREE.MathUtils.lerp(1, 0.82, underSteer),
+  };
+}
+
 function computeDrivenWheelLateralRelease(
   wheel,
   config,
@@ -1831,6 +2253,37 @@ function computeDrivenWheelLateralRelease(
   const release = THREE.MathUtils.lerp(1, wheel.front ? 0.72 : 0.34, spin * driveDemand);
 
   return THREE.MathUtils.clamp(release, 0.28, 1);
+}
+
+function computeDrivenWheelLongitudinalRelease(
+  wheel,
+  config,
+  longitudinalSlip,
+  throttleAxis,
+  steerState,
+  speedMs,
+) {
+  const driven =
+    (wheel.front && config.frontTraction) || (!wheel.front && config.rearTraction);
+
+  if (!driven || wheel.front || throttleAxis <= 0.2) {
+    return 1;
+  }
+
+  const spin = THREE.MathUtils.clamp(
+    inverseLerp(
+      config.tireConfig.optimalSlipRatio * 1.4,
+      config.tireConfig.optimalSlipRatio * 8,
+      Math.abs(longitudinalSlip),
+    ),
+    0,
+    1,
+  );
+  const steerDemand = THREE.MathUtils.clamp(inverseLerp(0.25, 0.85, Math.abs(steerState)), 0, 1);
+  const lowSpeedDemand = THREE.MathUtils.clamp(1 - inverseLerp(10, 28, speedMs), 0, 1);
+  const donutDemand = spin * steerDemand * lowSpeedDemand * THREE.MathUtils.clamp(throttleAxis, 0, 1);
+
+  return THREE.MathUtils.lerp(1, 0.36, donutDemand);
 }
 
 function peakSlipResponse(normalizedSlip, falloff = 0.22) {
@@ -1893,6 +2346,8 @@ function computeAeroAndRollingForces(state, config, forward, right, runtimeDebug
 }
 
 function updateWheelVisuals(carRoot, wheelLayout, state) {
+  carRoot.updateWorldMatrix(true, false);
+
   for (const wheel of wheelLayout) {
     const tire = wheel.tire;
 
@@ -1902,13 +2357,38 @@ function updateWheelVisuals(carRoot, wheelLayout, state) {
 
     const wheelState = findWheelState(state, wheel.name);
     tire.position.copy(wheel.tireBasePosition);
-    tire.position.y += wheelState.suspensionOffset;
+
+    if (wheelState.grounded && wheelState.contactPoint && wheelState.contactNormal) {
+      TMP_A
+        .copy(wheelState.contactPoint)
+        .addScaledVector(
+          wheelState.contactNormal,
+          Math.max(wheel.wheelConfig.radius, 0.05),
+        );
+      TMP_B.copy(carRoot.worldToLocal(TMP_A));
+      tire.position.y = TMP_B.y;
+    } else {
+      const compression = THREE.MathUtils.clamp(
+        wheelState.compression ?? 0,
+        0,
+        wheel.wheelConfig.maxLength,
+      );
+      tire.position.y += wheel.wheelConfig.defaultCompression - compression;
+    }
 
     TMP_QUAT.setFromAxisAngle(WORLD_UP, wheelState.steerAngle);
-    TMP_QUAT_B.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -wheelState.spinAngle);
+    TMP_QUAT_B.setFromAxisAngle(LOCAL_TIRE_SPIN_AXIS, -wheelState.spinAngle);
     tire.quaternion.copy(TMP_QUAT);
     tire.quaternion.multiply(wheel.tireBaseQuaternion);
     tire.quaternion.multiply(TMP_QUAT_B);
+
+    if (wheel.brakeVisualParts?.length > 0) {
+      TMP_QUAT_C.copy(TMP_QUAT_B).invert();
+      for (const part of wheel.brakeVisualParts) {
+        part.quaternion.copy(part.userData.baseQuaternion ?? TMP_QUAT.identity());
+        part.quaternion.premultiply(TMP_QUAT_C);
+      }
+    }
   }
 }
 
@@ -1959,12 +2439,14 @@ function resetVehicleToSpawn(
   state.roll = 0;
   state.pitchRate = 0;
   state.rollRate = 0;
+  state.angularVelocity.set(0, 0, 0);
   state.steerState = 0;
   state.steerVelocity = 0;
   state.throttleAxis = 0;
   state.brakeAxis = 0;
   state.handbrakeAxis = 0;
   state.reverseLatched = false;
+  state.previousBrakePressed = false;
   state.gear = 1;
   state.shiftTimer = 0;
   state.shiftTargetGear = 1;
@@ -1986,18 +2468,27 @@ function resetVehicleToSpawn(
     wheelState.nativeOvershoot = 0;
     wheelState.suspensionOffset = 0;
     wheelState.suspensionForce = 0;
+    wheelState.spinContactTimer = 0;
     wheelState.surfaceType = "tarmac";
     wheelState.surfaceGrip = 1;
     wheelState.surfaceXFriction = 1;
     wheelState.surfaceZFriction = 1;
+    wheelState.materialSlot = 0;
+    wheelState.contactProfile = null;
+    wheelState.contactProfileIndex = 0;
+    wheelState.contactVector.set(0, 0, 0);
+    wheelState.tireForceMultiplier = 0.6;
     wheelState.spinAngle = 0;
     wheelState.angularVelocity = 0;
     wheelState.driveTorque = 0;
     wheelState.brakeTorque = 0;
     wheelState.tireReactionTorque = 0;
     wheelState.steerAngle = 0;
+    wheelState.wheelRate = 0;
     wheelState.load = 0;
   }
+  state.differentialState.front = createDifferentialRuntimeState();
+  state.differentialState.rear = createDifferentialRuntimeState();
 
   if (trackContactSampler ?? trackFloorSampler) {
     const contacts = sampleWheelContacts(
@@ -2013,7 +2504,6 @@ function resetVehicleToSpawn(
     }
   }
 
-  applyVehicleOrientation(carRoot, state);
   updateWheelVisuals(carRoot, wheelLayout, state);
   updateCameraState(state, carRoot);
 }
@@ -2029,15 +2519,22 @@ function stabilizeIdleState(state, dt) {
   if (state.grounded && idleInput && horizontal < 0.35) {
     state.velocity.x = dampToward(state.velocity.x, 0, 18, dt);
     state.velocity.z = dampToward(state.velocity.z, 0, 18, dt);
-    state.yawRate = dampToward(state.yawRate, 0, 14, dt);
+    const yawVelocity = state.angularVelocity.dot(WORLD_UP);
+    state.angularVelocity.addScaledVector(
+      WORLD_UP,
+      dampToward(yawVelocity, 0, 14, dt) - yawVelocity,
+    );
     if (Math.abs(state.velocity.x) < 0.02) {
       state.velocity.x = 0;
     }
     if (Math.abs(state.velocity.z) < 0.02) {
       state.velocity.z = 0;
     }
-    if (Math.abs(state.yawRate) < 0.01) {
-      state.yawRate = 0;
+    if (Math.abs(state.angularVelocity.dot(WORLD_UP)) < 0.01) {
+      state.angularVelocity.addScaledVector(
+        WORLD_UP,
+        -state.angularVelocity.dot(WORLD_UP),
+      );
     }
   }
 }
@@ -2097,7 +2594,10 @@ function resolveTrackBodyContacts(carRoot, config, state, trackFloorSampler) {
       applyContactAngularImpulse(state, normal, impact, BODY_WALL_PROBE_HEIGHT);
       state.velocity.addScaledVector(normal, -velocityIntoWall * 1.08);
       state.velocity.multiplyScalar(0.985);
-      state.yawRate *= 0.82;
+      state.angularVelocity.addScaledVector(
+        WORLD_UP,
+        -state.angularVelocity.dot(WORLD_UP) * 0.18,
+      );
     }
   }
 }
@@ -2110,9 +2610,18 @@ function applyContactAngularImpulse(state, normal, impact, heightOffset = 0) {
   const side = normal.dot(state.rightDir);
   const front = normal.dot(state.forwardDir);
   const heightScale = THREE.MathUtils.clamp(heightOffset / 0.9, 0.15, 1.4);
-  state.rollRate += THREE.MathUtils.clamp(side * impact * 0.045 * heightScale, -0.75, 0.75);
-  state.pitchRate += THREE.MathUtils.clamp(-front * impact * 0.035 * heightScale, -0.6, 0.6);
-  state.yawRate += THREE.MathUtils.clamp(-side * impact * 0.018, -0.35, 0.35);
+  state.angularVelocity.addScaledVector(
+    state.forwardDir,
+    -THREE.MathUtils.clamp(side * impact * 0.045 * heightScale, -0.75, 0.75),
+  );
+  state.angularVelocity.addScaledVector(
+    state.rightDir,
+    THREE.MathUtils.clamp(-front * impact * 0.035 * heightScale, -0.6, 0.6),
+  );
+  state.angularVelocity.addScaledVector(
+    WORLD_UP,
+    THREE.MathUtils.clamp(-side * impact * 0.018, -0.35, 0.35),
+  );
 }
 
 function createCustomDynamicObjectState(dynamicObjects) {
@@ -2392,6 +2901,10 @@ function createDebugState(state, config, carRoot) {
     rearSlipLongAvg: 0,
     rearWheelSpeed: 0,
     rearGroundSpeed: 0,
+    rearWheel398: 0,
+    diffBiasRear: 0,
+    diffRateLeftRear: 0,
+    diffRateRightRear: 0,
     frontGripScale: 1,
     rearGripScale: 1,
     wheelContacts: 0,
@@ -2418,6 +2931,7 @@ function createDebugState(state, config, carRoot) {
       driveTorque: 0,
       brakeTorque: 0,
       tireReactionTorque: 0,
+      spinContactTimer: 0,
       wheelLongitudinalSpeed: 0,
       groundRelativeLongitudinalVelocity: 0,
       slipRatio: 0,
@@ -2456,6 +2970,10 @@ function updateDebugState(
   const wheelContacts = state.wheelStates.filter((wheel) => wheel.grounded).length;
   const suspensionForce = state.wheelStates.reduce(
     (sum, wheel) => sum + (wheel.load ?? 0),
+    0,
+  );
+  const driveTorque = state.wheelStates.reduce(
+    (sum, wheel) => sum + Math.abs(wheel.driveTorque ?? 0),
     0,
   );
 
@@ -2527,10 +3045,17 @@ function updateDebugState(
   debugState.rearGroundSpeed =
     rearWheels.reduce((sum, wheel) => sum + Math.abs(wheel.longitudinalSpeed ?? 0), 0) /
     rearDivider;
+  debugState.rearWheel398 =
+    rearWheels.reduce((sum, wheel) => sum + (wheel.spinContactTimer ?? 0), 0) /
+    rearDivider;
+  debugState.diffBiasRear = state.differentialState.rear.bias ?? 0;
+  debugState.diffRateLeftRear = state.differentialState.rear.leftRate ?? 0;
+  debugState.diffRateRightRear = state.differentialState.rear.rightRate ?? 0;
   debugState.frontGripScale = state.surfaceGrip;
   debugState.rearGripScale =
     state.surfaceGrip * THREE.MathUtils.lerp(1, 0.18, state.handbrakeAxis);
   debugState.wheelContacts = wheelContacts;
+  debugState.engineForce = driveTorque;
   debugState.forwardImpulse = Math.abs(speedForward) * config.massKg;
   debugState.suspensionForce = suspensionForce;
   debugState.simSteps = stepCount;
@@ -2570,6 +3095,7 @@ function updateDebugState(
     wheelDebug.driveTorque = wheelState.driveTorque ?? 0;
     wheelDebug.brakeTorque = wheelState.brakeTorque ?? 0;
     wheelDebug.tireReactionTorque = wheelState.tireReactionTorque ?? 0;
+    wheelDebug.spinContactTimer = wheelState.spinContactTimer ?? 0;
     wheelDebug.wheelLongitudinalSpeed =
       (wheelState.angularVelocity ?? 0) *
       (index < 2 ? config.frontWheel.radius : config.rearWheel.radius);
@@ -2620,17 +3146,6 @@ function averageDrivenWheelOmega(state, config) {
   }
 
   return count > 0 ? sum / count : 0;
-}
-
-function countDrivenWheels(config) {
-  let count = 0;
-  if (config.frontTraction) {
-    count += 2;
-  }
-  if (config.rearTraction) {
-    count += 2;
-  }
-  return count;
 }
 
 function getCurrentGearRatio(state, config) {
@@ -2689,6 +3204,11 @@ function computeSurfaceGrip(config, surfaceType) {
 }
 
 function computeSurfaceProfile(config, surfaceType) {
+  const normalizedType = normalizeSurfaceType(surfaceType);
+  const nativeProfile =
+    config.contactProfiles?.[normalizedType] ??
+    config.contactProfiles?.tarmac ??
+    null;
   const surface = resolveSurfaceDynamics(config, surfaceType);
   const xGrip = pickScalar(surface.XFriction, 1.25);
   const zGrip = pickScalar(surface.ZFriction, 1.25);
@@ -2697,7 +3217,7 @@ function computeSurfaceProfile(config, surfaceType) {
   const zStiffness = toVector3(surface.ZStiffness, [1, 1, 1]).toArray();
 
   return {
-    type: normalizeSurfaceType(surfaceType),
+    type: normalizedType,
     grip: Math.max(((xGrip + zGrip) * 0.5) + boost, 0.35),
     xFriction: Math.max(xGrip + boost, 0.35),
     zFriction: Math.max(zGrip + boost, 0.35),
@@ -2705,8 +3225,90 @@ function computeSurfaceProfile(config, surfaceType) {
     zStiffness,
     rollingResistance: pickScalar(surface.RollingResistance, 0.005),
     slideControl: pickScalar(surface.SlideControl, 0),
+    slideUnderSteer: pickScalar(surface.SlideUnderSteer, 0),
+    underSteer: pickScalar(surface.UnderSteer, 0),
+    slowDown: pickScalar(surface.SlowDown, 0),
     antiSpin: pickScalar(surface.AntiSpin, 0),
+    native: nativeProfile,
+    nativeOffsets: nativeProfile?.nativeOffsets ?? null,
   };
+}
+
+function buildContactProfiles(surfaceDynamics) {
+  const profiles = {};
+  const surfaceTypes = [
+    "tarmac",
+    "gravel",
+    "sand",
+    "hazard",
+    "forest",
+    "object",
+    "stuntTarmac",
+    "snow",
+    "ice",
+  ];
+
+  for (const surfaceType of surfaceTypes) {
+    const source = surfaceDynamics?.[surfaceType] ?? surfaceDynamics?.tarmac ?? {};
+    const normalizedType = normalizeSurfaceType(surfaceType);
+    profiles[normalizedType] = buildContactProfile(normalizedType, source);
+  }
+
+  profiles.grass = profiles.forest ?? profiles.tarmac;
+  profiles.dirt = profiles.forest ?? profiles.tarmac;
+  profiles.default = profiles.tarmac;
+  return profiles;
+}
+
+function buildContactProfile(type, source) {
+  const slideUnderSteer = pickScalar(source.SlideUnderSteer, 0);
+  const slideControl = pickScalar(source.SlideControl, 0.6);
+  const underSteer = pickScalar(source.UnderSteer, 0);
+  const slowDown = pickScalar(source.SlowDown, 0);
+  const antiSpin = pickScalar(source.AntiSpin, 0);
+
+  return {
+    type,
+    rollingResistance: pickScalar(source.RollingResistance, 0.005),
+    inducedDragCoeff: pickScalar(source.InducedDragCoeff, 0.15),
+    pneumaticTrail: pickScalar(source.PneumaticTrail, 0.08),
+    pneumaticOffset: pickScalar(source.PneumaticOffset, 0.5),
+    zStiffness: toVector3(source.ZStiffness, [1, 0.95, 1]).toArray(),
+    xStiffness: toVector3(source.XStiffness, [0.85, 1, 1]).toArray(),
+    zFriction: toVector2(source.ZFriction, [1.5, 1]),
+    xFriction: toVector2(source.XFriction, [1.5, 1]),
+    frictionBoost: pickScalar(source.FrictionBoost, 0.1),
+    slideUnderSteer,
+    slideControl,
+    underSteer,
+    slowDown,
+    antiSpin,
+    nativeOffsets: {
+      profile44: slideUnderSteer,
+      profile48: slideControl,
+      profile4c: underSteer,
+      profile50: slowDown,
+      profile54: antiSpin,
+    },
+  };
+}
+
+function resolveContactProfileIndex(surfaceType) {
+  switch (normalizeSurfaceType(surfaceType)) {
+    case "tarmac":
+      return 0;
+    case "gravel":
+      return 1;
+    case "sand":
+      return 2;
+    case "hazard":
+      return 3;
+    case "grass":
+    case "dirt":
+      return 4;
+    default:
+      return 0;
+  }
 }
 
 function resolveSurfaceDynamics(config, surfaceType) {
@@ -2748,20 +3350,29 @@ function computeWheelLoad(
   overshoot = 0,
 ) {
   const staticLoad = (config.massKg * config.gravity) / 4;
-  const springForce = compression * wheelConfig.springRate;
+  const block = wheelConfig.suspensionBlock ?? wheelConfig;
+  const springRate = Math.max(block.springRate ?? wheelConfig.springRate, 1);
+  const springForce = compression * springRate;
   const quarterMass = Math.max(config.massKg / 4, 1);
-  const criticalDamping = 2 * Math.sqrt(Math.max(wheelConfig.springRate, 1) * quarterMass);
+  const criticalDamping = 2 * Math.sqrt(springRate * quarterMass);
   const dampingScale =
     compressionVelocity >= 0
-      ? Math.max(wheelConfig.bumpDamp, 0.05)
-      : Math.max(wheelConfig.reboundDamp, 0.05);
+      ? Math.max(block.bumpDamp ?? wheelConfig.bumpDamp, 0.05)
+      : Math.max(block.reboundDamp ?? wheelConfig.reboundDamp, 0.05);
   const dampingForce = compressionVelocity * criticalDamping * dampingScale;
-  const bumpForce = overshoot * wheelConfig.springRate * 1.35;
+  const bumpCompression = Math.max(
+    compression - Math.max(block.overshootStart ?? wheelConfig.maxLength * 0.92, 0),
+    overshoot,
+    0,
+  );
+  const bumpForce =
+    bumpCompression *
+    (springRate * 1.35 + Math.max(block.bumperConst ?? 0, 0));
 
   return THREE.MathUtils.clamp(
     springForce + dampingForce + bumpForce,
     0,
-    staticLoad * 3.25,
+    block.forceCap ?? staticLoad * 3.25,
   );
 }
 
@@ -2830,30 +3441,6 @@ function updatePlanarBasisFromQuaternion(state, quaternion) {
 function computeOrientationOffset(quaternion, yaw) {
   TMP_QUAT.setFromAxisAngle(WORLD_UP, yaw);
   return TMP_QUAT.clone().invert().multiply(quaternion.clone());
-}
-
-function applyVehicleOrientation(carRoot, state) {
-  const up = TMP_UP.copy(state.groundNormal ?? WORLD_UP);
-  if (up.lengthSq() < 1e-8) {
-    up.copy(WORLD_UP);
-  }
-  up.normalize();
-
-  const yawForward = TMP_FORWARD.set(-Math.sin(state.yaw), 0, -Math.cos(state.yaw));
-  yawForward.projectOnPlane(up);
-  if (yawForward.lengthSq() < 1e-8) {
-    yawForward.set(0, 0, -1).projectOnPlane(up);
-  }
-  yawForward.normalize();
-  const right = TMP_RIGHT.crossVectors(yawForward, up).normalize();
-  const back = TMP_A.copy(yawForward).negate();
-
-  TMP_MAT.makeBasis(right, up, back);
-  TMP_QUAT.setFromRotationMatrix(TMP_MAT);
-  TMP_QUAT_B.setFromAxisAngle(LOCAL_RIGHT, state.pitch ?? 0);
-  TMP_QUAT_C.setFromAxisAngle(LOCAL_BACK, -(state.roll ?? 0));
-  TMP_QUAT.multiply(TMP_QUAT_B).multiply(TMP_QUAT_C);
-  carRoot.quaternion.copy(TMP_QUAT).multiply(state.orientationOffset);
 }
 
 function extractYaw(quaternion) {

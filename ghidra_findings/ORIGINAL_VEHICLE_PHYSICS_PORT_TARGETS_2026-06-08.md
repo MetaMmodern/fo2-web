@@ -181,7 +181,26 @@ Likely deferrable for a first one-car feel prototype:
 
 - The exact producer of `PlayerHost_AdvanceRaceSimulationTicks.param_2` still needs a clean caller trace. Confirmed call-site xrefs include `0x004de64a` and `0x0048e0b0`, but Ghidra did not resolve those directly to decompilable containing functions in this session.
 - `0x0046f510` is classified from raw bytes, not decompiled C. If implementation needs exact bit-level parity, define the function in Ghidra or use an external x86 disassembler for a full instruction-level transcript before porting.
-- `Vehicle_AccumulateWheelTireAndSteeringForces` needs a second pass focused on naming wheel-block offsets and scalar constants before implementation.
-- 2026-06-09 tire-force follow-up confirmed that native force accumulation is not a simple combined-slip ellipse. It separates contact-basis and wheel-basis forces using contact `+0x44`, `+0x48`, aggregate contact `+0x4c/+0x50/+0x54`, and `ABS(wheel+0x378)`, then applies tail yaw/counter-steer assist through `SteeringRack_GetCounterSteerAssistIndex` @ `0x00441990`. The current web driven-wheel lateral-release change is therefore an approximation pending the exact `wheel+0x378` producer and assist branches.
-- 2026-06-09 donut follow-up confirmed the remaining native drivetrain path is important: `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` calls `Differential_SolveLeftRightWheelTorques` @ `0x004408d0`, which consumes wheel `+0x398` and writes left/right torque outputs at diff `+0x50/+0x54/+0x58`. Web equal-torque splitting is not enough for one-wheel spin/donut parity.
 - `PhysicsWorld_StepActiveBodiesAndContacts` is broad engine infrastructure. For a web port, it may be better to implement a smaller vehicle-specific integrator/query path than to port the whole world island solver.
+
+## Exhaustive Driving RE Pass 2026-06-09
+
+Focused note: `ghidra_findings/DRIVING_EXHAUSTIVE_RE_PASS_2026-06-09.md`.
+
+Resolved from the previous open tire/drivetrain pass:
+
+- `VehiclePhysics_LoadHandlingAndDrivetrain` @ `0x00439a10` establishes the native data-load order: differential, gearbox, wheel-pair/suspension handling, tire dynamics, then steering assist lookup.
+- `FUN_00439a90` @ `0x00439a90` constructs the runtime suspension/wheel blocks after handling load. It fills `vehicle + 0x1888 + i*0x40` from the wheel geometry group at `vehicle + 0x1d24 + i*0x44`; the user-facing block range is `vehicle + 0x188c..0x18b0 + i*0x40`.
+- `Wheel_LoadTireDynamics` @ `0x0043aa30` reads `Data.Physics.TireDynamics` and builds the `vehicle+0x1e5c` tire/material profile table with `0x58` stride.
+- `Vehicle_AccumulateWheelTireAndSteeringForces` @ `0x00429be0` consumes `wheel+0x334`, `wheel+0x348`, `wheel+0x344`, `ABS(wheel+0x378)`, contact profile `+0x44/+0x48`, aggregate profile `+0x4c/+0x50/+0x54`, and steering/yaw assist fields near the tail.
+- `SteeringRack_GetCounterSteerAssistIndex` @ `0x00441990` is used both by self-aligning torque and by the tire-force tail; `Steering_PC` speed limits alone are not the full steering feel.
+- `Differential_SolveLeftRightWheelTorques` @ `0x004408d0` and `Drivetrain_UpdateWheelRatesAndAutoShift` @ `0x004414f0` are confirmed required for donut/one-wheel spin parity.
+
+Remaining implementation risk is not an unknown subsystem. It is translating the decompiler output into clean JS structs and preserving the confirmed data flow without inventing replacement constants.
+
+Resolved in the 2026-06-09 follow-up:
+
+- `wheel + 0x378` is the `SlideControl` float from the tire profile struct loaded by `Wheel_LoadTireDynamics` at profile offset `+0x30`.
+- `wheel + 0x398` is produced by live wheel callback `FUN_0043c060` @ `0x0043c060`, initialized by the wheel constructor at raw code `0x0043b970`, reset by `FUN_0043bf40` @ `0x0043bf40`, and consumed by `Differential_SolveLeftRightWheelTorques` @ `0x004408d0`.
+- `Differential_SolveLeftRightWheelTorques` converts each child gear node back to wheel base with `childNode - 0xf0`, then reads the left/right `wheel + 0x398` values at `0x00440918` and `0x0044091e`.
+- `FUN_0043c060` treats `wheel + 0x398` as a contact/compression spin-time accumulator: it zeros the field when the wheel object is not active or normalized compression is below `FLOAT_0067dd38`; otherwise it adds the callback timestep.

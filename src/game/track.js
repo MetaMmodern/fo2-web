@@ -1704,15 +1704,36 @@ function buildTrackFloorHit(hit, normal) {
     ? hit.object.material[hit.face?.materialIndex ?? 0]
     : hit.object.material;
   const materialName = material?.name ?? "";
+  const surfaceType = classifySurfaceType(materialName);
 
   return {
     point: hit.point.clone(),
     normal: normal.clone(),
     distance: hit.distance,
     materialName,
-    surfaceType: classifySurfaceType(materialName),
+    materialSlot: resolveContactMaterialSlot(surfaceType),
+    surfaceType,
     object: hit.object,
+    faceIndex: hit.faceIndex ?? -1,
   };
+}
+
+function resolveContactMaterialSlot(surfaceType) {
+  switch (surfaceType) {
+    case "tarmac":
+      return 0;
+    case "gravel":
+      return 1;
+    case "sand":
+      return 2;
+    case "hazard":
+      return 3;
+    case "grass":
+    case "dirt":
+      return 4;
+    default:
+      return 0;
+  }
 }
 
 function classifySurfaceType(materialName) {
