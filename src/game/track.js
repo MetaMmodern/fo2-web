@@ -2,6 +2,11 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
+import {
+  createIndexedTriangleCollisionSampler,
+  loadNativeTrackCollision,
+} from "./nativeCollision.js";
+
 const textureNameAliases = {
   colormap: "col",
 };
@@ -36,6 +41,7 @@ export async function loadTrack(
     loadCollisionAsset(
       assetUrls.collisionModel ?? null,
       assetUrls.collisionMeta ?? null,
+      assetUrls.collisionCdb2 ?? null,
     ),
   ]);
 
@@ -71,7 +77,9 @@ export async function loadTrack(
     startPoints,
     collisionAsset,
     dynamicObjects,
-    contactSampler: createTrackFloorSampler(
+    contactSampler: createContactSampler(
+      collisionAsset?.nativeSampler ?? null,
+      collisionAsset?.indexedSampler ?? null,
       collisionAsset?.root ?? trackRoot,
       { includeInvisible: Boolean(collisionAsset?.root) },
     ),
@@ -324,6 +332,57 @@ export function createTrackFloorSampler(trackRoot, options = {}) {
   };
 }
 
+function createContactSampler(nativeSampler, indexedSampler, fallbackRoot, fallbackOptions) {
+  const fallbackSampler = createTrackFloorSampler(fallbackRoot, fallbackOptions);
+
+  if (!nativeSampler && !indexedSampler) {
+    return fallbackSampler;
+  }
+
+  return {
+    sample(worldPosition, options = {}) {
+      return (
+        fallbackSampler.sample(worldPosition, options) ??
+        nativeSampler?.sample(worldPosition, options) ??
+        null
+      );
+    },
+    raycast(origin, direction, options = {}) {
+      if (options.preferIndexed) {
+        return indexedSampler?.raycast(origin, direction, options) ?? null;
+      }
+
+      const isGroundRay =
+        direction &&
+        direction.lengthSq() > 1e-8 &&
+        FORWARD.copy(direction).normalize().dot(DOWN) > 0.72;
+
+      if (isGroundRay) {
+        return (
+          fallbackSampler.raycast(origin, direction, options) ??
+          nativeSampler?.raycast(origin, direction, options)
+        );
+      }
+
+      return nativeSampler?.raycast(origin, direction, options) ?? null;
+    },
+    queryObbContacts(center, axes, halfExtents, options = {}) {
+      if (options.preferIndexed) {
+        return (
+          indexedSampler?.queryObbContacts(center, axes, halfExtents, options) ??
+          []
+        );
+      }
+
+      return (
+        nativeSampler?.queryObbContacts(center, axes, halfExtents, options) ??
+        indexedSampler?.queryObbContacts(center, axes, halfExtents, options) ??
+        []
+      );
+    },
+  };
+}
+
 function buildTrackSamplerSpatialIndex(meshes, gridSize) {
   if (meshes.length < 8 || !Number.isFinite(gridSize) || gridSize <= 0) {
     return null;
@@ -447,19 +506,26 @@ function prepareCollisionDebugVisuals(root) {
   });
 }
 
-async function loadCollisionAsset(collisionModelUrl, collisionMetaUrl) {
-  if (!collisionModelUrl) {
+async function loadCollisionAsset(collisionModelUrl, collisionMetaUrl, collisionCdb2Url) {
+  if (!collisionModelUrl && !collisionCdb2Url) {
     return null;
   }
 
-  const [root, meta] = await Promise.all([
-    loadGltf(collisionModelUrl),
+  const [root, meta, nativeSampler] = await Promise.all([
+    collisionModelUrl ? loadGltf(collisionModelUrl) : Promise.resolve(null),
     loadJsonIfPresent(collisionMetaUrl),
+    loadNativeTrackCollision(collisionCdb2Url),
   ]);
+  const indexedSampler = createIndexedTriangleCollisionSampler(
+    meta?.mesh ?? null,
+    "collision-meta",
+  );
 
   return {
     root,
     meta,
+    nativeSampler,
+    indexedSampler,
   };
 }
 

@@ -372,3 +372,50 @@ Practical conclusion:
 
 - For driving feel, a full collision-engine port is not the immediate blocker. The highest-value collision step is native-style wheel ground contact records: point, normal, compression, material/profile pointer, and load inputs.
 - For exact cones/walls/movable props, there is still substantial decompilation and implementation work. The ROMU/reference source helps as an index, but the current repo does not appear to contain a ready C++ port of the contact manifold/island solver that can be directly translated.
+
+## Collision Versus Destruction Split 2026-06-09
+
+Focused note: `ghidra_findings/COLLISION_AND_DESTRUCTION_SPLIT_2026-06-09.md`.
+
+Additional Ghidra pass confirmed the collision/destruction boundary:
+
+- `PhysicsWorld_GenerateContactManifolds` @ `0x005692b0` is the contact generation stage.
+- `PhysicsWorld_AppendContactConstraint` @ `0x0056a850` appends generated contacts into the world contact graph.
+- `CollisionSpatial_GenerateBodyTriangleContacts` @ `0x00570040` produces active body-vs-static triangle contacts from authored BVH/CDB data.
+- `Vehicle_FlushQueuedCollisionRecords` @ `0x00426550`, `Vehicle_ProcessCollisionDamageStep` @ `0x004293c0`, and `Vehicle_ApplyCollisionDamageAndDeformation` @ `0x00426670` are damage/deformation consumers of queued collision records.
+- `DynamicObject_InitializeFromLua` @ `0x00590fd0` reads both collision/runtime fields and destruction/effect fields.
+- `DynamicObject_DispatchDestroyAndEmitterFx` @ `0x00591cb0` is destruction/effects dispatch, not baseline collision resolution.
+
+Implementation strategy update:
+
+- Do not implement cones/walls by mixing damage/destruction behavior into the first collision pass.
+- First port data-driven collision body volumes, static triangle contacts, dynamic-object mass/restitution/category/inertia, activation/live-set behavior, and contact response.
+- Add vehicle deformation, panel breakage, destroy FX, emitter FX, and explosion force only after baseline collision response is stable.
+
+## No-Assumptions Collision Port Gate 2026-06-09
+
+Focused note: `ghidra_findings/COLLISION_PORT_DATA_GAPS_2026-06-09.md`.
+
+Current answer after the follow-up pass: the repo/Ghidra state is now sufficient to design an assumption-free native static collision path for wheel queries, active body-vs-static triangle contacts, vehicle body volumes, generated contacts, contact nodes, and per-contact solving. It is still not sufficient for a full original dynamic prop/cone/barrier implementation because dynamic-object body setup, broadphase live-set activation, material table loading, and callback/threshold structs need more field-level recovery.
+
+Confirmed additional anchors:
+
+- `CollisionSpatial_ClipTriangleAgainstBodyBoxContact` @ `0x00571080` emits the `0x38` body-vs-static contact record.
+- `CollisionMath_ComputeTriangleBoxPenetrationDepth` @ `0x00570910` computes the exact triangle-vs-box depth used by that contact generator.
+- `CollisionCdb2_ExpandLeafCommands` @ `0x0056d3d0` expands native `track_cdb2.gen` leaf command headers into `0x10` triangle candidates.
+- `CollisionCdb2_DecodeTriangles_Mode0..5` @ `0x0056ce10`, `0x0056cfa0`, `0x0056d120`, `0x0056d1c0`, `0x0056d250`, and `0x0056d330` are the recovered CDB2 payload decoder modes.
+- `PhysicsWorld_InitializeContactPoolsAndDefaults` @ `0x00565a10` initializes the `0x400` contact-node pool at `world+0xf720`, stride `0x44`, and installs contact vtable `0x0067bc0c`.
+- `ContactConstraint_GetSolverRowCount` @ `0x0056f2b0`, `ContactConstraint_FillSolverRowsAndBounds` @ `0x0056f2d0`, and `ContactConstraint_ResetNodeLinks` @ `0x00565220` are the contact vtable methods.
+- `PhysicsSolver_SolveContactConstraint` @ `0x00572fb0` is now confirmed as the per-contact projected bounded solver.
+- Solver matrix/Jacobian helpers now have conservative labels at `0x00572420`, `0x005725b0`, `0x00572850`, `0x00574a50`, `0x00572da0`, `0x00572e60`, `0x005720a0`, and `0x00572250`.
+- `Vehicle_LoadCollisionPanelsAndCrashConfig` @ `0x00431b50` consumes `CollisionFull*`, `CollisionBottom*`, and `CollisionTop*`; the current web full-box-only body bounds are not native-complete.
+
+Still required before full dynamic prop implementation:
+
+- dynamic object body/shape construction from template/config data
+- broadphase pair filtering and active/live-set transitions
+- final labels for contact node flags `0x10/0x20`
+- final callback/threshold struct at contact node `+0x34` and helper `FUN_00564a60`
+- full material table loader mapping for the consumed `0x14` material records
+
+Implementation implication: native static collision should now be ported from raw `track_bvh.gen` / `track_cdb2.gen`, not from render-mesh material heuristics or the current W32/BVH surface subset metadata. Cones and other movable props should wait for the dynamic-object body and activation passes.

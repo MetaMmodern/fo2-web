@@ -33,6 +33,8 @@ const webtestTrack = {
   log: null,
   collisionModel: null,
   collisionMeta: null,
+  collisionBvh: null,
+  collisionCdb2: null,
   startPoints: null,
   lightmap: null,
   trackTextures: {},

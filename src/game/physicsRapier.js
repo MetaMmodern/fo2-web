@@ -348,6 +348,7 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
     driveForceScale: clamp(readProfileScalar(car.MassFudgeFactor, 1), 0.6, 1.6),
     bodyHalfExtents: bounds.halfExtents,
     bodyOffset: bounds.offset,
+    bodyCollisionVolumes: bounds.volumes,
     wheelbase: wheelMetrics.wheelbase,
     trackWidth: wheelMetrics.trackWidth,
     frontTraction,
@@ -507,25 +508,63 @@ function buildRapierVehicleConfig(rawConfig, carRoot) {
 }
 
 function resolveBodyBounds(bodyCollision, carRoot) {
-  const minArray = bodyCollision.collisionFullMin;
-  const maxArray = bodyCollision.collisionFullMax;
+  const fullVolume = resolveCollisionVolume(
+    bodyCollision.collisionFullMin,
+    bodyCollision.collisionFullMax,
+    new THREE.Vector3(0.3, 0.2, 0.6),
+  );
 
-  if (Array.isArray(minArray) && Array.isArray(maxArray)) {
-    const min = new THREE.Vector3().fromArray(minArray);
-    const max = new THREE.Vector3().fromArray(maxArray);
+  if (fullVolume) {
+    const bottomVolume = resolveCollisionVolume(
+      bodyCollision.collisionBottomMin,
+      bodyCollision.collisionBottomMax,
+      new THREE.Vector3(0.3, 0.12, 0.6),
+    );
+    const topVolume = resolveCollisionVolume(
+      bodyCollision.collisionTopMin,
+      bodyCollision.collisionTopMax,
+      new THREE.Vector3(0.3, 0.12, 0.6),
+    );
 
     return {
-      halfExtents: max.clone().sub(min).multiplyScalar(0.5).max(new THREE.Vector3(0.3, 0.2, 0.6)),
-      offset: min.clone().add(max).multiplyScalar(0.5),
+      halfExtents: fullVolume.halfExtents,
+      offset: fullVolume.offset,
+      volumes: {
+        full: fullVolume,
+        bottom: bottomVolume ?? fullVolume,
+        top: topVolume ?? fullVolume,
+      },
     };
   }
 
   const box = new THREE.Box3().setFromObject(carRoot);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3()).sub(carRoot.position);
+  const halfExtents = size.multiplyScalar(0.5).max(new THREE.Vector3(0.3, 0.2, 0.6));
   return {
-    halfExtents: size.multiplyScalar(0.5).max(new THREE.Vector3(0.3, 0.2, 0.6)),
+    halfExtents,
     offset: center,
+    volumes: {
+      full: {
+        halfExtents: halfExtents.clone(),
+        offset: center.clone(),
+      },
+      bottom: null,
+      top: null,
+    },
+  };
+}
+
+function resolveCollisionVolume(minArray, maxArray, minHalfExtents) {
+  if (!Array.isArray(minArray) || !Array.isArray(maxArray)) {
+    return null;
+  }
+
+  const min = new THREE.Vector3().fromArray(minArray);
+  const max = new THREE.Vector3().fromArray(maxArray);
+  return {
+    halfExtents: max.clone().sub(min).multiplyScalar(0.5).max(minHalfExtents),
+    offset: min.clone().add(max).multiplyScalar(0.5),
   };
 }
 

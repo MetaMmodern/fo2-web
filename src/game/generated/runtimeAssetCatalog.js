@@ -220,729 +220,741 @@ import asset215 from "url:../../data/global/flares/day_flares.png";
 import asset216 from "url:../../data/global/skybox/arena_day_u.png";
 import asset217 from "url:../../data/tracks/arena/arena1/a/geometry/collision.glb";
 import asset218 from "../../data/tracks/arena/arena1/a/geometry/collision.meta.json";
-import asset219 from "url:../../data/tracks/arena/arena1/a/geometry/track_geom_out.glb";
-import asset220 from "url:../../data/tracks/arena/arena1/a/geometry/track_geom_log.txt";
-import asset221 from "url:../../data/tracks/arena/arena1/a/data/startpoints.bed";
-import asset222 from "url:../../data/tracks/arena/arena1/a/lighting/lightmap1_w2.png";
-import asset223 from "url:../../data/tracks/city/textures/adverts.png";
-import asset224 from "url:../../data/tracks/city/textures/advetisement_b.png";
-import asset225 from "url:../../data/tracks/city/textures/alpha_bushbranch.png";
-import asset226 from "url:../../data/tracks/city/textures/alpha_bushlod.png";
-import asset227 from "url:../../data/tracks/city/textures/alpha_bushsprite.png";
-import asset228 from "url:../../data/tracks/city/textures/alpha_cs_fence.png";
-import asset229 from "url:../../data/tracks/city/textures/alpha_dynamic.png";
-import asset230 from "url:../../data/tracks/city/textures/alpha_dynwindows.png";
-import asset231 from "url:../../data/tracks/city/textures/alpha_forestwall.png";
-import asset232 from "url:../../data/tracks/city/textures/alpha_gaffiti_a.png";
-import asset233 from "url:../../data/tracks/city/textures/alpha_houseplant_a.png";
-import asset234 from "url:../../data/tracks/city/textures/alpha_parkfence.png";
-import asset235 from "url:../../data/tracks/city/textures/alpha_plantbox1_02.png";
-import asset236 from "url:../../data/tracks/city/textures/alpha_shop_fence.png";
-import asset237 from "url:../../data/tracks/city/textures/alpha_traffic_line.png";
-import asset238 from "url:../../data/tracks/city/textures/alpha_treebranch.png";
-import asset239 from "url:../../data/tracks/city/textures/alpha_treelod.png";
-import asset240 from "url:../../data/tracks/city/textures/alpha_treesprite.png";
-import asset241 from "url:../../data/tracks/city/textures/alpha_windows.png";
-import asset242 from "url:../../data/tracks/city/textures/alpha_windowshader.png";
-import asset243 from "url:../../data/tracks/city/textures/alpha_wirefence_c.png";
-import asset244 from "url:../../data/tracks/city/textures/alpha_wirefence_d.png";
-import asset245 from "url:../../data/tracks/city/textures/barrels.png";
-import asset246 from "url:../../data/tracks/city/textures/beam.png";
-import asset247 from "url:../../data/tracks/city/textures/bigcrane_alpha.png";
-import asset248 from "url:../../data/tracks/city/textures/bigcrane_details.png";
-import asset249 from "url:../../data/tracks/city/textures/bistro.png";
-import asset250 from "url:../../data/tracks/city/textures/block_fence_b.png";
-import asset251 from "url:../../data/tracks/city/textures/cableroll_cable.png";
-import asset252 from "url:../../data/tracks/city/textures/cableroll_wood.png";
-import asset253 from "url:../../data/tracks/city/textures/cardboard_box.png";
-import asset254 from "url:../../data/tracks/city/textures/cargo_container.png";
-import asset255 from "url:../../data/tracks/city/textures/cargotruck.png";
-import asset256 from "url:../../data/tracks/city/textures/carthreeb.png";
-import asset257 from "url:../../data/tracks/city/textures/carthreec.png";
-import asset258 from "url:../../data/tracks/city/textures/cementmixer.png";
-import asset259 from "url:../../data/tracks/city/textures/city1_mall_walls.png";
-import asset260 from "url:../../data/tracks/city/textures/cityhall_stairs.png";
-import asset261 from "url:../../data/tracks/city/textures/cityhall_stone.png";
-import asset262 from "url:../../data/tracks/city/textures/cityharlembuildings_balcony.png";
-import asset263 from "url:../../data/tracks/city/textures/cityharlembuildings_wallsb.png";
-import asset264 from "url:../../data/tracks/city/textures/cityhospital_details.png";
-import asset265 from "url:../../data/tracks/city/textures/cityindustrialbuildinga_objects.png";
-import asset266 from "url:../../data/tracks/city/textures/citymetaltrashcanb.png";
-import asset267 from "url:../../data/tracks/city/textures/concrete_b.png";
-import asset268 from "url:../../data/tracks/city/textures/cone.png";
-import asset269 from "url:../../data/tracks/city/textures/construction_pipes.png";
-import asset270 from "url:../../data/tracks/city/textures/constructiontoilet.png";
-import asset271 from "url:../../data/tracks/city/textures/dm_terrain_grass.png";
-import asset272 from "url:../../data/tracks/city/textures/dm_terrain_grasslane.png";
-import asset273 from "url:../../data/tracks/city/textures/drinkvending.png";
-import asset274 from "url:../../data/tracks/city/textures/dumpsters.png";
-import asset275 from "url:../../data/tracks/city/textures/excavator.png";
-import asset276 from "url:../../data/tracks/city/textures/exittunnel.png";
-import asset277 from "url:../../data/tracks/city/textures/firestation_details.png";
-import asset278 from "url:../../data/tracks/city/textures/firestation_wallsa.png";
-import asset279 from "url:../../data/tracks/city/textures/firetruck.png";
-import asset280 from "url:../../data/tracks/city/textures/flap_with_light.png";
-import asset281 from "url:../../data/tracks/city/textures/forklifter_texture.png";
-import asset282 from "url:../../data/tracks/city/textures/freeway_wall.png";
-import asset283 from "url:../../data/tracks/city/textures/garbagetruck.png";
-import asset284 from "url:../../data/tracks/city/textures/gas_station_a.png";
-import asset285 from "url:../../data/tracks/city/textures/gasstation_detail.png";
-import asset286 from "url:../../data/tracks/city/textures/gasstation_pumps.png";
-import asset287 from "url:../../data/tracks/city/textures/gasstation_sign.png";
-import asset288 from "url:../../data/tracks/city/textures/gasstation_sign2.png";
-import asset289 from "url:../../data/tracks/city/textures/generic_metal_red.png";
-import asset290 from "url:../../data/tracks/city/textures/generic_wood1.png";
-import asset291 from "url:../../data/tracks/city/textures/granite.png";
-import asset292 from "url:../../data/tracks/city/textures/groundfloor1.png";
-import asset293 from "url:../../data/tracks/city/textures/groundfloor2.png";
-import asset294 from "url:../../data/tracks/city/textures/groundfloor3.png";
-import asset295 from "url:../../data/tracks/city/textures/highway_bottom.png";
-import asset296 from "url:../../data/tracks/city/textures/highway_lamps.png";
-import asset297 from "url:../../data/tracks/city/textures/highway_pillars.png";
-import asset298 from "url:../../data/tracks/city/textures/highway_signs.png";
-import asset299 from "url:../../data/tracks/city/textures/highway_wedge.png";
-import asset300 from "url:../../data/tracks/city/textures/largedebriscontainer.png";
-import asset301 from "url:../../data/tracks/city/textures/ledarrowboard.png";
-import asset302 from "url:../../data/tracks/city/textures/light_arrows.png";
-import asset303 from "url:../../data/tracks/city/textures/lightpoles_shared.png";
-import asset304 from "url:../../data/tracks/city/textures/mall_ceiling2.png";
-import asset305 from "url:../../data/tracks/city/textures/mall_dynamcs.png";
-import asset306 from "url:../../data/tracks/city/textures/mall_metalgrille_b.png";
-import asset307 from "url:../../data/tracks/city/textures/mall_shops_b.png";
-import asset308 from "url:../../data/tracks/city/textures/mall_shops_inside.png";
-import asset309 from "url:../../data/tracks/city/textures/mall_signs.png";
-import asset310 from "url:../../data/tracks/city/textures/mall_signs_b.png";
-import asset311 from "url:../../data/tracks/city/textures/mall_structures.png";
-import asset312 from "url:../../data/tracks/city/textures/mall_upperlevelshops.png";
-import asset313 from "url:../../data/tracks/city/textures/mall_wall_a.png";
-import asset314 from "url:../../data/tracks/city/textures/metalworks.png";
-import asset315 from "url:../../data/tracks/city/textures/nearwall.png";
-import asset316 from "url:../../data/tracks/city/textures/newspaper_stand.png";
-import asset317 from "url:../../data/tracks/city/textures/obj_parkfountain.png";
-import asset318 from "url:../../data/tracks/city/textures/open_trench_sign.png";
-import asset319 from "url:../../data/tracks/city/textures/paperstack.png";
-import asset320 from "url:../../data/tracks/city/textures/parkbench.png";
-import asset321 from "url:../../data/tracks/city/textures/parkingbuilding_detail.png";
-import asset322 from "url:../../data/tracks/city/textures/parkmeter.png";
-import asset323 from "url:../../data/tracks/city/textures/parkwall.png";
-import asset324 from "url:../../data/tracks/city/textures/plantbox1_02.png";
-import asset325 from "url:../../data/tracks/city/textures/plastered wall_grey_128x128.png";
-import asset326 from "url:../../data/tracks/city/textures/platform_door.png";
-import asset327 from "url:../../data/tracks/city/textures/platform_walls.png";
-import asset328 from "url:../../data/tracks/city/textures/postbox.png";
-import asset329 from "url:../../data/tracks/city/textures/pressurewasher.png";
-import asset330 from "url:../../data/tracks/city/textures/propane_tank.png";
-import asset331 from "url:../../data/tracks/city/textures/rac_car_five.png";
-import asset332 from "url:../../data/tracks/city/textures/rac_wooden_box_a.png";
-import asset333 from "url:../../data/tracks/city/textures/rac_wooden_box_big_crate.png";
-import asset334 from "url:../../data/tracks/city/textures/railing.png";
-import asset335 from "url:../../data/tracks/city/textures/restaurant_counter.png";
-import asset336 from "url:../../data/tracks/city/textures/restaurant_miscstuff.png";
-import asset337 from "url:../../data/tracks/city/textures/restaurant_saladbar.png";
-import asset338 from "url:../../data/tracks/city/textures/restaurant_signs.png";
-import asset339 from "url:../../data/tracks/city/textures/roadsign_1.png";
-import asset340 from "url:../../data/tracks/city/textures/roller.png";
-import asset341 from "url:../../data/tracks/city/textures/roof.png";
-import asset342 from "url:../../data/tracks/city/textures/scaffolds_high.png";
-import asset343 from "url:../../data/tracks/city/textures/scissorlift_alpha.png";
-import asset344 from "url:../../data/tracks/city/textures/scissorlift_details.png";
-import asset345 from "url:../../data/tracks/city/textures/sdm_mall_floor.png";
-import asset346 from "url:../../data/tracks/city/textures/sdm_road_mud_tile.png";
-import asset347 from "url:../../data/tracks/city/textures/sdm_road_tarmac.png";
-import asset348 from "url:../../data/tracks/city/textures/sdm_road_tarmac_tile.png";
-import asset349 from "url:../../data/tracks/city/textures/sdm_side_city.png";
-import asset350 from "url:../../data/tracks/city/textures/sdm_side_tarmac.png";
-import asset351 from "url:../../data/tracks/city/textures/sdm_sidewalktile.png";
-import asset352 from "url:../../data/tracks/city/textures/sheetmetal_truckterminal.png";
-import asset353 from "url:../../data/tracks/city/textures/sheetmetalfence.png";
-import asset354 from "url:../../data/tracks/city/textures/shop_a_wall.png";
-import asset355 from "url:../../data/tracks/city/textures/shopdetail.png";
-import asset356 from "url:../../data/tracks/city/textures/shoppingcart.png";
-import asset357 from "url:../../data/tracks/city/textures/shopwindow_inside.png";
-import asset358 from "url:../../data/tracks/city/textures/signs.png";
-import asset359 from "url:../../data/tracks/city/textures/sm_building_classic_ai.png";
-import asset360 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding.png";
-import asset361 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding_02.png";
-import asset362 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding_04.png";
-import asset363 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingeight_walls.png";
-import asset364 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingfive_walls.png";
-import asset365 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingfour_walls.png";
-import asset366 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingthree_walls.png";
-import asset367 from "url:../../data/tracks/city/textures/sm_cityharlembuildinga_wallsa.png";
-import asset368 from "url:../../data/tracks/city/textures/sm_cityharlembuildingb_wallsa.png";
-import asset369 from "url:../../data/tracks/city/textures/sm_cityharlembuildingd_wallsa.png";
-import asset370 from "url:../../data/tracks/city/textures/sm_cityindustrialbuildinga_walls.png";
-import asset371 from "url:../../data/tracks/city/textures/sm_cityindustrialbuildingc_walls.png";
-import asset372 from "url:../../data/tracks/city/textures/sm_citymodernbuildinga_walls.png";
-import asset373 from "url:../../data/tracks/city/textures/sm_citymodernbuildingd_walls.png";
-import asset374 from "url:../../data/tracks/city/textures/sm_citymodernbuildingh_walls.png";
-import asset375 from "url:../../data/tracks/city/textures/sm_cityofficebuildingc_walls.png";
-import asset376 from "url:../../data/tracks/city/textures/sm_cityofficebuildinge_walls.png";
-import asset377 from "url:../../data/tracks/city/textures/sm_cityskyscraperbuildingc_walls.png";
-import asset378 from "url:../../data/tracks/city/textures/sm_cityskyscraperbuildingd_walls.png";
-import asset379 from "url:../../data/tracks/city/textures/sm_distant_buildings.png";
-import asset380 from "url:../../data/tracks/city/textures/sm_residential_building.png";
-import asset381 from "url:../../data/tracks/city/textures/sm_shop_a.png";
-import asset382 from "url:../../data/tracks/city/textures/sm_shop_a_wall_windowed.png";
-import asset383 from "url:../../data/tracks/city/textures/startfinishsign.png";
-import asset384 from "url:../../data/tracks/city/textures/stonewall.png";
-import asset385 from "url:../../data/tracks/city/textures/street_lamp_adverts.png";
-import asset386 from "url:../../data/tracks/city/textures/styroxandstuffboxesc.png";
-import asset387 from "url:../../data/tracks/city/textures/tarmac_tile_128x128.png";
-import asset388 from "url:../../data/tracks/city/textures/ticket_booth.png";
-import asset389 from "url:../../data/tracks/city/textures/tool_box.png";
-import asset390 from "url:../../data/tracks/city/textures/traffic_light.png";
-import asset391 from "url:../../data/tracks/city/textures/trailers.png";
-import asset392 from "url:../../data/tracks/city/textures/trashbin.png";
-import asset393 from "url:../../data/tracks/city/textures/trashcansmallplastic.png";
-import asset394 from "url:../../data/tracks/city/textures/treetrunk.png";
-import asset395 from "url:../../data/tracks/city/textures/truckterminal.png";
-import asset396 from "url:../../data/tracks/city/textures/truckterminal_dynobjects.png";
-import asset397 from "url:../../data/tracks/city/textures/truckterminal_posts.png";
-import asset398 from "url:../../data/tracks/city/textures/tunnel_ceilingfan.png";
-import asset399 from "url:../../data/tracks/city/textures/tunnel_piping.png";
-import asset400 from "url:../../data/tracks/city/textures/undergroundparking_detail.png";
-import asset401 from "url:../../data/tracks/city/textures/undergroundparking_wall_tile.png";
-import asset402 from "url:../../data/tracks/city/textures/undergroundparking_walls.png";
-import asset403 from "url:../../data/tracks/city/textures/undergrparking_hallwall2.png";
-import asset404 from "url:../../data/tracks/city/textures/van_texporter.png";
-import asset405 from "url:../../data/tracks/city/textures/warehouse_building.png";
-import asset406 from "url:../../data/tracks/city/textures/warehouse_building_b.png";
-import asset407 from "url:../../data/tracks/city/textures/warehouse_c.png";
-import asset408 from "url:../../data/tracks/city/textures/warninglight.png";
-import asset409 from "url:../../data/tracks/city/textures/wheelbarrow.png";
-import asset410 from "url:../../data/tracks/city/textures/wooden_roadblock.png";
-import asset411 from "url:../../data/tracks/city/city1/a/data/atmosphere.ini";
-import asset412 from "url:../../data/global/atmosphere/grey.ini";
-import asset413 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
-import asset414 from "url:../../data/global/atmosphere/grey_clouds_top.png";
-import asset415 from "url:../../data/tracks/city/textures/city_background.png";
-import asset416 from "url:../../data/global/filters/cityday_add.tga";
-import asset417 from "url:../../data/global/filters/cityday_sub.tga";
-import asset418 from "url:../../data/global/flares/day.ini";
-import asset419 from "url:../../data/global/flares/day_glow.png";
-import asset420 from "url:../../data/global/flares/day_flares.png";
-import asset421 from "url:../../data/tracks/city/city1/a/geometry/collision.glb";
-import asset422 from "../../data/tracks/city/city1/a/geometry/collision.meta.json";
-import asset423 from "url:../../data/tracks/city/city1/a/geometry/track_geom_out.glb";
-import asset424 from "url:../../data/tracks/city/city1/a/geometry/track_geom_log.txt";
-import asset425 from "url:../../data/tracks/city/city1/a/data/startpoints.bed";
-import asset426 from "url:../../data/tracks/city/city1/a/lighting/lightmap1_w2.png";
-import asset427 from "url:../../data/tracks/city/textures/adverts.png";
-import asset428 from "url:../../data/tracks/city/textures/advetisement_b.png";
-import asset429 from "url:../../data/tracks/city/textures/alpha_bushbranch.png";
-import asset430 from "url:../../data/tracks/city/textures/alpha_bushlod.png";
-import asset431 from "url:../../data/tracks/city/textures/alpha_bushsprite.png";
-import asset432 from "url:../../data/tracks/city/textures/alpha_cs_fence.png";
-import asset433 from "url:../../data/tracks/city/textures/alpha_dynamic.png";
-import asset434 from "url:../../data/tracks/city/textures/alpha_dynwindows.png";
-import asset435 from "url:../../data/tracks/city/textures/alpha_forestwall.png";
-import asset436 from "url:../../data/tracks/city/textures/alpha_gaffiti_a.png";
-import asset437 from "url:../../data/tracks/city/textures/alpha_houseplant_a.png";
-import asset438 from "url:../../data/tracks/city/textures/alpha_parkfence.png";
-import asset439 from "url:../../data/tracks/city/textures/alpha_plantbox1_02.png";
-import asset440 from "url:../../data/tracks/city/textures/alpha_shop_fence.png";
-import asset441 from "url:../../data/tracks/city/textures/alpha_traffic_line.png";
-import asset442 from "url:../../data/tracks/city/textures/alpha_treebranch.png";
-import asset443 from "url:../../data/tracks/city/textures/alpha_treelod.png";
-import asset444 from "url:../../data/tracks/city/textures/alpha_treesprite.png";
-import asset445 from "url:../../data/tracks/city/textures/alpha_windows.png";
-import asset446 from "url:../../data/tracks/city/textures/alpha_windowshader.png";
-import asset447 from "url:../../data/tracks/city/textures/alpha_wirefence_c.png";
-import asset448 from "url:../../data/tracks/city/textures/alpha_wirefence_d.png";
-import asset449 from "url:../../data/tracks/city/textures/barrels.png";
-import asset450 from "url:../../data/tracks/city/textures/beam.png";
-import asset451 from "url:../../data/tracks/city/textures/bigcrane_alpha.png";
-import asset452 from "url:../../data/tracks/city/textures/bigcrane_details.png";
-import asset453 from "url:../../data/tracks/city/textures/bistro.png";
-import asset454 from "url:../../data/tracks/city/textures/block_fence_b.png";
-import asset455 from "url:../../data/tracks/city/textures/cableroll_cable.png";
-import asset456 from "url:../../data/tracks/city/textures/cableroll_wood.png";
-import asset457 from "url:../../data/tracks/city/textures/cardboard_box.png";
-import asset458 from "url:../../data/tracks/city/textures/cargo_container.png";
-import asset459 from "url:../../data/tracks/city/textures/cargotruck.png";
-import asset460 from "url:../../data/tracks/city/textures/carthreeb.png";
-import asset461 from "url:../../data/tracks/city/textures/carthreec.png";
-import asset462 from "url:../../data/tracks/city/textures/cementmixer.png";
-import asset463 from "url:../../data/tracks/city/textures/city1_mall_walls.png";
-import asset464 from "url:../../data/tracks/city/textures/cityhall_stairs.png";
-import asset465 from "url:../../data/tracks/city/textures/cityhall_stone.png";
-import asset466 from "url:../../data/tracks/city/textures/cityharlembuildings_balcony.png";
-import asset467 from "url:../../data/tracks/city/textures/cityharlembuildings_wallsb.png";
-import asset468 from "url:../../data/tracks/city/textures/cityhospital_details.png";
-import asset469 from "url:../../data/tracks/city/textures/cityindustrialbuildinga_objects.png";
-import asset470 from "url:../../data/tracks/city/textures/citymetaltrashcanb.png";
-import asset471 from "url:../../data/tracks/city/textures/concrete_b.png";
-import asset472 from "url:../../data/tracks/city/textures/cone.png";
-import asset473 from "url:../../data/tracks/city/textures/construction_pipes.png";
-import asset474 from "url:../../data/tracks/city/textures/constructiontoilet.png";
-import asset475 from "url:../../data/tracks/city/textures/dm_terrain_grass.png";
-import asset476 from "url:../../data/tracks/city/textures/dm_terrain_grasslane.png";
-import asset477 from "url:../../data/tracks/city/textures/drinkvending.png";
-import asset478 from "url:../../data/tracks/city/textures/dumpsters.png";
-import asset479 from "url:../../data/tracks/city/textures/excavator.png";
-import asset480 from "url:../../data/tracks/city/textures/exittunnel.png";
-import asset481 from "url:../../data/tracks/city/textures/firestation_details.png";
-import asset482 from "url:../../data/tracks/city/textures/firestation_wallsa.png";
-import asset483 from "url:../../data/tracks/city/textures/firetruck.png";
-import asset484 from "url:../../data/tracks/city/textures/flap_with_light.png";
-import asset485 from "url:../../data/tracks/city/textures/forklifter_texture.png";
-import asset486 from "url:../../data/tracks/city/textures/freeway_wall.png";
-import asset487 from "url:../../data/tracks/city/textures/gasstation_detail.png";
-import asset488 from "url:../../data/tracks/city/textures/gasstation_pumps.png";
-import asset489 from "url:../../data/tracks/city/textures/generic_metal_red.png";
-import asset490 from "url:../../data/tracks/city/textures/generic_wood1.png";
-import asset491 from "url:../../data/tracks/city/textures/granite.png";
-import asset492 from "url:../../data/tracks/city/textures/groundfloor1.png";
-import asset493 from "url:../../data/tracks/city/textures/groundfloor2.png";
-import asset494 from "url:../../data/tracks/city/textures/groundfloor3.png";
-import asset495 from "url:../../data/tracks/city/textures/highway_bottom.png";
-import asset496 from "url:../../data/tracks/city/textures/highway_lamps.png";
-import asset497 from "url:../../data/tracks/city/textures/highway_pillars.png";
-import asset498 from "url:../../data/tracks/city/textures/highway_signs.png";
-import asset499 from "url:../../data/tracks/city/textures/highway_wedge.png";
-import asset500 from "url:../../data/tracks/city/textures/largedebriscontainer.png";
-import asset501 from "url:../../data/tracks/city/textures/ledarrowboard.png";
-import asset502 from "url:../../data/tracks/city/textures/light_arrows.png";
-import asset503 from "url:../../data/tracks/city/textures/lightpoles_shared.png";
-import asset504 from "url:../../data/tracks/city/textures/mall_ceiling2.png";
-import asset505 from "url:../../data/tracks/city/textures/mall_dynamcs.png";
-import asset506 from "url:../../data/tracks/city/textures/mall_shops_b.png";
-import asset507 from "url:../../data/tracks/city/textures/mall_shops_inside.png";
-import asset508 from "url:../../data/tracks/city/textures/mall_signs.png";
-import asset509 from "url:../../data/tracks/city/textures/mall_signs_b.png";
-import asset510 from "url:../../data/tracks/city/textures/mall_structures.png";
-import asset511 from "url:../../data/tracks/city/textures/mall_upperlevelshops.png";
-import asset512 from "url:../../data/tracks/city/textures/mall_wall_a.png";
-import asset513 from "url:../../data/tracks/city/textures/metalworks.png";
-import asset514 from "url:../../data/tracks/city/textures/nearwall.png";
-import asset515 from "url:../../data/tracks/city/textures/newspaper_stand.png";
-import asset516 from "url:../../data/tracks/city/textures/open_trench_sign.png";
-import asset517 from "url:../../data/tracks/city/textures/paperstack.png";
-import asset518 from "url:../../data/tracks/city/textures/parkbench.png";
-import asset519 from "url:../../data/tracks/city/textures/parkingbuilding_detail.png";
-import asset520 from "url:../../data/tracks/city/textures/parkmeter.png";
-import asset521 from "url:../../data/tracks/city/textures/parkwall.png";
-import asset522 from "url:../../data/tracks/city/textures/plantbox1_02.png";
-import asset523 from "url:../../data/tracks/city/textures/plastered wall_grey_128x128.png";
-import asset524 from "url:../../data/tracks/city/textures/platform_door.png";
-import asset525 from "url:../../data/tracks/city/textures/platform_walls.png";
-import asset526 from "url:../../data/tracks/city/textures/postbox.png";
-import asset527 from "url:../../data/tracks/city/textures/pressurewasher.png";
-import asset528 from "url:../../data/tracks/city/textures/rac_big_truck_three.png";
-import asset529 from "url:../../data/tracks/city/textures/rac_car_five.png";
-import asset530 from "url:../../data/tracks/city/textures/rac_wooden_box_a.png";
-import asset531 from "url:../../data/tracks/city/textures/rac_wooden_box_big_crate.png";
-import asset532 from "url:../../data/tracks/city/textures/railing.png";
-import asset533 from "url:../../data/tracks/city/textures/restaurant_miscstuff.png";
-import asset534 from "url:../../data/tracks/city/textures/restaurant_saladbar.png";
-import asset535 from "url:../../data/tracks/city/textures/roadsign_1.png";
-import asset536 from "url:../../data/tracks/city/textures/roller.png";
-import asset537 from "url:../../data/tracks/city/textures/roof.png";
-import asset538 from "url:../../data/tracks/city/textures/scaffolds_high.png";
-import asset539 from "url:../../data/tracks/city/textures/scissorlift_alpha.png";
-import asset540 from "url:../../data/tracks/city/textures/scissorlift_details.png";
-import asset541 from "url:../../data/tracks/city/textures/sdm_mall_floor.png";
-import asset542 from "url:../../data/tracks/city/textures/sdm_road_mud_tile.png";
-import asset543 from "url:../../data/tracks/city/textures/sdm_road_tarmac.png";
-import asset544 from "url:../../data/tracks/city/textures/sdm_road_tarmac_tile.png";
-import asset545 from "url:../../data/tracks/city/textures/sdm_side_city.png";
-import asset546 from "url:../../data/tracks/city/textures/sdm_side_tarmac.png";
-import asset547 from "url:../../data/tracks/city/textures/sdm_sidewalktile.png";
-import asset548 from "url:../../data/tracks/city/textures/sheetmetal_truckterminal.png";
-import asset549 from "url:../../data/tracks/city/textures/sheetmetalfence.png";
-import asset550 from "url:../../data/tracks/city/textures/shop_a_wall.png";
-import asset551 from "url:../../data/tracks/city/textures/shopdetail.png";
-import asset552 from "url:../../data/tracks/city/textures/shoppingcart.png";
-import asset553 from "url:../../data/tracks/city/textures/shopwindow_inside.png";
-import asset554 from "url:../../data/tracks/city/textures/signs.png";
-import asset555 from "url:../../data/tracks/city/textures/sm_building_classic_ai.png";
-import asset556 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding.png";
-import asset557 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding_02.png";
-import asset558 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding_04.png";
-import asset559 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingeight_walls.png";
-import asset560 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingfive_walls.png";
-import asset561 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingfour_walls.png";
-import asset562 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingthree_walls.png";
-import asset563 from "url:../../data/tracks/city/textures/sm_cityharlembuildinga_wallsa.png";
-import asset564 from "url:../../data/tracks/city/textures/sm_cityharlembuildingb_wallsa.png";
-import asset565 from "url:../../data/tracks/city/textures/sm_cityharlembuildingd_wallsa.png";
-import asset566 from "url:../../data/tracks/city/textures/sm_cityindustrialbuildinga_walls.png";
-import asset567 from "url:../../data/tracks/city/textures/sm_cityindustrialbuildingc_walls.png";
-import asset568 from "url:../../data/tracks/city/textures/sm_citymodernbuildinga_walls.png";
-import asset569 from "url:../../data/tracks/city/textures/sm_citymodernbuildingd_walls.png";
-import asset570 from "url:../../data/tracks/city/textures/sm_citymodernbuildingh_walls.png";
-import asset571 from "url:../../data/tracks/city/textures/sm_cityofficebuildingc_walls.png";
-import asset572 from "url:../../data/tracks/city/textures/sm_cityofficebuildinge_walls.png";
-import asset573 from "url:../../data/tracks/city/textures/sm_cityskyscraperbuildingc_walls.png";
-import asset574 from "url:../../data/tracks/city/textures/sm_cityskyscraperbuildingd_walls.png";
-import asset575 from "url:../../data/tracks/city/textures/sm_distant_buildings.png";
-import asset576 from "url:../../data/tracks/city/textures/sm_residential_building.png";
-import asset577 from "url:../../data/tracks/city/textures/sm_shop_a.png";
-import asset578 from "url:../../data/tracks/city/textures/sm_shop_a_wall_windowed.png";
-import asset579 from "url:../../data/tracks/city/textures/startfinishsign.png";
-import asset580 from "url:../../data/tracks/city/textures/stonewall.png";
-import asset581 from "url:../../data/tracks/city/textures/street_lamp_adverts.png";
-import asset582 from "url:../../data/tracks/city/textures/styroxandstuffboxesc.png";
-import asset583 from "url:../../data/tracks/city/textures/tarmac_tile_128x128.png";
-import asset584 from "url:../../data/tracks/city/textures/terrain_grass_128x128.png";
-import asset585 from "url:../../data/tracks/city/textures/ticket_booth.png";
-import asset586 from "url:../../data/tracks/city/textures/tool_box.png";
-import asset587 from "url:../../data/tracks/city/textures/traffic_light.png";
-import asset588 from "url:../../data/tracks/city/textures/trailers.png";
-import asset589 from "url:../../data/tracks/city/textures/trashbin.png";
-import asset590 from "url:../../data/tracks/city/textures/trashcansmallplastic.png";
-import asset591 from "url:../../data/tracks/city/textures/treetrunk.png";
-import asset592 from "url:../../data/tracks/city/textures/truckterminal.png";
-import asset593 from "url:../../data/tracks/city/textures/truckterminal_dynobjects.png";
-import asset594 from "url:../../data/tracks/city/textures/truckterminal_posts.png";
-import asset595 from "url:../../data/tracks/city/textures/tunnel_ceilingfan.png";
-import asset596 from "url:../../data/tracks/city/textures/tunnel_piping.png";
-import asset597 from "url:../../data/tracks/city/textures/undergroundparking_detail.png";
-import asset598 from "url:../../data/tracks/city/textures/undergroundparking_wall_tile.png";
-import asset599 from "url:../../data/tracks/city/textures/undergroundparking_walls.png";
-import asset600 from "url:../../data/tracks/city/textures/undergrparking_hallwall2.png";
-import asset601 from "url:../../data/tracks/city/textures/van_texporter.png";
-import asset602 from "url:../../data/tracks/city/textures/warehouse_building.png";
-import asset603 from "url:../../data/tracks/city/textures/warehouse_building_b.png";
-import asset604 from "url:../../data/tracks/city/textures/warehouse_c.png";
-import asset605 from "url:../../data/tracks/city/textures/warninglight.png";
-import asset606 from "url:../../data/tracks/city/textures/wheelbarrow.png";
-import asset607 from "url:../../data/tracks/city/textures/wooden_roadblock.png";
-import asset608 from "url:../../data/tracks/city/city1/b/data/atmosphere.ini";
-import asset609 from "url:../../data/global/atmosphere/grey.ini";
-import asset610 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
-import asset611 from "url:../../data/global/atmosphere/grey_clouds_top.png";
-import asset612 from "url:../../data/tracks/city/textures/city_background_sunset.png";
-import asset613 from "url:../../data/global/filters/citysunset_add.tga";
-import asset614 from "url:../../data/global/filters/citysunset_sub.tga";
-import asset615 from "url:../../data/global/flares/day.ini";
-import asset616 from "url:../../data/global/flares/day_glow.png";
-import asset617 from "url:../../data/global/flares/day_flares.png";
-import asset618 from "url:../../data/tracks/city/city1/b/geometry/collision.glb";
-import asset619 from "../../data/tracks/city/city1/b/geometry/collision.meta.json";
-import asset620 from "url:../../data/tracks/city/city1/b/geometry/track_geom_out.glb";
-import asset621 from "url:../../data/tracks/city/city1/b/geometry/track_geom_log.txt";
-import asset622 from "url:../../data/tracks/city/city1/b/data/startpoints.bed";
-import asset623 from "url:../../data/tracks/city/city1/b/lighting/lightmap1_w2.png";
-import asset624 from "url:../../data/tracks/forest/textures/3_colours_barrel.png";
-import asset625 from "url:../../data/tracks/forest/textures/advetisement_c.png";
-import asset626 from "url:../../data/tracks/forest/textures/advetisement_d.png";
-import asset627 from "url:../../data/tracks/forest/textures/advetisement_e.png";
-import asset628 from "url:../../data/tracks/forest/textures/alpha_bushbranch.png";
-import asset629 from "url:../../data/tracks/forest/textures/alpha_bushlod.png";
-import asset630 from "url:../../data/tracks/forest/textures/alpha_bushsprite.png";
-import asset631 from "url:../../data/tracks/forest/textures/alpha_dynamic.png";
-import asset632 from "url:../../data/tracks/forest/textures/alpha_forestwall.png";
-import asset633 from "url:../../data/tracks/forest/textures/alpha_objects.png";
-import asset634 from "url:../../data/tracks/forest/textures/alpha_traffic_line.png";
-import asset635 from "url:../../data/tracks/forest/textures/alpha_treebranch.png";
-import asset636 from "url:../../data/tracks/forest/textures/alpha_treelod.png";
-import asset637 from "url:../../data/tracks/forest/textures/alpha_treesprite.png";
-import asset638 from "url:../../data/tracks/forest/textures/alpha_windowshader.png";
-import asset639 from "url:../../data/tracks/forest/textures/alpha_wirefence.png";
-import asset640 from "url:../../data/tracks/forest/textures/beam_txt.png";
-import asset641 from "url:../../data/tracks/forest/textures/big_log_txt.png";
-import asset642 from "url:../../data/tracks/forest/textures/block_fence_b.png";
-import asset643 from "url:../../data/tracks/forest/textures/bucket.png";
-import asset644 from "url:../../data/tracks/forest/textures/cableroll.png";
-import asset645 from "url:../../data/tracks/forest/textures/canister_txt_128.png";
-import asset646 from "url:../../data/tracks/forest/textures/cardboard_box.png";
-import asset647 from "url:../../data/tracks/forest/textures/city_advetisement_c.png";
-import asset648 from "url:../../data/tracks/forest/textures/city_lightpoles_shared.png";
-import asset649 from "url:../../data/tracks/forest/textures/coal.png";
-import asset650 from "url:../../data/tracks/forest/textures/cone.png";
-import asset651 from "url:../../data/tracks/forest/textures/constructiontoilet.png";
-import asset652 from "url:../../data/tracks/forest/textures/desertgasstation_roof.png";
-import asset653 from "url:../../data/tracks/forest/textures/desertgasstation_walls.png";
-import asset654 from "url:../../data/tracks/forest/textures/dm_overgrown_road.png";
-import asset655 from "url:../../data/tracks/forest/textures/dm_terrain_forest.png";
-import asset656 from "url:../../data/tracks/forest/textures/dm_traintrack.png";
-import asset657 from "url:../../data/tracks/forest/textures/electric_pole.png";
-import asset658 from "url:../../data/tracks/forest/textures/fallentree_pine.png";
-import asset659 from "url:../../data/tracks/forest/textures/fence_field_a.png";
-import asset660 from "url:../../data/tracks/forest/textures/forest_tractor.png";
-import asset661 from "url:../../data/tracks/forest/textures/forklifter_texture.png";
-import asset662 from "url:../../data/tracks/forest/textures/gasbottle_3colors.png";
-import asset663 from "url:../../data/tracks/forest/textures/gasbottle_cart.png";
-import asset664 from "url:../../data/tracks/forest/textures/gasbottle_chubby.png";
-import asset665 from "url:../../data/tracks/forest/textures/gaspump_txt.png";
-import asset666 from "url:../../data/tracks/forest/textures/generic_metal_red.png";
-import asset667 from "url:../../data/tracks/forest/textures/guardhouse_txt.png";
-import asset668 from "url:../../data/tracks/forest/textures/highway_signs.png";
-import asset669 from "url:../../data/tracks/forest/textures/kallio_2a.png";
-import asset670 from "url:../../data/tracks/forest/textures/kallio_2b.png";
-import asset671 from "url:../../data/tracks/forest/textures/ladder1.png";
-import asset672 from "url:../../data/tracks/forest/textures/ledarrowboard.png";
-import asset673 from "url:../../data/tracks/forest/textures/light_arrows.png";
-import asset674 from "url:../../data/tracks/forest/textures/log_crane.png";
-import asset675 from "url:../../data/tracks/forest/textures/log_truck_texture.png";
-import asset676 from "url:../../data/tracks/forest/textures/logloadertwo.png";
-import asset677 from "url:../../data/tracks/forest/textures/logshed.png";
-import asset678 from "url:../../data/tracks/forest/textures/machineone.png";
-import asset679 from "url:../../data/tracks/forest/textures/metal_bar_c.png";
-import asset680 from "url:../../data/tracks/forest/textures/metal_barrel_plain_txt.png";
-import asset681 from "url:../../data/tracks/forest/textures/metal_bluegrey_rusted.png";
-import asset682 from "url:../../data/tracks/forest/textures/metal_gate.png";
-import asset683 from "url:../../data/tracks/forest/textures/metal_grey.png";
-import asset684 from "url:../../data/tracks/forest/textures/mill_low_logpile_256.png";
-import asset685 from "url:../../data/tracks/forest/textures/mobilebarrack_texture.png";
-import asset686 from "url:../../data/tracks/forest/textures/nascar_stand_concrete.png";
-import asset687 from "url:../../data/tracks/forest/textures/oldtruck.png";
-import asset688 from "url:../../data/tracks/forest/textures/open_trench_sign.png";
-import asset689 from "url:../../data/tracks/forest/textures/plasticchair.png";
-import asset690 from "url:../../data/tracks/forest/textures/plastictable.png";
-import asset691 from "url:../../data/tracks/forest/textures/pressurewasher.png";
-import asset692 from "url:../../data/tracks/forest/textures/roadblock.png";
-import asset693 from "url:../../data/tracks/forest/textures/rock_fence.png";
-import asset694 from "url:../../data/tracks/forest/textures/scaffold_b.png";
-import asset695 from "url:../../data/tracks/forest/textures/scaffolds_high.png";
-import asset696 from "url:../../data/tracks/forest/textures/sdm_road_medium.png";
-import asset697 from "url:../../data/tracks/forest/textures/sdm_road_tarmac.png";
-import asset698 from "url:../../data/tracks/forest/textures/sdm_side_forest.png";
-import asset699 from "url:../../data/tracks/forest/textures/shovel.png";
-import asset700 from "url:../../data/tracks/forest/textures/smallloadingcart.png";
-import asset701 from "url:../../data/tracks/forest/textures/startfinishsign.png";
-import asset702 from "url:../../data/tracks/forest/textures/stone_spotty.png";
-import asset703 from "url:../../data/tracks/forest/textures/styroxandstuffboxesb.png";
-import asset704 from "url:../../data/tracks/forest/textures/styroxandstuffboxesc.png";
-import asset705 from "url:../../data/tracks/forest/textures/tablesaw.png";
-import asset706 from "url:../../data/tracks/forest/textures/trackside_adverts_a.png";
-import asset707 from "url:../../data/tracks/forest/textures/trailer.png";
-import asset708 from "url:../../data/tracks/forest/textures/train_car_log_txt.png";
-import asset709 from "url:../../data/tracks/forest/textures/train_cart_open_txt.png";
-import asset710 from "url:../../data/tracks/forest/textures/trashcancontainer.png";
-import asset711 from "url:../../data/tracks/forest/textures/treetrunk.png";
-import asset712 from "url:../../data/tracks/forest/textures/warninglight.png";
-import asset713 from "url:../../data/tracks/forest/textures/watertank_txt.png";
-import asset714 from "url:../../data/tracks/forest/textures/wood_c.png";
-import asset715 from "url:../../data/tracks/forest/textures/wood_fence.png";
-import asset716 from "url:../../data/tracks/forest/forest1/a/data/atmosphere.ini";
-import asset717 from "url:../../data/global/atmosphere/grey.ini";
-import asset718 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
-import asset719 from "url:../../data/global/atmosphere/grey_clouds_top.png";
-import asset720 from "url:../../data/tracks/forest/textures/forest_background_day.png";
-import asset721 from "url:../../data/global/filters/default_add.tga";
-import asset722 from "url:../../data/global/filters/default_sub.tga";
-import asset723 from "url:../../data/global/flares/day.ini";
-import asset724 from "url:../../data/global/flares/day_glow.png";
-import asset725 from "url:../../data/global/flares/day_flares.png";
-import asset726 from "url:../../data/tracks/forest/forest1/a/geometry/collision.glb";
-import asset727 from "../../data/tracks/forest/forest1/a/geometry/collision.meta.json";
-import asset728 from "url:../../data/tracks/forest/forest1/a/geometry/track_geom_out.glb";
-import asset729 from "url:../../data/tracks/forest/forest1/a/geometry/track_geom_log.txt";
-import asset730 from "url:../../data/tracks/forest/forest1/a/data/startpoints.bed";
-import asset731 from "url:../../data/tracks/forest/forest1/a/lighting/lightmap1_w2.png";
-import asset732 from "url:../../data/tracks/forest/textures/3_colours_barrel.png";
-import asset733 from "url:../../data/tracks/forest/textures/advetisement_c.png";
-import asset734 from "url:../../data/tracks/forest/textures/advetisement_d.png";
-import asset735 from "url:../../data/tracks/forest/textures/advetisement_e.png";
-import asset736 from "url:../../data/tracks/forest/textures/alpha_bushbranch.png";
-import asset737 from "url:../../data/tracks/forest/textures/alpha_bushlod.png";
-import asset738 from "url:../../data/tracks/forest/textures/alpha_bushsprite.png";
-import asset739 from "url:../../data/tracks/forest/textures/alpha_dynamic.png";
-import asset740 from "url:../../data/tracks/forest/textures/alpha_forestwall.png";
-import asset741 from "url:../../data/tracks/forest/textures/alpha_objects.png";
-import asset742 from "url:../../data/tracks/forest/textures/alpha_traffic_line.png";
-import asset743 from "url:../../data/tracks/forest/textures/alpha_treebranch.png";
-import asset744 from "url:../../data/tracks/forest/textures/alpha_treelod.png";
-import asset745 from "url:../../data/tracks/forest/textures/alpha_treesprite.png";
-import asset746 from "url:../../data/tracks/forest/textures/alpha_windowshader.png";
-import asset747 from "url:../../data/tracks/forest/textures/alpha_wirefence.png";
-import asset748 from "url:../../data/tracks/forest/textures/beam_txt.png";
-import asset749 from "url:../../data/tracks/forest/textures/big_log_txt.png";
-import asset750 from "url:../../data/tracks/forest/textures/block_fence_b.png";
-import asset751 from "url:../../data/tracks/forest/textures/bucket.png";
-import asset752 from "url:../../data/tracks/forest/textures/cableroll.png";
-import asset753 from "url:../../data/tracks/forest/textures/canister_txt_128.png";
-import asset754 from "url:../../data/tracks/forest/textures/cardboard_box.png";
-import asset755 from "url:../../data/tracks/forest/textures/city_advetisement_c.png";
-import asset756 from "url:../../data/tracks/forest/textures/city_lightpoles_shared.png";
-import asset757 from "url:../../data/tracks/forest/textures/coal.png";
-import asset758 from "url:../../data/tracks/forest/textures/coalloader_alpha.png";
-import asset759 from "url:../../data/tracks/forest/textures/coalloader_details.png";
-import asset760 from "url:../../data/tracks/forest/textures/cone.png";
-import asset761 from "url:../../data/tracks/forest/textures/constructiontoilet.png";
-import asset762 from "url:../../data/tracks/forest/textures/desertgasstation_walls.png";
-import asset763 from "url:../../data/tracks/forest/textures/dm_overgrown_road.png";
-import asset764 from "url:../../data/tracks/forest/textures/dm_terrain_forest.png";
-import asset765 from "url:../../data/tracks/forest/textures/dm_traintrack.png";
-import asset766 from "url:../../data/tracks/forest/textures/electric_pole.png";
-import asset767 from "url:../../data/tracks/forest/textures/fallentree_pine.png";
-import asset768 from "url:../../data/tracks/forest/textures/fence_field_a.png";
-import asset769 from "url:../../data/tracks/forest/textures/forklifter_texture.png";
-import asset770 from "url:../../data/tracks/forest/textures/gasbottle_3colors.png";
-import asset771 from "url:../../data/tracks/forest/textures/gasbottle_cart.png";
-import asset772 from "url:../../data/tracks/forest/textures/gasbottle_chubby.png";
-import asset773 from "url:../../data/tracks/forest/textures/gaspump_txt.png";
-import asset774 from "url:../../data/tracks/forest/textures/generic_metal_red.png";
-import asset775 from "url:../../data/tracks/forest/textures/guardhouse_txt.png";
-import asset776 from "url:../../data/tracks/forest/textures/highway_signs.png";
-import asset777 from "url:../../data/tracks/forest/textures/kallio_2a.png";
-import asset778 from "url:../../data/tracks/forest/textures/kallio_2b.png";
-import asset779 from "url:../../data/tracks/forest/textures/ladder1.png";
-import asset780 from "url:../../data/tracks/forest/textures/ledarrowboard.png";
-import asset781 from "url:../../data/tracks/forest/textures/light_arrows.png";
-import asset782 from "url:../../data/tracks/forest/textures/log_crane.png";
-import asset783 from "url:../../data/tracks/forest/textures/log_truck_texture.png";
-import asset784 from "url:../../data/tracks/forest/textures/logloaderone.png";
-import asset785 from "url:../../data/tracks/forest/textures/logshed.png";
-import asset786 from "url:../../data/tracks/forest/textures/machineone.png";
-import asset787 from "url:../../data/tracks/forest/textures/metal_bar_c.png";
-import asset788 from "url:../../data/tracks/forest/textures/metal_barrel_plain_txt.png";
-import asset789 from "url:../../data/tracks/forest/textures/metal_bluegrey_rusted.png";
-import asset790 from "url:../../data/tracks/forest/textures/metal_gate.png";
-import asset791 from "url:../../data/tracks/forest/textures/metal_grey.png";
-import asset792 from "url:../../data/tracks/forest/textures/mill_low_logpile_256.png";
-import asset793 from "url:../../data/tracks/forest/textures/nascar_stand_concrete.png";
-import asset794 from "url:../../data/tracks/forest/textures/oldtruck.png";
-import asset795 from "url:../../data/tracks/forest/textures/open_trench_sign.png";
-import asset796 from "url:../../data/tracks/forest/textures/plasticchair.png";
-import asset797 from "url:../../data/tracks/forest/textures/plastictable.png";
-import asset798 from "url:../../data/tracks/forest/textures/pressurewasher.png";
-import asset799 from "url:../../data/tracks/forest/textures/railing.png";
-import asset800 from "url:../../data/tracks/forest/textures/railroad_bridge_big.png";
-import asset801 from "url:../../data/tracks/forest/textures/roadblock.png";
-import asset802 from "url:../../data/tracks/forest/textures/scaffold_b.png";
-import asset803 from "url:../../data/tracks/forest/textures/scaffolds_high.png";
-import asset804 from "url:../../data/tracks/forest/textures/sdm_road_medium.png";
-import asset805 from "url:../../data/tracks/forest/textures/sdm_road_tarmac.png";
-import asset806 from "url:../../data/tracks/forest/textures/sdm_side_forest.png";
-import asset807 from "url:../../data/tracks/forest/textures/shovel.png";
-import asset808 from "url:../../data/tracks/forest/textures/sm_railroad_track.png";
-import asset809 from "url:../../data/tracks/forest/textures/smallloadingcart.png";
-import asset810 from "url:../../data/tracks/forest/textures/startfinishsign.png";
-import asset811 from "url:../../data/tracks/forest/textures/stone_spotty.png";
-import asset812 from "url:../../data/tracks/forest/textures/styroxandstuffboxesb.png";
-import asset813 from "url:../../data/tracks/forest/textures/styroxandstuffboxesc.png";
-import asset814 from "url:../../data/tracks/forest/textures/tablesaw.png";
-import asset815 from "url:../../data/tracks/forest/textures/track_extension.png";
-import asset816 from "url:../../data/tracks/forest/textures/trackside_adverts_a.png";
-import asset817 from "url:../../data/tracks/forest/textures/trailer.png";
-import asset818 from "url:../../data/tracks/forest/textures/train.png";
-import asset819 from "url:../../data/tracks/forest/textures/train_car_log_txt.png";
-import asset820 from "url:../../data/tracks/forest/textures/train_cart_open_txt.png";
-import asset821 from "url:../../data/tracks/forest/textures/traincartmisc.png";
-import asset822 from "url:../../data/tracks/forest/textures/trainstation_roof.png";
-import asset823 from "url:../../data/tracks/forest/textures/trainstation_txt.png";
-import asset824 from "url:../../data/tracks/forest/textures/trashcancontainer.png";
-import asset825 from "url:../../data/tracks/forest/textures/treetrunk.png";
-import asset826 from "url:../../data/tracks/forest/textures/warehouse_big_open.png";
-import asset827 from "url:../../data/tracks/forest/textures/warninglight.png";
-import asset828 from "url:../../data/tracks/forest/textures/water.png";
-import asset829 from "url:../../data/tracks/forest/textures/watertank_txt.png";
-import asset830 from "url:../../data/tracks/forest/textures/watertower_alpha_rusty.png";
-import asset831 from "url:../../data/tracks/forest/textures/watertower_tank_rusty.png";
-import asset832 from "url:../../data/tracks/forest/textures/wood_c.png";
-import asset833 from "url:../../data/tracks/forest/textures/wood_fence.png";
-import asset834 from "url:../../data/tracks/forest/forest1/c/data/atmosphere.ini";
-import asset835 from "url:../../data/global/atmosphere/grey.ini";
-import asset836 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
-import asset837 from "url:../../data/global/atmosphere/grey_clouds_top.png";
-import asset838 from "url:../../data/tracks/forest/textures/forest_background_sunset_red.png";
-import asset839 from "url:../../data/global/filters/citysunset_add.tga";
-import asset840 from "url:../../data/global/filters/citysunset_sub.tga";
-import asset841 from "url:../../data/global/flares/day.ini";
-import asset842 from "url:../../data/global/flares/day_glow.png";
-import asset843 from "url:../../data/global/flares/day_flares.png";
-import asset844 from "url:../../data/tracks/forest/forest1/c/geometry/collision.glb";
-import asset845 from "../../data/tracks/forest/forest1/c/geometry/collision.meta.json";
-import asset846 from "url:../../data/tracks/forest/forest1/c/geometry/track_geom_out.glb";
-import asset847 from "url:../../data/tracks/forest/forest1/c/geometry/track_geom_log.txt";
-import asset848 from "url:../../data/tracks/forest/forest1/c/data/startpoints.bed";
-import asset849 from "url:../../data/tracks/forest/forest1/c/lighting/lightmap1_w2.png";
-import asset850 from "url:../../data/tracks/garagetest/textures/advertisements_nascar_fencea.png";
-import asset851 from "url:../../data/tracks/garagetest/textures/advetisement_c.png";
-import asset852 from "url:../../data/tracks/garagetest/textures/alpha_audience_a.png";
-import asset853 from "url:../../data/tracks/garagetest/textures/alpha_audience_b.png";
-import asset854 from "url:../../data/tracks/garagetest/textures/alpha_audience_c.png";
-import asset855 from "url:../../data/tracks/garagetest/textures/alpha_audience_stand_one_windows.png";
-import asset856 from "url:../../data/tracks/garagetest/textures/alpha_audience_stand_three_stairs.png";
-import asset857 from "url:../../data/tracks/garagetest/textures/alpha_bridge_racing_five.png";
-import asset858 from "url:../../data/tracks/garagetest/textures/alpha_bushbranch.png";
-import asset859 from "url:../../data/tracks/garagetest/textures/alpha_bushlod.png";
-import asset860 from "url:../../data/tracks/garagetest/textures/alpha_bushsprite.png";
-import asset861 from "url:../../data/tracks/garagetest/textures/alpha_dynamic.png";
-import asset862 from "url:../../data/tracks/garagetest/textures/alpha_objects.png";
-import asset863 from "url:../../data/tracks/garagetest/textures/alpha_traffic_line.png";
-import asset864 from "url:../../data/tracks/garagetest/textures/alpha_treebranch.png";
-import asset865 from "url:../../data/tracks/garagetest/textures/alpha_treelod.png";
-import asset866 from "url:../../data/tracks/garagetest/textures/alpha_treesprite.png";
-import asset867 from "url:../../data/tracks/garagetest/textures/alpha_wirefence.png";
-import asset868 from "url:../../data/tracks/garagetest/textures/big_cone_a.png";
-import asset869 from "url:../../data/tracks/garagetest/textures/bigtruckthree.png";
-import asset870 from "url:../../data/tracks/garagetest/textures/blimp.png";
-import asset871 from "url:../../data/tracks/garagetest/textures/concretewall_plain.png";
-import asset872 from "url:../../data/tracks/garagetest/textures/concretewall_red.png";
-import asset873 from "url:../../data/tracks/garagetest/textures/concretewall_yellow_black.png";
-import asset874 from "url:../../data/tracks/garagetest/textures/cone.png";
-import asset875 from "url:../../data/tracks/garagetest/textures/control_tower_balcony.png";
-import asset876 from "url:../../data/tracks/garagetest/textures/control_tower_base.png";
-import asset877 from "url:../../data/tracks/garagetest/textures/control_tower_top.png";
-import asset878 from "url:../../data/tracks/garagetest/textures/dm_terrain_grass.png";
-import asset879 from "url:../../data/tracks/garagetest/textures/hot_air_balloon.png";
-import asset880 from "url:../../data/tracks/garagetest/textures/lights_a.png";
-import asset881 from "url:../../data/tracks/garagetest/textures/rac_advertisement_board.png";
-import asset882 from "url:../../data/tracks/garagetest/textures/rac_advertisement_racing.png";
-import asset883 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_details.png";
-import asset884 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_floor.png";
-import asset885 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_roof.png";
-import asset886 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_seats.png";
-import asset887 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_walls.png";
-import asset888 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_ceiling.png";
-import asset889 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_details.png";
-import asset890 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_floor.png";
-import asset891 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_roof.png";
-import asset892 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_walls.png";
-import asset893 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_windows.png";
-import asset894 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_two_walls_a.png";
-import asset895 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_two_windows.png";
-import asset896 from "url:../../data/tracks/garagetest/textures/rac_billboard_racing_a_advertisement.png";
-import asset897 from "url:../../data/tracks/garagetest/textures/rac_billboard_racing_metal.png";
-import asset898 from "url:../../data/tracks/garagetest/textures/rac_bridge_racing_five_advertisement.png";
-import asset899 from "url:../../data/tracks/garagetest/textures/rac_bridge_racing_five_metal.png";
-import asset900 from "url:../../data/tracks/garagetest/textures/rac_building_over_road_concrete_wall.png";
-import asset901 from "url:../../data/tracks/garagetest/textures/rac_chicane_red_white.png";
-import asset902 from "url:../../data/tracks/garagetest/textures/rac_pit_door.png";
-import asset903 from "url:../../data/tracks/garagetest/textures/rac_tires.png";
-import asset904 from "url:../../data/tracks/garagetest/textures/rac_watch_tower_one.png";
-import asset905 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_alpha.png";
-import asset906 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_alphawindows.png";
-import asset907 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_floor.png";
-import asset908 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_poles.png";
-import asset909 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_walls.png";
-import asset910 from "url:../../data/tracks/garagetest/textures/railing.png";
-import asset911 from "url:../../data/tracks/garagetest/textures/scaffold_b.png";
-import asset912 from "url:../../data/tracks/garagetest/textures/sdm_road_concrete.png";
-import asset913 from "url:../../data/tracks/garagetest/textures/sdm_road_concrete_mark.png";
-import asset914 from "url:../../data/tracks/garagetest/textures/sdm_road_concrete_tile.png";
-import asset915 from "url:../../data/tracks/garagetest/textures/sdm_road_tarmac_tile.png";
-import asset916 from "url:../../data/tracks/garagetest/textures/sdm_side_grass.png";
-import asset917 from "url:../../data/tracks/garagetest/textures/sdm_terrain_grass.png";
-import asset918 from "url:../../data/tracks/garagetest/textures/sm_rac_audience_stand_two_windows.png";
-import asset919 from "url:../../data/tracks/garagetest/textures/sponsorsigns_a.png";
-import asset920 from "url:../../data/tracks/garagetest/textures/start.png";
-import asset921 from "url:../../data/tracks/garagetest/textures/trailer_with_roof.png";
-import asset922 from "url:../../data/tracks/garagetest/textures/treetrunk.png";
-import asset923 from "url:../../data/tracks/garagetest/textures/truck_o_detail.png";
-import asset924 from "url:../../data/tracks/garagetest/textures/wall_a.png";
-import asset925 from "url:../../data/tracks/garagetest/garagetest1/a/data/atmosphere.ini";
-import asset926 from "url:../../data/global/atmosphere/grey.ini";
-import asset927 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
-import asset928 from "url:../../data/global/atmosphere/grey_clouds_top.png";
-import asset929 from "url:../../data/tracks/garagetest/textures/nascar_background_day.png";
-import asset930 from "url:../../data/global/filters/default_add.tga";
-import asset931 from "url:../../data/global/filters/default_sub.tga";
-import asset932 from "url:../../data/global/flares/day.ini";
-import asset933 from "url:../../data/global/flares/day_glow.png";
-import asset934 from "url:../../data/global/flares/day_flares.png";
-import asset935 from "url:../../data/global/skybox/arena_day_u.png";
-import asset936 from "url:../../data/tracks/garagetest/garagetest1/a/geometry/collision.glb";
-import asset937 from "../../data/tracks/garagetest/garagetest1/a/geometry/collision.meta.json";
-import asset938 from "url:../../data/tracks/garagetest/garagetest1/a/geometry/track_geom_out.glb";
-import asset939 from "url:../../data/tracks/garagetest/garagetest1/a/geometry/track_geom_log.txt";
-import asset940 from "url:../../data/tracks/garagetest/garagetest1/a/data/startpoints.bed";
-import asset941 from "url:../../data/tracks/garagetest/garagetest1/a/lighting/lightmap1_w2.png";
+import asset219 from "url:../../data/tracks/arena/arena1/a/geometry/track_bvh.gen";
+import asset220 from "url:../../data/tracks/arena/arena1/a/geometry/track_cdb2.gen";
+import asset221 from "url:../../data/tracks/arena/arena1/a/geometry/track_geom_out.glb";
+import asset222 from "url:../../data/tracks/arena/arena1/a/geometry/track_geom_log.txt";
+import asset223 from "url:../../data/tracks/arena/arena1/a/data/startpoints.bed";
+import asset224 from "url:../../data/tracks/arena/arena1/a/lighting/lightmap1_w2.png";
+import asset225 from "url:../../data/tracks/city/textures/adverts.png";
+import asset226 from "url:../../data/tracks/city/textures/advetisement_b.png";
+import asset227 from "url:../../data/tracks/city/textures/alpha_bushbranch.png";
+import asset228 from "url:../../data/tracks/city/textures/alpha_bushlod.png";
+import asset229 from "url:../../data/tracks/city/textures/alpha_bushsprite.png";
+import asset230 from "url:../../data/tracks/city/textures/alpha_cs_fence.png";
+import asset231 from "url:../../data/tracks/city/textures/alpha_dynamic.png";
+import asset232 from "url:../../data/tracks/city/textures/alpha_dynwindows.png";
+import asset233 from "url:../../data/tracks/city/textures/alpha_forestwall.png";
+import asset234 from "url:../../data/tracks/city/textures/alpha_gaffiti_a.png";
+import asset235 from "url:../../data/tracks/city/textures/alpha_houseplant_a.png";
+import asset236 from "url:../../data/tracks/city/textures/alpha_parkfence.png";
+import asset237 from "url:../../data/tracks/city/textures/alpha_plantbox1_02.png";
+import asset238 from "url:../../data/tracks/city/textures/alpha_shop_fence.png";
+import asset239 from "url:../../data/tracks/city/textures/alpha_traffic_line.png";
+import asset240 from "url:../../data/tracks/city/textures/alpha_treebranch.png";
+import asset241 from "url:../../data/tracks/city/textures/alpha_treelod.png";
+import asset242 from "url:../../data/tracks/city/textures/alpha_treesprite.png";
+import asset243 from "url:../../data/tracks/city/textures/alpha_windows.png";
+import asset244 from "url:../../data/tracks/city/textures/alpha_windowshader.png";
+import asset245 from "url:../../data/tracks/city/textures/alpha_wirefence_c.png";
+import asset246 from "url:../../data/tracks/city/textures/alpha_wirefence_d.png";
+import asset247 from "url:../../data/tracks/city/textures/barrels.png";
+import asset248 from "url:../../data/tracks/city/textures/beam.png";
+import asset249 from "url:../../data/tracks/city/textures/bigcrane_alpha.png";
+import asset250 from "url:../../data/tracks/city/textures/bigcrane_details.png";
+import asset251 from "url:../../data/tracks/city/textures/bistro.png";
+import asset252 from "url:../../data/tracks/city/textures/block_fence_b.png";
+import asset253 from "url:../../data/tracks/city/textures/cableroll_cable.png";
+import asset254 from "url:../../data/tracks/city/textures/cableroll_wood.png";
+import asset255 from "url:../../data/tracks/city/textures/cardboard_box.png";
+import asset256 from "url:../../data/tracks/city/textures/cargo_container.png";
+import asset257 from "url:../../data/tracks/city/textures/cargotruck.png";
+import asset258 from "url:../../data/tracks/city/textures/carthreeb.png";
+import asset259 from "url:../../data/tracks/city/textures/carthreec.png";
+import asset260 from "url:../../data/tracks/city/textures/cementmixer.png";
+import asset261 from "url:../../data/tracks/city/textures/city1_mall_walls.png";
+import asset262 from "url:../../data/tracks/city/textures/cityhall_stairs.png";
+import asset263 from "url:../../data/tracks/city/textures/cityhall_stone.png";
+import asset264 from "url:../../data/tracks/city/textures/cityharlembuildings_balcony.png";
+import asset265 from "url:../../data/tracks/city/textures/cityharlembuildings_wallsb.png";
+import asset266 from "url:../../data/tracks/city/textures/cityhospital_details.png";
+import asset267 from "url:../../data/tracks/city/textures/cityindustrialbuildinga_objects.png";
+import asset268 from "url:../../data/tracks/city/textures/citymetaltrashcanb.png";
+import asset269 from "url:../../data/tracks/city/textures/concrete_b.png";
+import asset270 from "url:../../data/tracks/city/textures/cone.png";
+import asset271 from "url:../../data/tracks/city/textures/construction_pipes.png";
+import asset272 from "url:../../data/tracks/city/textures/constructiontoilet.png";
+import asset273 from "url:../../data/tracks/city/textures/dm_terrain_grass.png";
+import asset274 from "url:../../data/tracks/city/textures/dm_terrain_grasslane.png";
+import asset275 from "url:../../data/tracks/city/textures/drinkvending.png";
+import asset276 from "url:../../data/tracks/city/textures/dumpsters.png";
+import asset277 from "url:../../data/tracks/city/textures/excavator.png";
+import asset278 from "url:../../data/tracks/city/textures/exittunnel.png";
+import asset279 from "url:../../data/tracks/city/textures/firestation_details.png";
+import asset280 from "url:../../data/tracks/city/textures/firestation_wallsa.png";
+import asset281 from "url:../../data/tracks/city/textures/firetruck.png";
+import asset282 from "url:../../data/tracks/city/textures/flap_with_light.png";
+import asset283 from "url:../../data/tracks/city/textures/forklifter_texture.png";
+import asset284 from "url:../../data/tracks/city/textures/freeway_wall.png";
+import asset285 from "url:../../data/tracks/city/textures/garbagetruck.png";
+import asset286 from "url:../../data/tracks/city/textures/gas_station_a.png";
+import asset287 from "url:../../data/tracks/city/textures/gasstation_detail.png";
+import asset288 from "url:../../data/tracks/city/textures/gasstation_pumps.png";
+import asset289 from "url:../../data/tracks/city/textures/gasstation_sign.png";
+import asset290 from "url:../../data/tracks/city/textures/gasstation_sign2.png";
+import asset291 from "url:../../data/tracks/city/textures/generic_metal_red.png";
+import asset292 from "url:../../data/tracks/city/textures/generic_wood1.png";
+import asset293 from "url:../../data/tracks/city/textures/granite.png";
+import asset294 from "url:../../data/tracks/city/textures/groundfloor1.png";
+import asset295 from "url:../../data/tracks/city/textures/groundfloor2.png";
+import asset296 from "url:../../data/tracks/city/textures/groundfloor3.png";
+import asset297 from "url:../../data/tracks/city/textures/highway_bottom.png";
+import asset298 from "url:../../data/tracks/city/textures/highway_lamps.png";
+import asset299 from "url:../../data/tracks/city/textures/highway_pillars.png";
+import asset300 from "url:../../data/tracks/city/textures/highway_signs.png";
+import asset301 from "url:../../data/tracks/city/textures/highway_wedge.png";
+import asset302 from "url:../../data/tracks/city/textures/largedebriscontainer.png";
+import asset303 from "url:../../data/tracks/city/textures/ledarrowboard.png";
+import asset304 from "url:../../data/tracks/city/textures/light_arrows.png";
+import asset305 from "url:../../data/tracks/city/textures/lightpoles_shared.png";
+import asset306 from "url:../../data/tracks/city/textures/mall_ceiling2.png";
+import asset307 from "url:../../data/tracks/city/textures/mall_dynamcs.png";
+import asset308 from "url:../../data/tracks/city/textures/mall_metalgrille_b.png";
+import asset309 from "url:../../data/tracks/city/textures/mall_shops_b.png";
+import asset310 from "url:../../data/tracks/city/textures/mall_shops_inside.png";
+import asset311 from "url:../../data/tracks/city/textures/mall_signs.png";
+import asset312 from "url:../../data/tracks/city/textures/mall_signs_b.png";
+import asset313 from "url:../../data/tracks/city/textures/mall_structures.png";
+import asset314 from "url:../../data/tracks/city/textures/mall_upperlevelshops.png";
+import asset315 from "url:../../data/tracks/city/textures/mall_wall_a.png";
+import asset316 from "url:../../data/tracks/city/textures/metalworks.png";
+import asset317 from "url:../../data/tracks/city/textures/nearwall.png";
+import asset318 from "url:../../data/tracks/city/textures/newspaper_stand.png";
+import asset319 from "url:../../data/tracks/city/textures/obj_parkfountain.png";
+import asset320 from "url:../../data/tracks/city/textures/open_trench_sign.png";
+import asset321 from "url:../../data/tracks/city/textures/paperstack.png";
+import asset322 from "url:../../data/tracks/city/textures/parkbench.png";
+import asset323 from "url:../../data/tracks/city/textures/parkingbuilding_detail.png";
+import asset324 from "url:../../data/tracks/city/textures/parkmeter.png";
+import asset325 from "url:../../data/tracks/city/textures/parkwall.png";
+import asset326 from "url:../../data/tracks/city/textures/plantbox1_02.png";
+import asset327 from "url:../../data/tracks/city/textures/plastered wall_grey_128x128.png";
+import asset328 from "url:../../data/tracks/city/textures/platform_door.png";
+import asset329 from "url:../../data/tracks/city/textures/platform_walls.png";
+import asset330 from "url:../../data/tracks/city/textures/postbox.png";
+import asset331 from "url:../../data/tracks/city/textures/pressurewasher.png";
+import asset332 from "url:../../data/tracks/city/textures/propane_tank.png";
+import asset333 from "url:../../data/tracks/city/textures/rac_car_five.png";
+import asset334 from "url:../../data/tracks/city/textures/rac_wooden_box_a.png";
+import asset335 from "url:../../data/tracks/city/textures/rac_wooden_box_big_crate.png";
+import asset336 from "url:../../data/tracks/city/textures/railing.png";
+import asset337 from "url:../../data/tracks/city/textures/restaurant_counter.png";
+import asset338 from "url:../../data/tracks/city/textures/restaurant_miscstuff.png";
+import asset339 from "url:../../data/tracks/city/textures/restaurant_saladbar.png";
+import asset340 from "url:../../data/tracks/city/textures/restaurant_signs.png";
+import asset341 from "url:../../data/tracks/city/textures/roadsign_1.png";
+import asset342 from "url:../../data/tracks/city/textures/roller.png";
+import asset343 from "url:../../data/tracks/city/textures/roof.png";
+import asset344 from "url:../../data/tracks/city/textures/scaffolds_high.png";
+import asset345 from "url:../../data/tracks/city/textures/scissorlift_alpha.png";
+import asset346 from "url:../../data/tracks/city/textures/scissorlift_details.png";
+import asset347 from "url:../../data/tracks/city/textures/sdm_mall_floor.png";
+import asset348 from "url:../../data/tracks/city/textures/sdm_road_mud_tile.png";
+import asset349 from "url:../../data/tracks/city/textures/sdm_road_tarmac.png";
+import asset350 from "url:../../data/tracks/city/textures/sdm_road_tarmac_tile.png";
+import asset351 from "url:../../data/tracks/city/textures/sdm_side_city.png";
+import asset352 from "url:../../data/tracks/city/textures/sdm_side_tarmac.png";
+import asset353 from "url:../../data/tracks/city/textures/sdm_sidewalktile.png";
+import asset354 from "url:../../data/tracks/city/textures/sheetmetal_truckterminal.png";
+import asset355 from "url:../../data/tracks/city/textures/sheetmetalfence.png";
+import asset356 from "url:../../data/tracks/city/textures/shop_a_wall.png";
+import asset357 from "url:../../data/tracks/city/textures/shopdetail.png";
+import asset358 from "url:../../data/tracks/city/textures/shoppingcart.png";
+import asset359 from "url:../../data/tracks/city/textures/shopwindow_inside.png";
+import asset360 from "url:../../data/tracks/city/textures/signs.png";
+import asset361 from "url:../../data/tracks/city/textures/sm_building_classic_ai.png";
+import asset362 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding.png";
+import asset363 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding_02.png";
+import asset364 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding_04.png";
+import asset365 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingeight_walls.png";
+import asset366 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingfive_walls.png";
+import asset367 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingfour_walls.png";
+import asset368 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingthree_walls.png";
+import asset369 from "url:../../data/tracks/city/textures/sm_cityharlembuildinga_wallsa.png";
+import asset370 from "url:../../data/tracks/city/textures/sm_cityharlembuildingb_wallsa.png";
+import asset371 from "url:../../data/tracks/city/textures/sm_cityharlembuildingd_wallsa.png";
+import asset372 from "url:../../data/tracks/city/textures/sm_cityindustrialbuildinga_walls.png";
+import asset373 from "url:../../data/tracks/city/textures/sm_cityindustrialbuildingc_walls.png";
+import asset374 from "url:../../data/tracks/city/textures/sm_citymodernbuildinga_walls.png";
+import asset375 from "url:../../data/tracks/city/textures/sm_citymodernbuildingd_walls.png";
+import asset376 from "url:../../data/tracks/city/textures/sm_citymodernbuildingh_walls.png";
+import asset377 from "url:../../data/tracks/city/textures/sm_cityofficebuildingc_walls.png";
+import asset378 from "url:../../data/tracks/city/textures/sm_cityofficebuildinge_walls.png";
+import asset379 from "url:../../data/tracks/city/textures/sm_cityskyscraperbuildingc_walls.png";
+import asset380 from "url:../../data/tracks/city/textures/sm_cityskyscraperbuildingd_walls.png";
+import asset381 from "url:../../data/tracks/city/textures/sm_distant_buildings.png";
+import asset382 from "url:../../data/tracks/city/textures/sm_residential_building.png";
+import asset383 from "url:../../data/tracks/city/textures/sm_shop_a.png";
+import asset384 from "url:../../data/tracks/city/textures/sm_shop_a_wall_windowed.png";
+import asset385 from "url:../../data/tracks/city/textures/startfinishsign.png";
+import asset386 from "url:../../data/tracks/city/textures/stonewall.png";
+import asset387 from "url:../../data/tracks/city/textures/street_lamp_adverts.png";
+import asset388 from "url:../../data/tracks/city/textures/styroxandstuffboxesc.png";
+import asset389 from "url:../../data/tracks/city/textures/tarmac_tile_128x128.png";
+import asset390 from "url:../../data/tracks/city/textures/ticket_booth.png";
+import asset391 from "url:../../data/tracks/city/textures/tool_box.png";
+import asset392 from "url:../../data/tracks/city/textures/traffic_light.png";
+import asset393 from "url:../../data/tracks/city/textures/trailers.png";
+import asset394 from "url:../../data/tracks/city/textures/trashbin.png";
+import asset395 from "url:../../data/tracks/city/textures/trashcansmallplastic.png";
+import asset396 from "url:../../data/tracks/city/textures/treetrunk.png";
+import asset397 from "url:../../data/tracks/city/textures/truckterminal.png";
+import asset398 from "url:../../data/tracks/city/textures/truckterminal_dynobjects.png";
+import asset399 from "url:../../data/tracks/city/textures/truckterminal_posts.png";
+import asset400 from "url:../../data/tracks/city/textures/tunnel_ceilingfan.png";
+import asset401 from "url:../../data/tracks/city/textures/tunnel_piping.png";
+import asset402 from "url:../../data/tracks/city/textures/undergroundparking_detail.png";
+import asset403 from "url:../../data/tracks/city/textures/undergroundparking_wall_tile.png";
+import asset404 from "url:../../data/tracks/city/textures/undergroundparking_walls.png";
+import asset405 from "url:../../data/tracks/city/textures/undergrparking_hallwall2.png";
+import asset406 from "url:../../data/tracks/city/textures/van_texporter.png";
+import asset407 from "url:../../data/tracks/city/textures/warehouse_building.png";
+import asset408 from "url:../../data/tracks/city/textures/warehouse_building_b.png";
+import asset409 from "url:../../data/tracks/city/textures/warehouse_c.png";
+import asset410 from "url:../../data/tracks/city/textures/warninglight.png";
+import asset411 from "url:../../data/tracks/city/textures/wheelbarrow.png";
+import asset412 from "url:../../data/tracks/city/textures/wooden_roadblock.png";
+import asset413 from "url:../../data/tracks/city/city1/a/data/atmosphere.ini";
+import asset414 from "url:../../data/global/atmosphere/grey.ini";
+import asset415 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
+import asset416 from "url:../../data/global/atmosphere/grey_clouds_top.png";
+import asset417 from "url:../../data/tracks/city/textures/city_background.png";
+import asset418 from "url:../../data/global/filters/cityday_add.tga";
+import asset419 from "url:../../data/global/filters/cityday_sub.tga";
+import asset420 from "url:../../data/global/flares/day.ini";
+import asset421 from "url:../../data/global/flares/day_glow.png";
+import asset422 from "url:../../data/global/flares/day_flares.png";
+import asset423 from "url:../../data/tracks/city/city1/a/geometry/collision.glb";
+import asset424 from "../../data/tracks/city/city1/a/geometry/collision.meta.json";
+import asset425 from "url:../../data/tracks/city/city1/a/geometry/track_bvh.gen";
+import asset426 from "url:../../data/tracks/city/city1/a/geometry/track_cdb2.gen";
+import asset427 from "url:../../data/tracks/city/city1/a/geometry/track_geom_out.glb";
+import asset428 from "url:../../data/tracks/city/city1/a/geometry/track_geom_log.txt";
+import asset429 from "url:../../data/tracks/city/city1/a/data/startpoints.bed";
+import asset430 from "url:../../data/tracks/city/city1/a/lighting/lightmap1_w2.png";
+import asset431 from "url:../../data/tracks/city/textures/adverts.png";
+import asset432 from "url:../../data/tracks/city/textures/advetisement_b.png";
+import asset433 from "url:../../data/tracks/city/textures/alpha_bushbranch.png";
+import asset434 from "url:../../data/tracks/city/textures/alpha_bushlod.png";
+import asset435 from "url:../../data/tracks/city/textures/alpha_bushsprite.png";
+import asset436 from "url:../../data/tracks/city/textures/alpha_cs_fence.png";
+import asset437 from "url:../../data/tracks/city/textures/alpha_dynamic.png";
+import asset438 from "url:../../data/tracks/city/textures/alpha_dynwindows.png";
+import asset439 from "url:../../data/tracks/city/textures/alpha_forestwall.png";
+import asset440 from "url:../../data/tracks/city/textures/alpha_gaffiti_a.png";
+import asset441 from "url:../../data/tracks/city/textures/alpha_houseplant_a.png";
+import asset442 from "url:../../data/tracks/city/textures/alpha_parkfence.png";
+import asset443 from "url:../../data/tracks/city/textures/alpha_plantbox1_02.png";
+import asset444 from "url:../../data/tracks/city/textures/alpha_shop_fence.png";
+import asset445 from "url:../../data/tracks/city/textures/alpha_traffic_line.png";
+import asset446 from "url:../../data/tracks/city/textures/alpha_treebranch.png";
+import asset447 from "url:../../data/tracks/city/textures/alpha_treelod.png";
+import asset448 from "url:../../data/tracks/city/textures/alpha_treesprite.png";
+import asset449 from "url:../../data/tracks/city/textures/alpha_windows.png";
+import asset450 from "url:../../data/tracks/city/textures/alpha_windowshader.png";
+import asset451 from "url:../../data/tracks/city/textures/alpha_wirefence_c.png";
+import asset452 from "url:../../data/tracks/city/textures/alpha_wirefence_d.png";
+import asset453 from "url:../../data/tracks/city/textures/barrels.png";
+import asset454 from "url:../../data/tracks/city/textures/beam.png";
+import asset455 from "url:../../data/tracks/city/textures/bigcrane_alpha.png";
+import asset456 from "url:../../data/tracks/city/textures/bigcrane_details.png";
+import asset457 from "url:../../data/tracks/city/textures/bistro.png";
+import asset458 from "url:../../data/tracks/city/textures/block_fence_b.png";
+import asset459 from "url:../../data/tracks/city/textures/cableroll_cable.png";
+import asset460 from "url:../../data/tracks/city/textures/cableroll_wood.png";
+import asset461 from "url:../../data/tracks/city/textures/cardboard_box.png";
+import asset462 from "url:../../data/tracks/city/textures/cargo_container.png";
+import asset463 from "url:../../data/tracks/city/textures/cargotruck.png";
+import asset464 from "url:../../data/tracks/city/textures/carthreeb.png";
+import asset465 from "url:../../data/tracks/city/textures/carthreec.png";
+import asset466 from "url:../../data/tracks/city/textures/cementmixer.png";
+import asset467 from "url:../../data/tracks/city/textures/city1_mall_walls.png";
+import asset468 from "url:../../data/tracks/city/textures/cityhall_stairs.png";
+import asset469 from "url:../../data/tracks/city/textures/cityhall_stone.png";
+import asset470 from "url:../../data/tracks/city/textures/cityharlembuildings_balcony.png";
+import asset471 from "url:../../data/tracks/city/textures/cityharlembuildings_wallsb.png";
+import asset472 from "url:../../data/tracks/city/textures/cityhospital_details.png";
+import asset473 from "url:../../data/tracks/city/textures/cityindustrialbuildinga_objects.png";
+import asset474 from "url:../../data/tracks/city/textures/citymetaltrashcanb.png";
+import asset475 from "url:../../data/tracks/city/textures/concrete_b.png";
+import asset476 from "url:../../data/tracks/city/textures/cone.png";
+import asset477 from "url:../../data/tracks/city/textures/construction_pipes.png";
+import asset478 from "url:../../data/tracks/city/textures/constructiontoilet.png";
+import asset479 from "url:../../data/tracks/city/textures/dm_terrain_grass.png";
+import asset480 from "url:../../data/tracks/city/textures/dm_terrain_grasslane.png";
+import asset481 from "url:../../data/tracks/city/textures/drinkvending.png";
+import asset482 from "url:../../data/tracks/city/textures/dumpsters.png";
+import asset483 from "url:../../data/tracks/city/textures/excavator.png";
+import asset484 from "url:../../data/tracks/city/textures/exittunnel.png";
+import asset485 from "url:../../data/tracks/city/textures/firestation_details.png";
+import asset486 from "url:../../data/tracks/city/textures/firestation_wallsa.png";
+import asset487 from "url:../../data/tracks/city/textures/firetruck.png";
+import asset488 from "url:../../data/tracks/city/textures/flap_with_light.png";
+import asset489 from "url:../../data/tracks/city/textures/forklifter_texture.png";
+import asset490 from "url:../../data/tracks/city/textures/freeway_wall.png";
+import asset491 from "url:../../data/tracks/city/textures/gasstation_detail.png";
+import asset492 from "url:../../data/tracks/city/textures/gasstation_pumps.png";
+import asset493 from "url:../../data/tracks/city/textures/generic_metal_red.png";
+import asset494 from "url:../../data/tracks/city/textures/generic_wood1.png";
+import asset495 from "url:../../data/tracks/city/textures/granite.png";
+import asset496 from "url:../../data/tracks/city/textures/groundfloor1.png";
+import asset497 from "url:../../data/tracks/city/textures/groundfloor2.png";
+import asset498 from "url:../../data/tracks/city/textures/groundfloor3.png";
+import asset499 from "url:../../data/tracks/city/textures/highway_bottom.png";
+import asset500 from "url:../../data/tracks/city/textures/highway_lamps.png";
+import asset501 from "url:../../data/tracks/city/textures/highway_pillars.png";
+import asset502 from "url:../../data/tracks/city/textures/highway_signs.png";
+import asset503 from "url:../../data/tracks/city/textures/highway_wedge.png";
+import asset504 from "url:../../data/tracks/city/textures/largedebriscontainer.png";
+import asset505 from "url:../../data/tracks/city/textures/ledarrowboard.png";
+import asset506 from "url:../../data/tracks/city/textures/light_arrows.png";
+import asset507 from "url:../../data/tracks/city/textures/lightpoles_shared.png";
+import asset508 from "url:../../data/tracks/city/textures/mall_ceiling2.png";
+import asset509 from "url:../../data/tracks/city/textures/mall_dynamcs.png";
+import asset510 from "url:../../data/tracks/city/textures/mall_shops_b.png";
+import asset511 from "url:../../data/tracks/city/textures/mall_shops_inside.png";
+import asset512 from "url:../../data/tracks/city/textures/mall_signs.png";
+import asset513 from "url:../../data/tracks/city/textures/mall_signs_b.png";
+import asset514 from "url:../../data/tracks/city/textures/mall_structures.png";
+import asset515 from "url:../../data/tracks/city/textures/mall_upperlevelshops.png";
+import asset516 from "url:../../data/tracks/city/textures/mall_wall_a.png";
+import asset517 from "url:../../data/tracks/city/textures/metalworks.png";
+import asset518 from "url:../../data/tracks/city/textures/nearwall.png";
+import asset519 from "url:../../data/tracks/city/textures/newspaper_stand.png";
+import asset520 from "url:../../data/tracks/city/textures/open_trench_sign.png";
+import asset521 from "url:../../data/tracks/city/textures/paperstack.png";
+import asset522 from "url:../../data/tracks/city/textures/parkbench.png";
+import asset523 from "url:../../data/tracks/city/textures/parkingbuilding_detail.png";
+import asset524 from "url:../../data/tracks/city/textures/parkmeter.png";
+import asset525 from "url:../../data/tracks/city/textures/parkwall.png";
+import asset526 from "url:../../data/tracks/city/textures/plantbox1_02.png";
+import asset527 from "url:../../data/tracks/city/textures/plastered wall_grey_128x128.png";
+import asset528 from "url:../../data/tracks/city/textures/platform_door.png";
+import asset529 from "url:../../data/tracks/city/textures/platform_walls.png";
+import asset530 from "url:../../data/tracks/city/textures/postbox.png";
+import asset531 from "url:../../data/tracks/city/textures/pressurewasher.png";
+import asset532 from "url:../../data/tracks/city/textures/rac_big_truck_three.png";
+import asset533 from "url:../../data/tracks/city/textures/rac_car_five.png";
+import asset534 from "url:../../data/tracks/city/textures/rac_wooden_box_a.png";
+import asset535 from "url:../../data/tracks/city/textures/rac_wooden_box_big_crate.png";
+import asset536 from "url:../../data/tracks/city/textures/railing.png";
+import asset537 from "url:../../data/tracks/city/textures/restaurant_miscstuff.png";
+import asset538 from "url:../../data/tracks/city/textures/restaurant_saladbar.png";
+import asset539 from "url:../../data/tracks/city/textures/roadsign_1.png";
+import asset540 from "url:../../data/tracks/city/textures/roller.png";
+import asset541 from "url:../../data/tracks/city/textures/roof.png";
+import asset542 from "url:../../data/tracks/city/textures/scaffolds_high.png";
+import asset543 from "url:../../data/tracks/city/textures/scissorlift_alpha.png";
+import asset544 from "url:../../data/tracks/city/textures/scissorlift_details.png";
+import asset545 from "url:../../data/tracks/city/textures/sdm_mall_floor.png";
+import asset546 from "url:../../data/tracks/city/textures/sdm_road_mud_tile.png";
+import asset547 from "url:../../data/tracks/city/textures/sdm_road_tarmac.png";
+import asset548 from "url:../../data/tracks/city/textures/sdm_road_tarmac_tile.png";
+import asset549 from "url:../../data/tracks/city/textures/sdm_side_city.png";
+import asset550 from "url:../../data/tracks/city/textures/sdm_side_tarmac.png";
+import asset551 from "url:../../data/tracks/city/textures/sdm_sidewalktile.png";
+import asset552 from "url:../../data/tracks/city/textures/sheetmetal_truckterminal.png";
+import asset553 from "url:../../data/tracks/city/textures/sheetmetalfence.png";
+import asset554 from "url:../../data/tracks/city/textures/shop_a_wall.png";
+import asset555 from "url:../../data/tracks/city/textures/shopdetail.png";
+import asset556 from "url:../../data/tracks/city/textures/shoppingcart.png";
+import asset557 from "url:../../data/tracks/city/textures/shopwindow_inside.png";
+import asset558 from "url:../../data/tracks/city/textures/signs.png";
+import asset559 from "url:../../data/tracks/city/textures/sm_building_classic_ai.png";
+import asset560 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding.png";
+import asset561 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding_02.png";
+import asset562 from "url:../../data/tracks/city/textures/sm_cityadministrationbuilding_04.png";
+import asset563 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingeight_walls.png";
+import asset564 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingfive_walls.png";
+import asset565 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingfour_walls.png";
+import asset566 from "url:../../data/tracks/city/textures/sm_cityclassicbuildingthree_walls.png";
+import asset567 from "url:../../data/tracks/city/textures/sm_cityharlembuildinga_wallsa.png";
+import asset568 from "url:../../data/tracks/city/textures/sm_cityharlembuildingb_wallsa.png";
+import asset569 from "url:../../data/tracks/city/textures/sm_cityharlembuildingd_wallsa.png";
+import asset570 from "url:../../data/tracks/city/textures/sm_cityindustrialbuildinga_walls.png";
+import asset571 from "url:../../data/tracks/city/textures/sm_cityindustrialbuildingc_walls.png";
+import asset572 from "url:../../data/tracks/city/textures/sm_citymodernbuildinga_walls.png";
+import asset573 from "url:../../data/tracks/city/textures/sm_citymodernbuildingd_walls.png";
+import asset574 from "url:../../data/tracks/city/textures/sm_citymodernbuildingh_walls.png";
+import asset575 from "url:../../data/tracks/city/textures/sm_cityofficebuildingc_walls.png";
+import asset576 from "url:../../data/tracks/city/textures/sm_cityofficebuildinge_walls.png";
+import asset577 from "url:../../data/tracks/city/textures/sm_cityskyscraperbuildingc_walls.png";
+import asset578 from "url:../../data/tracks/city/textures/sm_cityskyscraperbuildingd_walls.png";
+import asset579 from "url:../../data/tracks/city/textures/sm_distant_buildings.png";
+import asset580 from "url:../../data/tracks/city/textures/sm_residential_building.png";
+import asset581 from "url:../../data/tracks/city/textures/sm_shop_a.png";
+import asset582 from "url:../../data/tracks/city/textures/sm_shop_a_wall_windowed.png";
+import asset583 from "url:../../data/tracks/city/textures/startfinishsign.png";
+import asset584 from "url:../../data/tracks/city/textures/stonewall.png";
+import asset585 from "url:../../data/tracks/city/textures/street_lamp_adverts.png";
+import asset586 from "url:../../data/tracks/city/textures/styroxandstuffboxesc.png";
+import asset587 from "url:../../data/tracks/city/textures/tarmac_tile_128x128.png";
+import asset588 from "url:../../data/tracks/city/textures/terrain_grass_128x128.png";
+import asset589 from "url:../../data/tracks/city/textures/ticket_booth.png";
+import asset590 from "url:../../data/tracks/city/textures/tool_box.png";
+import asset591 from "url:../../data/tracks/city/textures/traffic_light.png";
+import asset592 from "url:../../data/tracks/city/textures/trailers.png";
+import asset593 from "url:../../data/tracks/city/textures/trashbin.png";
+import asset594 from "url:../../data/tracks/city/textures/trashcansmallplastic.png";
+import asset595 from "url:../../data/tracks/city/textures/treetrunk.png";
+import asset596 from "url:../../data/tracks/city/textures/truckterminal.png";
+import asset597 from "url:../../data/tracks/city/textures/truckterminal_dynobjects.png";
+import asset598 from "url:../../data/tracks/city/textures/truckterminal_posts.png";
+import asset599 from "url:../../data/tracks/city/textures/tunnel_ceilingfan.png";
+import asset600 from "url:../../data/tracks/city/textures/tunnel_piping.png";
+import asset601 from "url:../../data/tracks/city/textures/undergroundparking_detail.png";
+import asset602 from "url:../../data/tracks/city/textures/undergroundparking_wall_tile.png";
+import asset603 from "url:../../data/tracks/city/textures/undergroundparking_walls.png";
+import asset604 from "url:../../data/tracks/city/textures/undergrparking_hallwall2.png";
+import asset605 from "url:../../data/tracks/city/textures/van_texporter.png";
+import asset606 from "url:../../data/tracks/city/textures/warehouse_building.png";
+import asset607 from "url:../../data/tracks/city/textures/warehouse_building_b.png";
+import asset608 from "url:../../data/tracks/city/textures/warehouse_c.png";
+import asset609 from "url:../../data/tracks/city/textures/warninglight.png";
+import asset610 from "url:../../data/tracks/city/textures/wheelbarrow.png";
+import asset611 from "url:../../data/tracks/city/textures/wooden_roadblock.png";
+import asset612 from "url:../../data/tracks/city/city1/b/data/atmosphere.ini";
+import asset613 from "url:../../data/global/atmosphere/grey.ini";
+import asset614 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
+import asset615 from "url:../../data/global/atmosphere/grey_clouds_top.png";
+import asset616 from "url:../../data/tracks/city/textures/city_background_sunset.png";
+import asset617 from "url:../../data/global/filters/citysunset_add.tga";
+import asset618 from "url:../../data/global/filters/citysunset_sub.tga";
+import asset619 from "url:../../data/global/flares/day.ini";
+import asset620 from "url:../../data/global/flares/day_glow.png";
+import asset621 from "url:../../data/global/flares/day_flares.png";
+import asset622 from "url:../../data/tracks/city/city1/b/geometry/collision.glb";
+import asset623 from "../../data/tracks/city/city1/b/geometry/collision.meta.json";
+import asset624 from "url:../../data/tracks/city/city1/b/geometry/track_bvh.gen";
+import asset625 from "url:../../data/tracks/city/city1/b/geometry/track_cdb2.gen";
+import asset626 from "url:../../data/tracks/city/city1/b/geometry/track_geom_out.glb";
+import asset627 from "url:../../data/tracks/city/city1/b/geometry/track_geom_log.txt";
+import asset628 from "url:../../data/tracks/city/city1/b/data/startpoints.bed";
+import asset629 from "url:../../data/tracks/city/city1/b/lighting/lightmap1_w2.png";
+import asset630 from "url:../../data/tracks/forest/textures/3_colours_barrel.png";
+import asset631 from "url:../../data/tracks/forest/textures/advetisement_c.png";
+import asset632 from "url:../../data/tracks/forest/textures/advetisement_d.png";
+import asset633 from "url:../../data/tracks/forest/textures/advetisement_e.png";
+import asset634 from "url:../../data/tracks/forest/textures/alpha_bushbranch.png";
+import asset635 from "url:../../data/tracks/forest/textures/alpha_bushlod.png";
+import asset636 from "url:../../data/tracks/forest/textures/alpha_bushsprite.png";
+import asset637 from "url:../../data/tracks/forest/textures/alpha_dynamic.png";
+import asset638 from "url:../../data/tracks/forest/textures/alpha_forestwall.png";
+import asset639 from "url:../../data/tracks/forest/textures/alpha_objects.png";
+import asset640 from "url:../../data/tracks/forest/textures/alpha_traffic_line.png";
+import asset641 from "url:../../data/tracks/forest/textures/alpha_treebranch.png";
+import asset642 from "url:../../data/tracks/forest/textures/alpha_treelod.png";
+import asset643 from "url:../../data/tracks/forest/textures/alpha_treesprite.png";
+import asset644 from "url:../../data/tracks/forest/textures/alpha_windowshader.png";
+import asset645 from "url:../../data/tracks/forest/textures/alpha_wirefence.png";
+import asset646 from "url:../../data/tracks/forest/textures/beam_txt.png";
+import asset647 from "url:../../data/tracks/forest/textures/big_log_txt.png";
+import asset648 from "url:../../data/tracks/forest/textures/block_fence_b.png";
+import asset649 from "url:../../data/tracks/forest/textures/bucket.png";
+import asset650 from "url:../../data/tracks/forest/textures/cableroll.png";
+import asset651 from "url:../../data/tracks/forest/textures/canister_txt_128.png";
+import asset652 from "url:../../data/tracks/forest/textures/cardboard_box.png";
+import asset653 from "url:../../data/tracks/forest/textures/city_advetisement_c.png";
+import asset654 from "url:../../data/tracks/forest/textures/city_lightpoles_shared.png";
+import asset655 from "url:../../data/tracks/forest/textures/coal.png";
+import asset656 from "url:../../data/tracks/forest/textures/cone.png";
+import asset657 from "url:../../data/tracks/forest/textures/constructiontoilet.png";
+import asset658 from "url:../../data/tracks/forest/textures/desertgasstation_roof.png";
+import asset659 from "url:../../data/tracks/forest/textures/desertgasstation_walls.png";
+import asset660 from "url:../../data/tracks/forest/textures/dm_overgrown_road.png";
+import asset661 from "url:../../data/tracks/forest/textures/dm_terrain_forest.png";
+import asset662 from "url:../../data/tracks/forest/textures/dm_traintrack.png";
+import asset663 from "url:../../data/tracks/forest/textures/electric_pole.png";
+import asset664 from "url:../../data/tracks/forest/textures/fallentree_pine.png";
+import asset665 from "url:../../data/tracks/forest/textures/fence_field_a.png";
+import asset666 from "url:../../data/tracks/forest/textures/forest_tractor.png";
+import asset667 from "url:../../data/tracks/forest/textures/forklifter_texture.png";
+import asset668 from "url:../../data/tracks/forest/textures/gasbottle_3colors.png";
+import asset669 from "url:../../data/tracks/forest/textures/gasbottle_cart.png";
+import asset670 from "url:../../data/tracks/forest/textures/gasbottle_chubby.png";
+import asset671 from "url:../../data/tracks/forest/textures/gaspump_txt.png";
+import asset672 from "url:../../data/tracks/forest/textures/generic_metal_red.png";
+import asset673 from "url:../../data/tracks/forest/textures/guardhouse_txt.png";
+import asset674 from "url:../../data/tracks/forest/textures/highway_signs.png";
+import asset675 from "url:../../data/tracks/forest/textures/kallio_2a.png";
+import asset676 from "url:../../data/tracks/forest/textures/kallio_2b.png";
+import asset677 from "url:../../data/tracks/forest/textures/ladder1.png";
+import asset678 from "url:../../data/tracks/forest/textures/ledarrowboard.png";
+import asset679 from "url:../../data/tracks/forest/textures/light_arrows.png";
+import asset680 from "url:../../data/tracks/forest/textures/log_crane.png";
+import asset681 from "url:../../data/tracks/forest/textures/log_truck_texture.png";
+import asset682 from "url:../../data/tracks/forest/textures/logloadertwo.png";
+import asset683 from "url:../../data/tracks/forest/textures/logshed.png";
+import asset684 from "url:../../data/tracks/forest/textures/machineone.png";
+import asset685 from "url:../../data/tracks/forest/textures/metal_bar_c.png";
+import asset686 from "url:../../data/tracks/forest/textures/metal_barrel_plain_txt.png";
+import asset687 from "url:../../data/tracks/forest/textures/metal_bluegrey_rusted.png";
+import asset688 from "url:../../data/tracks/forest/textures/metal_gate.png";
+import asset689 from "url:../../data/tracks/forest/textures/metal_grey.png";
+import asset690 from "url:../../data/tracks/forest/textures/mill_low_logpile_256.png";
+import asset691 from "url:../../data/tracks/forest/textures/mobilebarrack_texture.png";
+import asset692 from "url:../../data/tracks/forest/textures/nascar_stand_concrete.png";
+import asset693 from "url:../../data/tracks/forest/textures/oldtruck.png";
+import asset694 from "url:../../data/tracks/forest/textures/open_trench_sign.png";
+import asset695 from "url:../../data/tracks/forest/textures/plasticchair.png";
+import asset696 from "url:../../data/tracks/forest/textures/plastictable.png";
+import asset697 from "url:../../data/tracks/forest/textures/pressurewasher.png";
+import asset698 from "url:../../data/tracks/forest/textures/roadblock.png";
+import asset699 from "url:../../data/tracks/forest/textures/rock_fence.png";
+import asset700 from "url:../../data/tracks/forest/textures/scaffold_b.png";
+import asset701 from "url:../../data/tracks/forest/textures/scaffolds_high.png";
+import asset702 from "url:../../data/tracks/forest/textures/sdm_road_medium.png";
+import asset703 from "url:../../data/tracks/forest/textures/sdm_road_tarmac.png";
+import asset704 from "url:../../data/tracks/forest/textures/sdm_side_forest.png";
+import asset705 from "url:../../data/tracks/forest/textures/shovel.png";
+import asset706 from "url:../../data/tracks/forest/textures/smallloadingcart.png";
+import asset707 from "url:../../data/tracks/forest/textures/startfinishsign.png";
+import asset708 from "url:../../data/tracks/forest/textures/stone_spotty.png";
+import asset709 from "url:../../data/tracks/forest/textures/styroxandstuffboxesb.png";
+import asset710 from "url:../../data/tracks/forest/textures/styroxandstuffboxesc.png";
+import asset711 from "url:../../data/tracks/forest/textures/tablesaw.png";
+import asset712 from "url:../../data/tracks/forest/textures/trackside_adverts_a.png";
+import asset713 from "url:../../data/tracks/forest/textures/trailer.png";
+import asset714 from "url:../../data/tracks/forest/textures/train_car_log_txt.png";
+import asset715 from "url:../../data/tracks/forest/textures/train_cart_open_txt.png";
+import asset716 from "url:../../data/tracks/forest/textures/trashcancontainer.png";
+import asset717 from "url:../../data/tracks/forest/textures/treetrunk.png";
+import asset718 from "url:../../data/tracks/forest/textures/warninglight.png";
+import asset719 from "url:../../data/tracks/forest/textures/watertank_txt.png";
+import asset720 from "url:../../data/tracks/forest/textures/wood_c.png";
+import asset721 from "url:../../data/tracks/forest/textures/wood_fence.png";
+import asset722 from "url:../../data/tracks/forest/forest1/a/data/atmosphere.ini";
+import asset723 from "url:../../data/global/atmosphere/grey.ini";
+import asset724 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
+import asset725 from "url:../../data/global/atmosphere/grey_clouds_top.png";
+import asset726 from "url:../../data/tracks/forest/textures/forest_background_day.png";
+import asset727 from "url:../../data/global/filters/default_add.tga";
+import asset728 from "url:../../data/global/filters/default_sub.tga";
+import asset729 from "url:../../data/global/flares/day.ini";
+import asset730 from "url:../../data/global/flares/day_glow.png";
+import asset731 from "url:../../data/global/flares/day_flares.png";
+import asset732 from "url:../../data/tracks/forest/forest1/a/geometry/collision.glb";
+import asset733 from "../../data/tracks/forest/forest1/a/geometry/collision.meta.json";
+import asset734 from "url:../../data/tracks/forest/forest1/a/geometry/track_bvh.gen";
+import asset735 from "url:../../data/tracks/forest/forest1/a/geometry/track_cdb2.gen";
+import asset736 from "url:../../data/tracks/forest/forest1/a/geometry/track_geom_out.glb";
+import asset737 from "url:../../data/tracks/forest/forest1/a/geometry/track_geom_log.txt";
+import asset738 from "url:../../data/tracks/forest/forest1/a/data/startpoints.bed";
+import asset739 from "url:../../data/tracks/forest/forest1/a/lighting/lightmap1_w2.png";
+import asset740 from "url:../../data/tracks/forest/textures/3_colours_barrel.png";
+import asset741 from "url:../../data/tracks/forest/textures/advetisement_c.png";
+import asset742 from "url:../../data/tracks/forest/textures/advetisement_d.png";
+import asset743 from "url:../../data/tracks/forest/textures/advetisement_e.png";
+import asset744 from "url:../../data/tracks/forest/textures/alpha_bushbranch.png";
+import asset745 from "url:../../data/tracks/forest/textures/alpha_bushlod.png";
+import asset746 from "url:../../data/tracks/forest/textures/alpha_bushsprite.png";
+import asset747 from "url:../../data/tracks/forest/textures/alpha_dynamic.png";
+import asset748 from "url:../../data/tracks/forest/textures/alpha_forestwall.png";
+import asset749 from "url:../../data/tracks/forest/textures/alpha_objects.png";
+import asset750 from "url:../../data/tracks/forest/textures/alpha_traffic_line.png";
+import asset751 from "url:../../data/tracks/forest/textures/alpha_treebranch.png";
+import asset752 from "url:../../data/tracks/forest/textures/alpha_treelod.png";
+import asset753 from "url:../../data/tracks/forest/textures/alpha_treesprite.png";
+import asset754 from "url:../../data/tracks/forest/textures/alpha_windowshader.png";
+import asset755 from "url:../../data/tracks/forest/textures/alpha_wirefence.png";
+import asset756 from "url:../../data/tracks/forest/textures/beam_txt.png";
+import asset757 from "url:../../data/tracks/forest/textures/big_log_txt.png";
+import asset758 from "url:../../data/tracks/forest/textures/block_fence_b.png";
+import asset759 from "url:../../data/tracks/forest/textures/bucket.png";
+import asset760 from "url:../../data/tracks/forest/textures/cableroll.png";
+import asset761 from "url:../../data/tracks/forest/textures/canister_txt_128.png";
+import asset762 from "url:../../data/tracks/forest/textures/cardboard_box.png";
+import asset763 from "url:../../data/tracks/forest/textures/city_advetisement_c.png";
+import asset764 from "url:../../data/tracks/forest/textures/city_lightpoles_shared.png";
+import asset765 from "url:../../data/tracks/forest/textures/coal.png";
+import asset766 from "url:../../data/tracks/forest/textures/coalloader_alpha.png";
+import asset767 from "url:../../data/tracks/forest/textures/coalloader_details.png";
+import asset768 from "url:../../data/tracks/forest/textures/cone.png";
+import asset769 from "url:../../data/tracks/forest/textures/constructiontoilet.png";
+import asset770 from "url:../../data/tracks/forest/textures/desertgasstation_walls.png";
+import asset771 from "url:../../data/tracks/forest/textures/dm_overgrown_road.png";
+import asset772 from "url:../../data/tracks/forest/textures/dm_terrain_forest.png";
+import asset773 from "url:../../data/tracks/forest/textures/dm_traintrack.png";
+import asset774 from "url:../../data/tracks/forest/textures/electric_pole.png";
+import asset775 from "url:../../data/tracks/forest/textures/fallentree_pine.png";
+import asset776 from "url:../../data/tracks/forest/textures/fence_field_a.png";
+import asset777 from "url:../../data/tracks/forest/textures/forklifter_texture.png";
+import asset778 from "url:../../data/tracks/forest/textures/gasbottle_3colors.png";
+import asset779 from "url:../../data/tracks/forest/textures/gasbottle_cart.png";
+import asset780 from "url:../../data/tracks/forest/textures/gasbottle_chubby.png";
+import asset781 from "url:../../data/tracks/forest/textures/gaspump_txt.png";
+import asset782 from "url:../../data/tracks/forest/textures/generic_metal_red.png";
+import asset783 from "url:../../data/tracks/forest/textures/guardhouse_txt.png";
+import asset784 from "url:../../data/tracks/forest/textures/highway_signs.png";
+import asset785 from "url:../../data/tracks/forest/textures/kallio_2a.png";
+import asset786 from "url:../../data/tracks/forest/textures/kallio_2b.png";
+import asset787 from "url:../../data/tracks/forest/textures/ladder1.png";
+import asset788 from "url:../../data/tracks/forest/textures/ledarrowboard.png";
+import asset789 from "url:../../data/tracks/forest/textures/light_arrows.png";
+import asset790 from "url:../../data/tracks/forest/textures/log_crane.png";
+import asset791 from "url:../../data/tracks/forest/textures/log_truck_texture.png";
+import asset792 from "url:../../data/tracks/forest/textures/logloaderone.png";
+import asset793 from "url:../../data/tracks/forest/textures/logshed.png";
+import asset794 from "url:../../data/tracks/forest/textures/machineone.png";
+import asset795 from "url:../../data/tracks/forest/textures/metal_bar_c.png";
+import asset796 from "url:../../data/tracks/forest/textures/metal_barrel_plain_txt.png";
+import asset797 from "url:../../data/tracks/forest/textures/metal_bluegrey_rusted.png";
+import asset798 from "url:../../data/tracks/forest/textures/metal_gate.png";
+import asset799 from "url:../../data/tracks/forest/textures/metal_grey.png";
+import asset800 from "url:../../data/tracks/forest/textures/mill_low_logpile_256.png";
+import asset801 from "url:../../data/tracks/forest/textures/nascar_stand_concrete.png";
+import asset802 from "url:../../data/tracks/forest/textures/oldtruck.png";
+import asset803 from "url:../../data/tracks/forest/textures/open_trench_sign.png";
+import asset804 from "url:../../data/tracks/forest/textures/plasticchair.png";
+import asset805 from "url:../../data/tracks/forest/textures/plastictable.png";
+import asset806 from "url:../../data/tracks/forest/textures/pressurewasher.png";
+import asset807 from "url:../../data/tracks/forest/textures/railing.png";
+import asset808 from "url:../../data/tracks/forest/textures/railroad_bridge_big.png";
+import asset809 from "url:../../data/tracks/forest/textures/roadblock.png";
+import asset810 from "url:../../data/tracks/forest/textures/scaffold_b.png";
+import asset811 from "url:../../data/tracks/forest/textures/scaffolds_high.png";
+import asset812 from "url:../../data/tracks/forest/textures/sdm_road_medium.png";
+import asset813 from "url:../../data/tracks/forest/textures/sdm_road_tarmac.png";
+import asset814 from "url:../../data/tracks/forest/textures/sdm_side_forest.png";
+import asset815 from "url:../../data/tracks/forest/textures/shovel.png";
+import asset816 from "url:../../data/tracks/forest/textures/sm_railroad_track.png";
+import asset817 from "url:../../data/tracks/forest/textures/smallloadingcart.png";
+import asset818 from "url:../../data/tracks/forest/textures/startfinishsign.png";
+import asset819 from "url:../../data/tracks/forest/textures/stone_spotty.png";
+import asset820 from "url:../../data/tracks/forest/textures/styroxandstuffboxesb.png";
+import asset821 from "url:../../data/tracks/forest/textures/styroxandstuffboxesc.png";
+import asset822 from "url:../../data/tracks/forest/textures/tablesaw.png";
+import asset823 from "url:../../data/tracks/forest/textures/track_extension.png";
+import asset824 from "url:../../data/tracks/forest/textures/trackside_adverts_a.png";
+import asset825 from "url:../../data/tracks/forest/textures/trailer.png";
+import asset826 from "url:../../data/tracks/forest/textures/train.png";
+import asset827 from "url:../../data/tracks/forest/textures/train_car_log_txt.png";
+import asset828 from "url:../../data/tracks/forest/textures/train_cart_open_txt.png";
+import asset829 from "url:../../data/tracks/forest/textures/traincartmisc.png";
+import asset830 from "url:../../data/tracks/forest/textures/trainstation_roof.png";
+import asset831 from "url:../../data/tracks/forest/textures/trainstation_txt.png";
+import asset832 from "url:../../data/tracks/forest/textures/trashcancontainer.png";
+import asset833 from "url:../../data/tracks/forest/textures/treetrunk.png";
+import asset834 from "url:../../data/tracks/forest/textures/warehouse_big_open.png";
+import asset835 from "url:../../data/tracks/forest/textures/warninglight.png";
+import asset836 from "url:../../data/tracks/forest/textures/water.png";
+import asset837 from "url:../../data/tracks/forest/textures/watertank_txt.png";
+import asset838 from "url:../../data/tracks/forest/textures/watertower_alpha_rusty.png";
+import asset839 from "url:../../data/tracks/forest/textures/watertower_tank_rusty.png";
+import asset840 from "url:../../data/tracks/forest/textures/wood_c.png";
+import asset841 from "url:../../data/tracks/forest/textures/wood_fence.png";
+import asset842 from "url:../../data/tracks/forest/forest1/c/data/atmosphere.ini";
+import asset843 from "url:../../data/global/atmosphere/grey.ini";
+import asset844 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
+import asset845 from "url:../../data/global/atmosphere/grey_clouds_top.png";
+import asset846 from "url:../../data/tracks/forest/textures/forest_background_sunset_red.png";
+import asset847 from "url:../../data/global/filters/citysunset_add.tga";
+import asset848 from "url:../../data/global/filters/citysunset_sub.tga";
+import asset849 from "url:../../data/global/flares/day.ini";
+import asset850 from "url:../../data/global/flares/day_glow.png";
+import asset851 from "url:../../data/global/flares/day_flares.png";
+import asset852 from "url:../../data/tracks/forest/forest1/c/geometry/collision.glb";
+import asset853 from "../../data/tracks/forest/forest1/c/geometry/collision.meta.json";
+import asset854 from "url:../../data/tracks/forest/forest1/c/geometry/track_bvh.gen";
+import asset855 from "url:../../data/tracks/forest/forest1/c/geometry/track_cdb2.gen";
+import asset856 from "url:../../data/tracks/forest/forest1/c/geometry/track_geom_out.glb";
+import asset857 from "url:../../data/tracks/forest/forest1/c/geometry/track_geom_log.txt";
+import asset858 from "url:../../data/tracks/forest/forest1/c/data/startpoints.bed";
+import asset859 from "url:../../data/tracks/forest/forest1/c/lighting/lightmap1_w2.png";
+import asset860 from "url:../../data/tracks/garagetest/textures/advertisements_nascar_fencea.png";
+import asset861 from "url:../../data/tracks/garagetest/textures/advetisement_c.png";
+import asset862 from "url:../../data/tracks/garagetest/textures/alpha_audience_a.png";
+import asset863 from "url:../../data/tracks/garagetest/textures/alpha_audience_b.png";
+import asset864 from "url:../../data/tracks/garagetest/textures/alpha_audience_c.png";
+import asset865 from "url:../../data/tracks/garagetest/textures/alpha_audience_stand_one_windows.png";
+import asset866 from "url:../../data/tracks/garagetest/textures/alpha_audience_stand_three_stairs.png";
+import asset867 from "url:../../data/tracks/garagetest/textures/alpha_bridge_racing_five.png";
+import asset868 from "url:../../data/tracks/garagetest/textures/alpha_bushbranch.png";
+import asset869 from "url:../../data/tracks/garagetest/textures/alpha_bushlod.png";
+import asset870 from "url:../../data/tracks/garagetest/textures/alpha_bushsprite.png";
+import asset871 from "url:../../data/tracks/garagetest/textures/alpha_dynamic.png";
+import asset872 from "url:../../data/tracks/garagetest/textures/alpha_objects.png";
+import asset873 from "url:../../data/tracks/garagetest/textures/alpha_traffic_line.png";
+import asset874 from "url:../../data/tracks/garagetest/textures/alpha_treebranch.png";
+import asset875 from "url:../../data/tracks/garagetest/textures/alpha_treelod.png";
+import asset876 from "url:../../data/tracks/garagetest/textures/alpha_treesprite.png";
+import asset877 from "url:../../data/tracks/garagetest/textures/alpha_wirefence.png";
+import asset878 from "url:../../data/tracks/garagetest/textures/big_cone_a.png";
+import asset879 from "url:../../data/tracks/garagetest/textures/bigtruckthree.png";
+import asset880 from "url:../../data/tracks/garagetest/textures/blimp.png";
+import asset881 from "url:../../data/tracks/garagetest/textures/concretewall_plain.png";
+import asset882 from "url:../../data/tracks/garagetest/textures/concretewall_red.png";
+import asset883 from "url:../../data/tracks/garagetest/textures/concretewall_yellow_black.png";
+import asset884 from "url:../../data/tracks/garagetest/textures/cone.png";
+import asset885 from "url:../../data/tracks/garagetest/textures/control_tower_balcony.png";
+import asset886 from "url:../../data/tracks/garagetest/textures/control_tower_base.png";
+import asset887 from "url:../../data/tracks/garagetest/textures/control_tower_top.png";
+import asset888 from "url:../../data/tracks/garagetest/textures/dm_terrain_grass.png";
+import asset889 from "url:../../data/tracks/garagetest/textures/hot_air_balloon.png";
+import asset890 from "url:../../data/tracks/garagetest/textures/lights_a.png";
+import asset891 from "url:../../data/tracks/garagetest/textures/rac_advertisement_board.png";
+import asset892 from "url:../../data/tracks/garagetest/textures/rac_advertisement_racing.png";
+import asset893 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_details.png";
+import asset894 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_floor.png";
+import asset895 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_roof.png";
+import asset896 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_seats.png";
+import asset897 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_four_walls.png";
+import asset898 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_ceiling.png";
+import asset899 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_details.png";
+import asset900 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_floor.png";
+import asset901 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_roof.png";
+import asset902 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_walls.png";
+import asset903 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_one_windows.png";
+import asset904 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_two_walls_a.png";
+import asset905 from "url:../../data/tracks/garagetest/textures/rac_audience_stand_two_windows.png";
+import asset906 from "url:../../data/tracks/garagetest/textures/rac_billboard_racing_a_advertisement.png";
+import asset907 from "url:../../data/tracks/garagetest/textures/rac_billboard_racing_metal.png";
+import asset908 from "url:../../data/tracks/garagetest/textures/rac_bridge_racing_five_advertisement.png";
+import asset909 from "url:../../data/tracks/garagetest/textures/rac_bridge_racing_five_metal.png";
+import asset910 from "url:../../data/tracks/garagetest/textures/rac_building_over_road_concrete_wall.png";
+import asset911 from "url:../../data/tracks/garagetest/textures/rac_chicane_red_white.png";
+import asset912 from "url:../../data/tracks/garagetest/textures/rac_pit_door.png";
+import asset913 from "url:../../data/tracks/garagetest/textures/rac_tires.png";
+import asset914 from "url:../../data/tracks/garagetest/textures/rac_watch_tower_one.png";
+import asset915 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_alpha.png";
+import asset916 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_alphawindows.png";
+import asset917 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_floor.png";
+import asset918 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_poles.png";
+import asset919 from "url:../../data/tracks/garagetest/textures/racingwatchtowertwo_walls.png";
+import asset920 from "url:../../data/tracks/garagetest/textures/railing.png";
+import asset921 from "url:../../data/tracks/garagetest/textures/scaffold_b.png";
+import asset922 from "url:../../data/tracks/garagetest/textures/sdm_road_concrete.png";
+import asset923 from "url:../../data/tracks/garagetest/textures/sdm_road_concrete_mark.png";
+import asset924 from "url:../../data/tracks/garagetest/textures/sdm_road_concrete_tile.png";
+import asset925 from "url:../../data/tracks/garagetest/textures/sdm_road_tarmac_tile.png";
+import asset926 from "url:../../data/tracks/garagetest/textures/sdm_side_grass.png";
+import asset927 from "url:../../data/tracks/garagetest/textures/sdm_terrain_grass.png";
+import asset928 from "url:../../data/tracks/garagetest/textures/sm_rac_audience_stand_two_windows.png";
+import asset929 from "url:../../data/tracks/garagetest/textures/sponsorsigns_a.png";
+import asset930 from "url:../../data/tracks/garagetest/textures/start.png";
+import asset931 from "url:../../data/tracks/garagetest/textures/trailer_with_roof.png";
+import asset932 from "url:../../data/tracks/garagetest/textures/treetrunk.png";
+import asset933 from "url:../../data/tracks/garagetest/textures/truck_o_detail.png";
+import asset934 from "url:../../data/tracks/garagetest/textures/wall_a.png";
+import asset935 from "url:../../data/tracks/garagetest/garagetest1/a/data/atmosphere.ini";
+import asset936 from "url:../../data/global/atmosphere/grey.ini";
+import asset937 from "url:../../data/global/atmosphere/grey_clouds_bottom.png";
+import asset938 from "url:../../data/global/atmosphere/grey_clouds_top.png";
+import asset939 from "url:../../data/tracks/garagetest/textures/nascar_background_day.png";
+import asset940 from "url:../../data/global/filters/default_add.tga";
+import asset941 from "url:../../data/global/filters/default_sub.tga";
+import asset942 from "url:../../data/global/flares/day.ini";
+import asset943 from "url:../../data/global/flares/day_glow.png";
+import asset944 from "url:../../data/global/flares/day_flares.png";
+import asset945 from "url:../../data/global/skybox/arena_day_u.png";
+import asset946 from "url:../../data/tracks/garagetest/garagetest1/a/geometry/collision.glb";
+import asset947 from "../../data/tracks/garagetest/garagetest1/a/geometry/collision.meta.json";
+import asset948 from "url:../../data/tracks/garagetest/garagetest1/a/geometry/track_bvh.gen";
+import asset949 from "url:../../data/tracks/garagetest/garagetest1/a/geometry/track_cdb2.gen";
+import asset950 from "url:../../data/tracks/garagetest/garagetest1/a/geometry/track_geom_out.glb";
+import asset951 from "url:../../data/tracks/garagetest/garagetest1/a/geometry/track_geom_log.txt";
+import asset952 from "url:../../data/tracks/garagetest/garagetest1/a/data/startpoints.bed";
+import asset953 from "url:../../data/tracks/garagetest/garagetest1/a/lighting/lightmap1_w2.png";
 
 export const carCatalog = [
   {
@@ -1500,12 +1512,14 @@ export const trackCatalog = [
         familyId: "arena",
         trackId: "arena1",
         variantId: "a",
-        model: asset219,
-        log: asset220,
+        model: asset221,
+        log: asset222,
         collisionModel: asset217,
         collisionMeta: asset218,
-        startPoints: asset221,
-        lightmap: asset222,
+        collisionBvh: asset219,
+        collisionCdb2: asset220,
+        startPoints: asset223,
+        lightmap: asset224,
         trackTextures: {
           "advetisement_c": asset147,
           "alpha_audience_stand_one_seats": asset148,
@@ -1640,214 +1654,216 @@ export const trackCatalog = [
         familyId: "city",
         trackId: "city1",
         variantId: "a",
-        model: asset423,
-        log: asset424,
-        collisionModel: asset421,
-        collisionMeta: asset422,
-        startPoints: asset425,
-        lightmap: asset426,
+        model: asset427,
+        log: asset428,
+        collisionModel: asset423,
+        collisionMeta: asset424,
+        collisionBvh: asset425,
+        collisionCdb2: asset426,
+        startPoints: asset429,
+        lightmap: asset430,
         trackTextures: {
-          "adverts": asset223,
-          "advetisement_b": asset224,
-          "alpha_bushbranch": asset225,
-          "alpha_bushlod": asset226,
-          "alpha_bushsprite": asset227,
-          "alpha_cs_fence": asset228,
-          "alpha_dynamic": asset229,
-          "alpha_dynwindows": asset230,
-          "alpha_forestwall": asset231,
-          "alpha_gaffiti_a": asset232,
-          "alpha_houseplant_a": asset233,
-          "alpha_parkfence": asset234,
-          "alpha_plantbox1_02": asset235,
-          "alpha_shop_fence": asset236,
-          "alpha_traffic_line": asset237,
-          "alpha_treebranch": asset238,
-          "alpha_treelod": asset239,
-          "alpha_treesprite": asset240,
-          "alpha_windows": asset241,
-          "alpha_windowshader": asset242,
-          "alpha_wirefence_c": asset243,
-          "alpha_wirefence_d": asset244,
-          "barrels": asset245,
-          "beam": asset246,
-          "bigcrane_alpha": asset247,
-          "bigcrane_details": asset248,
-          "bistro": asset249,
-          "block_fence_b": asset250,
-          "cableroll_cable": asset251,
-          "cableroll_wood": asset252,
-          "cardboard_box": asset253,
-          "cargo_container": asset254,
-          "cargotruck": asset255,
-          "carthreeb": asset256,
-          "carthreec": asset257,
-          "cementmixer": asset258,
-          "city1_mall_walls": asset259,
-          "cityhall_stairs": asset260,
-          "cityhall_stone": asset261,
-          "cityharlembuildings_balcony": asset262,
-          "cityharlembuildings_wallsb": asset263,
-          "cityhospital_details": asset264,
-          "cityindustrialbuildinga_objects": asset265,
-          "citymetaltrashcanb": asset266,
-          "concrete_b": asset267,
-          "cone": asset268,
-          "construction_pipes": asset269,
-          "constructiontoilet": asset270,
-          "dm_terrain_grass": asset271,
-          "dm_terrain_grasslane": asset272,
-          "drinkvending": asset273,
-          "dumpsters": asset274,
-          "excavator": asset275,
-          "exittunnel": asset276,
-          "firestation_details": asset277,
-          "firestation_wallsa": asset278,
-          "firetruck": asset279,
-          "flap_with_light": asset280,
-          "forklifter_texture": asset281,
-          "freeway_wall": asset282,
-          "garbagetruck": asset283,
-          "gas_station_a": asset284,
-          "gasstation_detail": asset285,
-          "gasstation_pumps": asset286,
-          "gasstation_sign": asset287,
-          "gasstation_sign2": asset288,
-          "generic_metal_red": asset289,
-          "generic_wood1": asset290,
-          "granite": asset291,
-          "groundfloor1": asset292,
-          "groundfloor2": asset293,
-          "groundfloor3": asset294,
-          "highway_bottom": asset295,
-          "highway_lamps": asset296,
-          "highway_pillars": asset297,
-          "highway_signs": asset298,
-          "highway_wedge": asset299,
-          "largedebriscontainer": asset300,
-          "ledarrowboard": asset301,
-          "light_arrows": asset302,
-          "lightpoles_shared": asset303,
-          "mall_ceiling2": asset304,
-          "mall_dynamcs": asset305,
-          "mall_metalgrille_b": asset306,
-          "mall_shops_b": asset307,
-          "mall_shops_inside": asset308,
-          "mall_signs": asset309,
-          "mall_signs_b": asset310,
-          "mall_structures": asset311,
-          "mall_upperlevelshops": asset312,
-          "mall_wall_a": asset313,
-          "metalworks": asset314,
-          "nearwall": asset315,
-          "newspaper_stand": asset316,
-          "obj_parkfountain": asset317,
-          "open_trench_sign": asset318,
-          "paperstack": asset319,
-          "parkbench": asset320,
-          "parkingbuilding_detail": asset321,
-          "parkmeter": asset322,
-          "parkwall": asset323,
-          "plantbox1_02": asset324,
-          "plastered wall_grey_128x128": asset325,
-          "platform_door": asset326,
-          "platform_walls": asset327,
-          "postbox": asset328,
-          "pressurewasher": asset329,
-          "propane_tank": asset330,
-          "rac_car_five": asset331,
-          "rac_wooden_box_a": asset332,
-          "rac_wooden_box_big_crate": asset333,
-          "railing": asset334,
-          "restaurant_counter": asset335,
-          "restaurant_miscstuff": asset336,
-          "restaurant_saladbar": asset337,
-          "restaurant_signs": asset338,
-          "roadsign_1": asset339,
-          "roller": asset340,
-          "roof": asset341,
-          "scaffolds_high": asset342,
-          "scissorlift_alpha": asset343,
-          "scissorlift_details": asset344,
-          "sdm_mall_floor": asset345,
-          "sdm_road_mud_tile": asset346,
-          "sdm_road_tarmac": asset347,
-          "sdm_road_tarmac_tile": asset348,
-          "sdm_side_city": asset349,
-          "sdm_side_tarmac": asset350,
-          "sdm_sidewalktile": asset351,
-          "sheetmetal_truckterminal": asset352,
-          "sheetmetalfence": asset353,
-          "shop_a_wall": asset354,
-          "shopdetail": asset355,
-          "shoppingcart": asset356,
-          "shopwindow_inside": asset357,
-          "signs": asset358,
-          "sm_building_classic_ai": asset359,
-          "sm_cityadministrationbuilding": asset360,
-          "sm_cityadministrationbuilding_02": asset361,
-          "sm_cityadministrationbuilding_04": asset362,
-          "sm_cityclassicbuildingeight_walls": asset363,
-          "sm_cityclassicbuildingfive_walls": asset364,
-          "sm_cityclassicbuildingfour_walls": asset365,
-          "sm_cityclassicbuildingthree_walls": asset366,
-          "sm_cityharlembuildinga_wallsa": asset367,
-          "sm_cityharlembuildingb_wallsa": asset368,
-          "sm_cityharlembuildingd_wallsa": asset369,
-          "sm_cityindustrialbuildinga_walls": asset370,
-          "sm_cityindustrialbuildingc_walls": asset371,
-          "sm_citymodernbuildinga_walls": asset372,
-          "sm_citymodernbuildingd_walls": asset373,
-          "sm_citymodernbuildingh_walls": asset374,
-          "sm_cityofficebuildingc_walls": asset375,
-          "sm_cityofficebuildinge_walls": asset376,
-          "sm_cityskyscraperbuildingc_walls": asset377,
-          "sm_cityskyscraperbuildingd_walls": asset378,
-          "sm_distant_buildings": asset379,
-          "sm_residential_building": asset380,
-          "sm_shop_a": asset381,
-          "sm_shop_a_wall_windowed": asset382,
-          "startfinishsign": asset383,
-          "stonewall": asset384,
-          "street_lamp_adverts": asset385,
-          "styroxandstuffboxesc": asset386,
-          "tarmac_tile_128x128": asset387,
-          "ticket_booth": asset388,
-          "tool_box": asset389,
-          "traffic_light": asset390,
-          "trailers": asset391,
-          "trashbin": asset392,
-          "trashcansmallplastic": asset393,
-          "treetrunk": asset394,
-          "truckterminal": asset395,
-          "truckterminal_dynobjects": asset396,
-          "truckterminal_posts": asset397,
-          "tunnel_ceilingfan": asset398,
-          "tunnel_piping": asset399,
-          "undergroundparking_detail": asset400,
-          "undergroundparking_wall_tile": asset401,
-          "undergroundparking_walls": asset402,
-          "undergrparking_hallwall2": asset403,
-          "van_texporter": asset404,
-          "warehouse_building": asset405,
-          "warehouse_building_b": asset406,
-          "warehouse_c": asset407,
-          "warninglight": asset408,
-          "wheelbarrow": asset409,
-          "wooden_roadblock": asset410
+          "adverts": asset225,
+          "advetisement_b": asset226,
+          "alpha_bushbranch": asset227,
+          "alpha_bushlod": asset228,
+          "alpha_bushsprite": asset229,
+          "alpha_cs_fence": asset230,
+          "alpha_dynamic": asset231,
+          "alpha_dynwindows": asset232,
+          "alpha_forestwall": asset233,
+          "alpha_gaffiti_a": asset234,
+          "alpha_houseplant_a": asset235,
+          "alpha_parkfence": asset236,
+          "alpha_plantbox1_02": asset237,
+          "alpha_shop_fence": asset238,
+          "alpha_traffic_line": asset239,
+          "alpha_treebranch": asset240,
+          "alpha_treelod": asset241,
+          "alpha_treesprite": asset242,
+          "alpha_windows": asset243,
+          "alpha_windowshader": asset244,
+          "alpha_wirefence_c": asset245,
+          "alpha_wirefence_d": asset246,
+          "barrels": asset247,
+          "beam": asset248,
+          "bigcrane_alpha": asset249,
+          "bigcrane_details": asset250,
+          "bistro": asset251,
+          "block_fence_b": asset252,
+          "cableroll_cable": asset253,
+          "cableroll_wood": asset254,
+          "cardboard_box": asset255,
+          "cargo_container": asset256,
+          "cargotruck": asset257,
+          "carthreeb": asset258,
+          "carthreec": asset259,
+          "cementmixer": asset260,
+          "city1_mall_walls": asset261,
+          "cityhall_stairs": asset262,
+          "cityhall_stone": asset263,
+          "cityharlembuildings_balcony": asset264,
+          "cityharlembuildings_wallsb": asset265,
+          "cityhospital_details": asset266,
+          "cityindustrialbuildinga_objects": asset267,
+          "citymetaltrashcanb": asset268,
+          "concrete_b": asset269,
+          "cone": asset270,
+          "construction_pipes": asset271,
+          "constructiontoilet": asset272,
+          "dm_terrain_grass": asset273,
+          "dm_terrain_grasslane": asset274,
+          "drinkvending": asset275,
+          "dumpsters": asset276,
+          "excavator": asset277,
+          "exittunnel": asset278,
+          "firestation_details": asset279,
+          "firestation_wallsa": asset280,
+          "firetruck": asset281,
+          "flap_with_light": asset282,
+          "forklifter_texture": asset283,
+          "freeway_wall": asset284,
+          "garbagetruck": asset285,
+          "gas_station_a": asset286,
+          "gasstation_detail": asset287,
+          "gasstation_pumps": asset288,
+          "gasstation_sign": asset289,
+          "gasstation_sign2": asset290,
+          "generic_metal_red": asset291,
+          "generic_wood1": asset292,
+          "granite": asset293,
+          "groundfloor1": asset294,
+          "groundfloor2": asset295,
+          "groundfloor3": asset296,
+          "highway_bottom": asset297,
+          "highway_lamps": asset298,
+          "highway_pillars": asset299,
+          "highway_signs": asset300,
+          "highway_wedge": asset301,
+          "largedebriscontainer": asset302,
+          "ledarrowboard": asset303,
+          "light_arrows": asset304,
+          "lightpoles_shared": asset305,
+          "mall_ceiling2": asset306,
+          "mall_dynamcs": asset307,
+          "mall_metalgrille_b": asset308,
+          "mall_shops_b": asset309,
+          "mall_shops_inside": asset310,
+          "mall_signs": asset311,
+          "mall_signs_b": asset312,
+          "mall_structures": asset313,
+          "mall_upperlevelshops": asset314,
+          "mall_wall_a": asset315,
+          "metalworks": asset316,
+          "nearwall": asset317,
+          "newspaper_stand": asset318,
+          "obj_parkfountain": asset319,
+          "open_trench_sign": asset320,
+          "paperstack": asset321,
+          "parkbench": asset322,
+          "parkingbuilding_detail": asset323,
+          "parkmeter": asset324,
+          "parkwall": asset325,
+          "plantbox1_02": asset326,
+          "plastered wall_grey_128x128": asset327,
+          "platform_door": asset328,
+          "platform_walls": asset329,
+          "postbox": asset330,
+          "pressurewasher": asset331,
+          "propane_tank": asset332,
+          "rac_car_five": asset333,
+          "rac_wooden_box_a": asset334,
+          "rac_wooden_box_big_crate": asset335,
+          "railing": asset336,
+          "restaurant_counter": asset337,
+          "restaurant_miscstuff": asset338,
+          "restaurant_saladbar": asset339,
+          "restaurant_signs": asset340,
+          "roadsign_1": asset341,
+          "roller": asset342,
+          "roof": asset343,
+          "scaffolds_high": asset344,
+          "scissorlift_alpha": asset345,
+          "scissorlift_details": asset346,
+          "sdm_mall_floor": asset347,
+          "sdm_road_mud_tile": asset348,
+          "sdm_road_tarmac": asset349,
+          "sdm_road_tarmac_tile": asset350,
+          "sdm_side_city": asset351,
+          "sdm_side_tarmac": asset352,
+          "sdm_sidewalktile": asset353,
+          "sheetmetal_truckterminal": asset354,
+          "sheetmetalfence": asset355,
+          "shop_a_wall": asset356,
+          "shopdetail": asset357,
+          "shoppingcart": asset358,
+          "shopwindow_inside": asset359,
+          "signs": asset360,
+          "sm_building_classic_ai": asset361,
+          "sm_cityadministrationbuilding": asset362,
+          "sm_cityadministrationbuilding_02": asset363,
+          "sm_cityadministrationbuilding_04": asset364,
+          "sm_cityclassicbuildingeight_walls": asset365,
+          "sm_cityclassicbuildingfive_walls": asset366,
+          "sm_cityclassicbuildingfour_walls": asset367,
+          "sm_cityclassicbuildingthree_walls": asset368,
+          "sm_cityharlembuildinga_wallsa": asset369,
+          "sm_cityharlembuildingb_wallsa": asset370,
+          "sm_cityharlembuildingd_wallsa": asset371,
+          "sm_cityindustrialbuildinga_walls": asset372,
+          "sm_cityindustrialbuildingc_walls": asset373,
+          "sm_citymodernbuildinga_walls": asset374,
+          "sm_citymodernbuildingd_walls": asset375,
+          "sm_citymodernbuildingh_walls": asset376,
+          "sm_cityofficebuildingc_walls": asset377,
+          "sm_cityofficebuildinge_walls": asset378,
+          "sm_cityskyscraperbuildingc_walls": asset379,
+          "sm_cityskyscraperbuildingd_walls": asset380,
+          "sm_distant_buildings": asset381,
+          "sm_residential_building": asset382,
+          "sm_shop_a": asset383,
+          "sm_shop_a_wall_windowed": asset384,
+          "startfinishsign": asset385,
+          "stonewall": asset386,
+          "street_lamp_adverts": asset387,
+          "styroxandstuffboxesc": asset388,
+          "tarmac_tile_128x128": asset389,
+          "ticket_booth": asset390,
+          "tool_box": asset391,
+          "traffic_light": asset392,
+          "trailers": asset393,
+          "trashbin": asset394,
+          "trashcansmallplastic": asset395,
+          "treetrunk": asset396,
+          "truckterminal": asset397,
+          "truckterminal_dynobjects": asset398,
+          "truckterminal_posts": asset399,
+          "tunnel_ceilingfan": asset400,
+          "tunnel_piping": asset401,
+          "undergroundparking_detail": asset402,
+          "undergroundparking_wall_tile": asset403,
+          "undergroundparking_walls": asset404,
+          "undergrparking_hallwall2": asset405,
+          "van_texporter": asset406,
+          "warehouse_building": asset407,
+          "warehouse_building_b": asset408,
+          "warehouse_c": asset409,
+          "warninglight": asset410,
+          "wheelbarrow": asset411,
+          "wooden_roadblock": asset412
         },
         environment: {
-          atmosphere: asset411,
-          atmospherePreset: asset412,
-          horizonTexture: asset415,
+          atmosphere: asset413,
+          atmospherePreset: asset414,
+          horizonTexture: asset417,
           skyTopTexture: null,
-          filterAddTexture: asset416,
-          filterSubTexture: asset417,
-          cloudBottomTexture: asset413,
-          cloudTopTexture: asset414,
-          flareConfig: asset418,
-          glowTexture: asset419,
-          flareTexture: asset420,
+          filterAddTexture: asset418,
+          filterSubTexture: asset419,
+          cloudBottomTexture: asset415,
+          cloudTopTexture: asset416,
+          flareConfig: asset420,
+          glowTexture: asset421,
+          flareTexture: asset422,
           flareConfigByName: {
             "day.ini": asset6,
             "canalday.ini": asset7,
@@ -1909,207 +1925,209 @@ export const trackCatalog = [
         familyId: "city",
         trackId: "city1",
         variantId: "b",
-        model: asset620,
-        log: asset621,
-        collisionModel: asset618,
-        collisionMeta: asset619,
-        startPoints: asset622,
-        lightmap: asset623,
+        model: asset626,
+        log: asset627,
+        collisionModel: asset622,
+        collisionMeta: asset623,
+        collisionBvh: asset624,
+        collisionCdb2: asset625,
+        startPoints: asset628,
+        lightmap: asset629,
         trackTextures: {
-          "adverts": asset427,
-          "advetisement_b": asset428,
-          "alpha_bushbranch": asset429,
-          "alpha_bushlod": asset430,
-          "alpha_bushsprite": asset431,
-          "alpha_cs_fence": asset432,
-          "alpha_dynamic": asset433,
-          "alpha_dynwindows": asset434,
-          "alpha_forestwall": asset435,
-          "alpha_gaffiti_a": asset436,
-          "alpha_houseplant_a": asset437,
-          "alpha_parkfence": asset438,
-          "alpha_plantbox1_02": asset439,
-          "alpha_shop_fence": asset440,
-          "alpha_traffic_line": asset441,
-          "alpha_treebranch": asset442,
-          "alpha_treelod": asset443,
-          "alpha_treesprite": asset444,
-          "alpha_windows": asset445,
-          "alpha_windowshader": asset446,
-          "alpha_wirefence_c": asset447,
-          "alpha_wirefence_d": asset448,
-          "barrels": asset449,
-          "beam": asset450,
-          "bigcrane_alpha": asset451,
-          "bigcrane_details": asset452,
-          "bistro": asset453,
-          "block_fence_b": asset454,
-          "cableroll_cable": asset455,
-          "cableroll_wood": asset456,
-          "cardboard_box": asset457,
-          "cargo_container": asset458,
-          "cargotruck": asset459,
-          "carthreeb": asset460,
-          "carthreec": asset461,
-          "cementmixer": asset462,
-          "city1_mall_walls": asset463,
-          "cityhall_stairs": asset464,
-          "cityhall_stone": asset465,
-          "cityharlembuildings_balcony": asset466,
-          "cityharlembuildings_wallsb": asset467,
-          "cityhospital_details": asset468,
-          "cityindustrialbuildinga_objects": asset469,
-          "citymetaltrashcanb": asset470,
-          "concrete_b": asset471,
-          "cone": asset472,
-          "construction_pipes": asset473,
-          "constructiontoilet": asset474,
-          "dm_terrain_grass": asset475,
-          "dm_terrain_grasslane": asset476,
-          "drinkvending": asset477,
-          "dumpsters": asset478,
-          "excavator": asset479,
-          "exittunnel": asset480,
-          "firestation_details": asset481,
-          "firestation_wallsa": asset482,
-          "firetruck": asset483,
-          "flap_with_light": asset484,
-          "forklifter_texture": asset485,
-          "freeway_wall": asset486,
-          "gasstation_detail": asset487,
-          "gasstation_pumps": asset488,
-          "generic_metal_red": asset489,
-          "generic_wood1": asset490,
-          "granite": asset491,
-          "groundfloor1": asset492,
-          "groundfloor2": asset493,
-          "groundfloor3": asset494,
-          "highway_bottom": asset495,
-          "highway_lamps": asset496,
-          "highway_pillars": asset497,
-          "highway_signs": asset498,
-          "highway_wedge": asset499,
-          "largedebriscontainer": asset500,
-          "ledarrowboard": asset501,
-          "light_arrows": asset502,
-          "lightpoles_shared": asset503,
-          "mall_ceiling2": asset504,
-          "mall_dynamcs": asset505,
-          "mall_shops_b": asset506,
-          "mall_shops_inside": asset507,
-          "mall_signs": asset508,
-          "mall_signs_b": asset509,
-          "mall_structures": asset510,
-          "mall_upperlevelshops": asset511,
-          "mall_wall_a": asset512,
-          "metalworks": asset513,
-          "nearwall": asset514,
-          "newspaper_stand": asset515,
-          "open_trench_sign": asset516,
-          "paperstack": asset517,
-          "parkbench": asset518,
-          "parkingbuilding_detail": asset519,
-          "parkmeter": asset520,
-          "parkwall": asset521,
-          "plantbox1_02": asset522,
-          "plastered wall_grey_128x128": asset523,
-          "platform_door": asset524,
-          "platform_walls": asset525,
-          "postbox": asset526,
-          "pressurewasher": asset527,
-          "rac_big_truck_three": asset528,
-          "rac_car_five": asset529,
-          "rac_wooden_box_a": asset530,
-          "rac_wooden_box_big_crate": asset531,
-          "railing": asset532,
-          "restaurant_miscstuff": asset533,
-          "restaurant_saladbar": asset534,
-          "roadsign_1": asset535,
-          "roller": asset536,
-          "roof": asset537,
-          "scaffolds_high": asset538,
-          "scissorlift_alpha": asset539,
-          "scissorlift_details": asset540,
-          "sdm_mall_floor": asset541,
-          "sdm_road_mud_tile": asset542,
-          "sdm_road_tarmac": asset543,
-          "sdm_road_tarmac_tile": asset544,
-          "sdm_side_city": asset545,
-          "sdm_side_tarmac": asset546,
-          "sdm_sidewalktile": asset547,
-          "sheetmetal_truckterminal": asset548,
-          "sheetmetalfence": asset549,
-          "shop_a_wall": asset550,
-          "shopdetail": asset551,
-          "shoppingcart": asset552,
-          "shopwindow_inside": asset553,
-          "signs": asset554,
-          "sm_building_classic_ai": asset555,
-          "sm_cityadministrationbuilding": asset556,
-          "sm_cityadministrationbuilding_02": asset557,
-          "sm_cityadministrationbuilding_04": asset558,
-          "sm_cityclassicbuildingeight_walls": asset559,
-          "sm_cityclassicbuildingfive_walls": asset560,
-          "sm_cityclassicbuildingfour_walls": asset561,
-          "sm_cityclassicbuildingthree_walls": asset562,
-          "sm_cityharlembuildinga_wallsa": asset563,
-          "sm_cityharlembuildingb_wallsa": asset564,
-          "sm_cityharlembuildingd_wallsa": asset565,
-          "sm_cityindustrialbuildinga_walls": asset566,
-          "sm_cityindustrialbuildingc_walls": asset567,
-          "sm_citymodernbuildinga_walls": asset568,
-          "sm_citymodernbuildingd_walls": asset569,
-          "sm_citymodernbuildingh_walls": asset570,
-          "sm_cityofficebuildingc_walls": asset571,
-          "sm_cityofficebuildinge_walls": asset572,
-          "sm_cityskyscraperbuildingc_walls": asset573,
-          "sm_cityskyscraperbuildingd_walls": asset574,
-          "sm_distant_buildings": asset575,
-          "sm_residential_building": asset576,
-          "sm_shop_a": asset577,
-          "sm_shop_a_wall_windowed": asset578,
-          "startfinishsign": asset579,
-          "stonewall": asset580,
-          "street_lamp_adverts": asset581,
-          "styroxandstuffboxesc": asset582,
-          "tarmac_tile_128x128": asset583,
-          "terrain_grass_128x128": asset584,
-          "ticket_booth": asset585,
-          "tool_box": asset586,
-          "traffic_light": asset587,
-          "trailers": asset588,
-          "trashbin": asset589,
-          "trashcansmallplastic": asset590,
-          "treetrunk": asset591,
-          "truckterminal": asset592,
-          "truckterminal_dynobjects": asset593,
-          "truckterminal_posts": asset594,
-          "tunnel_ceilingfan": asset595,
-          "tunnel_piping": asset596,
-          "undergroundparking_detail": asset597,
-          "undergroundparking_wall_tile": asset598,
-          "undergroundparking_walls": asset599,
-          "undergrparking_hallwall2": asset600,
-          "van_texporter": asset601,
-          "warehouse_building": asset602,
-          "warehouse_building_b": asset603,
-          "warehouse_c": asset604,
-          "warninglight": asset605,
-          "wheelbarrow": asset606,
-          "wooden_roadblock": asset607
+          "adverts": asset431,
+          "advetisement_b": asset432,
+          "alpha_bushbranch": asset433,
+          "alpha_bushlod": asset434,
+          "alpha_bushsprite": asset435,
+          "alpha_cs_fence": asset436,
+          "alpha_dynamic": asset437,
+          "alpha_dynwindows": asset438,
+          "alpha_forestwall": asset439,
+          "alpha_gaffiti_a": asset440,
+          "alpha_houseplant_a": asset441,
+          "alpha_parkfence": asset442,
+          "alpha_plantbox1_02": asset443,
+          "alpha_shop_fence": asset444,
+          "alpha_traffic_line": asset445,
+          "alpha_treebranch": asset446,
+          "alpha_treelod": asset447,
+          "alpha_treesprite": asset448,
+          "alpha_windows": asset449,
+          "alpha_windowshader": asset450,
+          "alpha_wirefence_c": asset451,
+          "alpha_wirefence_d": asset452,
+          "barrels": asset453,
+          "beam": asset454,
+          "bigcrane_alpha": asset455,
+          "bigcrane_details": asset456,
+          "bistro": asset457,
+          "block_fence_b": asset458,
+          "cableroll_cable": asset459,
+          "cableroll_wood": asset460,
+          "cardboard_box": asset461,
+          "cargo_container": asset462,
+          "cargotruck": asset463,
+          "carthreeb": asset464,
+          "carthreec": asset465,
+          "cementmixer": asset466,
+          "city1_mall_walls": asset467,
+          "cityhall_stairs": asset468,
+          "cityhall_stone": asset469,
+          "cityharlembuildings_balcony": asset470,
+          "cityharlembuildings_wallsb": asset471,
+          "cityhospital_details": asset472,
+          "cityindustrialbuildinga_objects": asset473,
+          "citymetaltrashcanb": asset474,
+          "concrete_b": asset475,
+          "cone": asset476,
+          "construction_pipes": asset477,
+          "constructiontoilet": asset478,
+          "dm_terrain_grass": asset479,
+          "dm_terrain_grasslane": asset480,
+          "drinkvending": asset481,
+          "dumpsters": asset482,
+          "excavator": asset483,
+          "exittunnel": asset484,
+          "firestation_details": asset485,
+          "firestation_wallsa": asset486,
+          "firetruck": asset487,
+          "flap_with_light": asset488,
+          "forklifter_texture": asset489,
+          "freeway_wall": asset490,
+          "gasstation_detail": asset491,
+          "gasstation_pumps": asset492,
+          "generic_metal_red": asset493,
+          "generic_wood1": asset494,
+          "granite": asset495,
+          "groundfloor1": asset496,
+          "groundfloor2": asset497,
+          "groundfloor3": asset498,
+          "highway_bottom": asset499,
+          "highway_lamps": asset500,
+          "highway_pillars": asset501,
+          "highway_signs": asset502,
+          "highway_wedge": asset503,
+          "largedebriscontainer": asset504,
+          "ledarrowboard": asset505,
+          "light_arrows": asset506,
+          "lightpoles_shared": asset507,
+          "mall_ceiling2": asset508,
+          "mall_dynamcs": asset509,
+          "mall_shops_b": asset510,
+          "mall_shops_inside": asset511,
+          "mall_signs": asset512,
+          "mall_signs_b": asset513,
+          "mall_structures": asset514,
+          "mall_upperlevelshops": asset515,
+          "mall_wall_a": asset516,
+          "metalworks": asset517,
+          "nearwall": asset518,
+          "newspaper_stand": asset519,
+          "open_trench_sign": asset520,
+          "paperstack": asset521,
+          "parkbench": asset522,
+          "parkingbuilding_detail": asset523,
+          "parkmeter": asset524,
+          "parkwall": asset525,
+          "plantbox1_02": asset526,
+          "plastered wall_grey_128x128": asset527,
+          "platform_door": asset528,
+          "platform_walls": asset529,
+          "postbox": asset530,
+          "pressurewasher": asset531,
+          "rac_big_truck_three": asset532,
+          "rac_car_five": asset533,
+          "rac_wooden_box_a": asset534,
+          "rac_wooden_box_big_crate": asset535,
+          "railing": asset536,
+          "restaurant_miscstuff": asset537,
+          "restaurant_saladbar": asset538,
+          "roadsign_1": asset539,
+          "roller": asset540,
+          "roof": asset541,
+          "scaffolds_high": asset542,
+          "scissorlift_alpha": asset543,
+          "scissorlift_details": asset544,
+          "sdm_mall_floor": asset545,
+          "sdm_road_mud_tile": asset546,
+          "sdm_road_tarmac": asset547,
+          "sdm_road_tarmac_tile": asset548,
+          "sdm_side_city": asset549,
+          "sdm_side_tarmac": asset550,
+          "sdm_sidewalktile": asset551,
+          "sheetmetal_truckterminal": asset552,
+          "sheetmetalfence": asset553,
+          "shop_a_wall": asset554,
+          "shopdetail": asset555,
+          "shoppingcart": asset556,
+          "shopwindow_inside": asset557,
+          "signs": asset558,
+          "sm_building_classic_ai": asset559,
+          "sm_cityadministrationbuilding": asset560,
+          "sm_cityadministrationbuilding_02": asset561,
+          "sm_cityadministrationbuilding_04": asset562,
+          "sm_cityclassicbuildingeight_walls": asset563,
+          "sm_cityclassicbuildingfive_walls": asset564,
+          "sm_cityclassicbuildingfour_walls": asset565,
+          "sm_cityclassicbuildingthree_walls": asset566,
+          "sm_cityharlembuildinga_wallsa": asset567,
+          "sm_cityharlembuildingb_wallsa": asset568,
+          "sm_cityharlembuildingd_wallsa": asset569,
+          "sm_cityindustrialbuildinga_walls": asset570,
+          "sm_cityindustrialbuildingc_walls": asset571,
+          "sm_citymodernbuildinga_walls": asset572,
+          "sm_citymodernbuildingd_walls": asset573,
+          "sm_citymodernbuildingh_walls": asset574,
+          "sm_cityofficebuildingc_walls": asset575,
+          "sm_cityofficebuildinge_walls": asset576,
+          "sm_cityskyscraperbuildingc_walls": asset577,
+          "sm_cityskyscraperbuildingd_walls": asset578,
+          "sm_distant_buildings": asset579,
+          "sm_residential_building": asset580,
+          "sm_shop_a": asset581,
+          "sm_shop_a_wall_windowed": asset582,
+          "startfinishsign": asset583,
+          "stonewall": asset584,
+          "street_lamp_adverts": asset585,
+          "styroxandstuffboxesc": asset586,
+          "tarmac_tile_128x128": asset587,
+          "terrain_grass_128x128": asset588,
+          "ticket_booth": asset589,
+          "tool_box": asset590,
+          "traffic_light": asset591,
+          "trailers": asset592,
+          "trashbin": asset593,
+          "trashcansmallplastic": asset594,
+          "treetrunk": asset595,
+          "truckterminal": asset596,
+          "truckterminal_dynobjects": asset597,
+          "truckterminal_posts": asset598,
+          "tunnel_ceilingfan": asset599,
+          "tunnel_piping": asset600,
+          "undergroundparking_detail": asset601,
+          "undergroundparking_wall_tile": asset602,
+          "undergroundparking_walls": asset603,
+          "undergrparking_hallwall2": asset604,
+          "van_texporter": asset605,
+          "warehouse_building": asset606,
+          "warehouse_building_b": asset607,
+          "warehouse_c": asset608,
+          "warninglight": asset609,
+          "wheelbarrow": asset610,
+          "wooden_roadblock": asset611
         },
         environment: {
-          atmosphere: asset608,
-          atmospherePreset: asset609,
-          horizonTexture: asset612,
+          atmosphere: asset612,
+          atmospherePreset: asset613,
+          horizonTexture: asset616,
           skyTopTexture: null,
-          filterAddTexture: asset613,
-          filterSubTexture: asset614,
-          cloudBottomTexture: asset610,
-          cloudTopTexture: asset611,
-          flareConfig: asset615,
-          glowTexture: asset616,
-          flareTexture: asset617,
+          filterAddTexture: asset617,
+          filterSubTexture: asset618,
+          cloudBottomTexture: asset614,
+          cloudTopTexture: asset615,
+          flareConfig: asset619,
+          glowTexture: asset620,
+          flareTexture: asset621,
           flareConfigByName: {
             "day.ini": asset6,
             "canalday.ini": asset7,
@@ -2171,118 +2189,120 @@ export const trackCatalog = [
         familyId: "forest",
         trackId: "forest1",
         variantId: "a",
-        model: asset728,
-        log: asset729,
-        collisionModel: asset726,
-        collisionMeta: asset727,
-        startPoints: asset730,
-        lightmap: asset731,
+        model: asset736,
+        log: asset737,
+        collisionModel: asset732,
+        collisionMeta: asset733,
+        collisionBvh: asset734,
+        collisionCdb2: asset735,
+        startPoints: asset738,
+        lightmap: asset739,
         trackTextures: {
-          "3_colours_barrel": asset624,
-          "advetisement_c": asset625,
-          "advetisement_d": asset626,
-          "advetisement_e": asset627,
-          "alpha_bushbranch": asset628,
-          "alpha_bushlod": asset629,
-          "alpha_bushsprite": asset630,
-          "alpha_dynamic": asset631,
-          "alpha_forestwall": asset632,
-          "alpha_objects": asset633,
-          "alpha_traffic_line": asset634,
-          "alpha_treebranch": asset635,
-          "alpha_treelod": asset636,
-          "alpha_treesprite": asset637,
-          "alpha_windowshader": asset638,
-          "alpha_wirefence": asset639,
-          "beam_txt": asset640,
-          "big_log_txt": asset641,
-          "block_fence_b": asset642,
-          "bucket": asset643,
-          "cableroll": asset644,
-          "canister_txt_128": asset645,
-          "cardboard_box": asset646,
-          "city_advetisement_c": asset647,
-          "city_lightpoles_shared": asset648,
-          "coal": asset649,
-          "cone": asset650,
-          "constructiontoilet": asset651,
-          "desertgasstation_roof": asset652,
-          "desertgasstation_walls": asset653,
-          "dm_overgrown_road": asset654,
-          "dm_terrain_forest": asset655,
-          "dm_traintrack": asset656,
-          "electric_pole": asset657,
-          "fallentree_pine": asset658,
-          "fence_field_a": asset659,
-          "forest_tractor": asset660,
-          "forklifter_texture": asset661,
-          "gasbottle_3colors": asset662,
-          "gasbottle_cart": asset663,
-          "gasbottle_chubby": asset664,
-          "gaspump_txt": asset665,
-          "generic_metal_red": asset666,
-          "guardhouse_txt": asset667,
-          "highway_signs": asset668,
-          "kallio_2a": asset669,
-          "kallio_2b": asset670,
-          "ladder1": asset671,
-          "ledarrowboard": asset672,
-          "light_arrows": asset673,
-          "log_crane": asset674,
-          "log_truck_texture": asset675,
-          "logloadertwo": asset676,
-          "logshed": asset677,
-          "machineone": asset678,
-          "metal_bar_c": asset679,
-          "metal_barrel_plain_txt": asset680,
-          "metal_bluegrey_rusted": asset681,
-          "metal_gate": asset682,
-          "metal_grey": asset683,
-          "mill_low_logpile_256": asset684,
-          "mobilebarrack_texture": asset685,
-          "nascar_stand_concrete": asset686,
-          "oldtruck": asset687,
-          "open_trench_sign": asset688,
-          "plasticchair": asset689,
-          "plastictable": asset690,
-          "pressurewasher": asset691,
-          "roadblock": asset692,
-          "rock_fence": asset693,
-          "scaffold_b": asset694,
-          "scaffolds_high": asset695,
-          "sdm_road_medium": asset696,
-          "sdm_road_tarmac": asset697,
-          "sdm_side_forest": asset698,
-          "shovel": asset699,
-          "smallloadingcart": asset700,
-          "startfinishsign": asset701,
-          "stone_spotty": asset702,
-          "styroxandstuffboxesb": asset703,
-          "styroxandstuffboxesc": asset704,
-          "tablesaw": asset705,
-          "trackside_adverts_a": asset706,
-          "trailer": asset707,
-          "train_car_log_txt": asset708,
-          "train_cart_open_txt": asset709,
-          "trashcancontainer": asset710,
-          "treetrunk": asset711,
-          "warninglight": asset712,
-          "watertank_txt": asset713,
-          "wood_c": asset714,
-          "wood_fence": asset715
+          "3_colours_barrel": asset630,
+          "advetisement_c": asset631,
+          "advetisement_d": asset632,
+          "advetisement_e": asset633,
+          "alpha_bushbranch": asset634,
+          "alpha_bushlod": asset635,
+          "alpha_bushsprite": asset636,
+          "alpha_dynamic": asset637,
+          "alpha_forestwall": asset638,
+          "alpha_objects": asset639,
+          "alpha_traffic_line": asset640,
+          "alpha_treebranch": asset641,
+          "alpha_treelod": asset642,
+          "alpha_treesprite": asset643,
+          "alpha_windowshader": asset644,
+          "alpha_wirefence": asset645,
+          "beam_txt": asset646,
+          "big_log_txt": asset647,
+          "block_fence_b": asset648,
+          "bucket": asset649,
+          "cableroll": asset650,
+          "canister_txt_128": asset651,
+          "cardboard_box": asset652,
+          "city_advetisement_c": asset653,
+          "city_lightpoles_shared": asset654,
+          "coal": asset655,
+          "cone": asset656,
+          "constructiontoilet": asset657,
+          "desertgasstation_roof": asset658,
+          "desertgasstation_walls": asset659,
+          "dm_overgrown_road": asset660,
+          "dm_terrain_forest": asset661,
+          "dm_traintrack": asset662,
+          "electric_pole": asset663,
+          "fallentree_pine": asset664,
+          "fence_field_a": asset665,
+          "forest_tractor": asset666,
+          "forklifter_texture": asset667,
+          "gasbottle_3colors": asset668,
+          "gasbottle_cart": asset669,
+          "gasbottle_chubby": asset670,
+          "gaspump_txt": asset671,
+          "generic_metal_red": asset672,
+          "guardhouse_txt": asset673,
+          "highway_signs": asset674,
+          "kallio_2a": asset675,
+          "kallio_2b": asset676,
+          "ladder1": asset677,
+          "ledarrowboard": asset678,
+          "light_arrows": asset679,
+          "log_crane": asset680,
+          "log_truck_texture": asset681,
+          "logloadertwo": asset682,
+          "logshed": asset683,
+          "machineone": asset684,
+          "metal_bar_c": asset685,
+          "metal_barrel_plain_txt": asset686,
+          "metal_bluegrey_rusted": asset687,
+          "metal_gate": asset688,
+          "metal_grey": asset689,
+          "mill_low_logpile_256": asset690,
+          "mobilebarrack_texture": asset691,
+          "nascar_stand_concrete": asset692,
+          "oldtruck": asset693,
+          "open_trench_sign": asset694,
+          "plasticchair": asset695,
+          "plastictable": asset696,
+          "pressurewasher": asset697,
+          "roadblock": asset698,
+          "rock_fence": asset699,
+          "scaffold_b": asset700,
+          "scaffolds_high": asset701,
+          "sdm_road_medium": asset702,
+          "sdm_road_tarmac": asset703,
+          "sdm_side_forest": asset704,
+          "shovel": asset705,
+          "smallloadingcart": asset706,
+          "startfinishsign": asset707,
+          "stone_spotty": asset708,
+          "styroxandstuffboxesb": asset709,
+          "styroxandstuffboxesc": asset710,
+          "tablesaw": asset711,
+          "trackside_adverts_a": asset712,
+          "trailer": asset713,
+          "train_car_log_txt": asset714,
+          "train_cart_open_txt": asset715,
+          "trashcancontainer": asset716,
+          "treetrunk": asset717,
+          "warninglight": asset718,
+          "watertank_txt": asset719,
+          "wood_c": asset720,
+          "wood_fence": asset721
         },
         environment: {
-          atmosphere: asset716,
-          atmospherePreset: asset717,
-          horizonTexture: asset720,
+          atmosphere: asset722,
+          atmospherePreset: asset723,
+          horizonTexture: asset726,
           skyTopTexture: null,
-          filterAddTexture: asset721,
-          filterSubTexture: asset722,
-          cloudBottomTexture: asset718,
-          cloudTopTexture: asset719,
-          flareConfig: asset723,
-          glowTexture: asset724,
-          flareTexture: asset725,
+          filterAddTexture: asset727,
+          filterSubTexture: asset728,
+          cloudBottomTexture: asset724,
+          cloudTopTexture: asset725,
+          flareConfig: asset729,
+          glowTexture: asset730,
+          flareTexture: asset731,
           flareConfigByName: {
             "day.ini": asset6,
             "canalday.ini": asset7,
@@ -2344,128 +2364,130 @@ export const trackCatalog = [
         familyId: "forest",
         trackId: "forest1",
         variantId: "c",
-        model: asset846,
-        log: asset847,
-        collisionModel: asset844,
-        collisionMeta: asset845,
-        startPoints: asset848,
-        lightmap: asset849,
+        model: asset856,
+        log: asset857,
+        collisionModel: asset852,
+        collisionMeta: asset853,
+        collisionBvh: asset854,
+        collisionCdb2: asset855,
+        startPoints: asset858,
+        lightmap: asset859,
         trackTextures: {
-          "3_colours_barrel": asset732,
-          "advetisement_c": asset733,
-          "advetisement_d": asset734,
-          "advetisement_e": asset735,
-          "alpha_bushbranch": asset736,
-          "alpha_bushlod": asset737,
-          "alpha_bushsprite": asset738,
-          "alpha_dynamic": asset739,
-          "alpha_forestwall": asset740,
-          "alpha_objects": asset741,
-          "alpha_traffic_line": asset742,
-          "alpha_treebranch": asset743,
-          "alpha_treelod": asset744,
-          "alpha_treesprite": asset745,
-          "alpha_windowshader": asset746,
-          "alpha_wirefence": asset747,
-          "beam_txt": asset748,
-          "big_log_txt": asset749,
-          "block_fence_b": asset750,
-          "bucket": asset751,
-          "cableroll": asset752,
-          "canister_txt_128": asset753,
-          "cardboard_box": asset754,
-          "city_advetisement_c": asset755,
-          "city_lightpoles_shared": asset756,
-          "coal": asset757,
-          "coalloader_alpha": asset758,
-          "coalloader_details": asset759,
-          "cone": asset760,
-          "constructiontoilet": asset761,
-          "desertgasstation_walls": asset762,
-          "dm_overgrown_road": asset763,
-          "dm_terrain_forest": asset764,
-          "dm_traintrack": asset765,
-          "electric_pole": asset766,
-          "fallentree_pine": asset767,
-          "fence_field_a": asset768,
-          "forklifter_texture": asset769,
-          "gasbottle_3colors": asset770,
-          "gasbottle_cart": asset771,
-          "gasbottle_chubby": asset772,
-          "gaspump_txt": asset773,
-          "generic_metal_red": asset774,
-          "guardhouse_txt": asset775,
-          "highway_signs": asset776,
-          "kallio_2a": asset777,
-          "kallio_2b": asset778,
-          "ladder1": asset779,
-          "ledarrowboard": asset780,
-          "light_arrows": asset781,
-          "log_crane": asset782,
-          "log_truck_texture": asset783,
-          "logloaderone": asset784,
-          "logshed": asset785,
-          "machineone": asset786,
-          "metal_bar_c": asset787,
-          "metal_barrel_plain_txt": asset788,
-          "metal_bluegrey_rusted": asset789,
-          "metal_gate": asset790,
-          "metal_grey": asset791,
-          "mill_low_logpile_256": asset792,
-          "nascar_stand_concrete": asset793,
-          "oldtruck": asset794,
-          "open_trench_sign": asset795,
-          "plasticchair": asset796,
-          "plastictable": asset797,
-          "pressurewasher": asset798,
-          "railing": asset799,
-          "railroad_bridge_big": asset800,
-          "roadblock": asset801,
-          "scaffold_b": asset802,
-          "scaffolds_high": asset803,
-          "sdm_road_medium": asset804,
-          "sdm_road_tarmac": asset805,
-          "sdm_side_forest": asset806,
-          "shovel": asset807,
-          "sm_railroad_track": asset808,
-          "smallloadingcart": asset809,
-          "startfinishsign": asset810,
-          "stone_spotty": asset811,
-          "styroxandstuffboxesb": asset812,
-          "styroxandstuffboxesc": asset813,
-          "tablesaw": asset814,
-          "track_extension": asset815,
-          "trackside_adverts_a": asset816,
-          "trailer": asset817,
-          "train": asset818,
-          "train_car_log_txt": asset819,
-          "train_cart_open_txt": asset820,
-          "traincartmisc": asset821,
-          "trainstation_roof": asset822,
-          "trainstation_txt": asset823,
-          "trashcancontainer": asset824,
-          "treetrunk": asset825,
-          "warehouse_big_open": asset826,
-          "warninglight": asset827,
-          "water": asset828,
-          "watertank_txt": asset829,
-          "watertower_alpha_rusty": asset830,
-          "watertower_tank_rusty": asset831,
-          "wood_c": asset832,
-          "wood_fence": asset833
+          "3_colours_barrel": asset740,
+          "advetisement_c": asset741,
+          "advetisement_d": asset742,
+          "advetisement_e": asset743,
+          "alpha_bushbranch": asset744,
+          "alpha_bushlod": asset745,
+          "alpha_bushsprite": asset746,
+          "alpha_dynamic": asset747,
+          "alpha_forestwall": asset748,
+          "alpha_objects": asset749,
+          "alpha_traffic_line": asset750,
+          "alpha_treebranch": asset751,
+          "alpha_treelod": asset752,
+          "alpha_treesprite": asset753,
+          "alpha_windowshader": asset754,
+          "alpha_wirefence": asset755,
+          "beam_txt": asset756,
+          "big_log_txt": asset757,
+          "block_fence_b": asset758,
+          "bucket": asset759,
+          "cableroll": asset760,
+          "canister_txt_128": asset761,
+          "cardboard_box": asset762,
+          "city_advetisement_c": asset763,
+          "city_lightpoles_shared": asset764,
+          "coal": asset765,
+          "coalloader_alpha": asset766,
+          "coalloader_details": asset767,
+          "cone": asset768,
+          "constructiontoilet": asset769,
+          "desertgasstation_walls": asset770,
+          "dm_overgrown_road": asset771,
+          "dm_terrain_forest": asset772,
+          "dm_traintrack": asset773,
+          "electric_pole": asset774,
+          "fallentree_pine": asset775,
+          "fence_field_a": asset776,
+          "forklifter_texture": asset777,
+          "gasbottle_3colors": asset778,
+          "gasbottle_cart": asset779,
+          "gasbottle_chubby": asset780,
+          "gaspump_txt": asset781,
+          "generic_metal_red": asset782,
+          "guardhouse_txt": asset783,
+          "highway_signs": asset784,
+          "kallio_2a": asset785,
+          "kallio_2b": asset786,
+          "ladder1": asset787,
+          "ledarrowboard": asset788,
+          "light_arrows": asset789,
+          "log_crane": asset790,
+          "log_truck_texture": asset791,
+          "logloaderone": asset792,
+          "logshed": asset793,
+          "machineone": asset794,
+          "metal_bar_c": asset795,
+          "metal_barrel_plain_txt": asset796,
+          "metal_bluegrey_rusted": asset797,
+          "metal_gate": asset798,
+          "metal_grey": asset799,
+          "mill_low_logpile_256": asset800,
+          "nascar_stand_concrete": asset801,
+          "oldtruck": asset802,
+          "open_trench_sign": asset803,
+          "plasticchair": asset804,
+          "plastictable": asset805,
+          "pressurewasher": asset806,
+          "railing": asset807,
+          "railroad_bridge_big": asset808,
+          "roadblock": asset809,
+          "scaffold_b": asset810,
+          "scaffolds_high": asset811,
+          "sdm_road_medium": asset812,
+          "sdm_road_tarmac": asset813,
+          "sdm_side_forest": asset814,
+          "shovel": asset815,
+          "sm_railroad_track": asset816,
+          "smallloadingcart": asset817,
+          "startfinishsign": asset818,
+          "stone_spotty": asset819,
+          "styroxandstuffboxesb": asset820,
+          "styroxandstuffboxesc": asset821,
+          "tablesaw": asset822,
+          "track_extension": asset823,
+          "trackside_adverts_a": asset824,
+          "trailer": asset825,
+          "train": asset826,
+          "train_car_log_txt": asset827,
+          "train_cart_open_txt": asset828,
+          "traincartmisc": asset829,
+          "trainstation_roof": asset830,
+          "trainstation_txt": asset831,
+          "trashcancontainer": asset832,
+          "treetrunk": asset833,
+          "warehouse_big_open": asset834,
+          "warninglight": asset835,
+          "water": asset836,
+          "watertank_txt": asset837,
+          "watertower_alpha_rusty": asset838,
+          "watertower_tank_rusty": asset839,
+          "wood_c": asset840,
+          "wood_fence": asset841
         },
         environment: {
-          atmosphere: asset834,
-          atmospherePreset: asset835,
-          horizonTexture: asset838,
+          atmosphere: asset842,
+          atmospherePreset: asset843,
+          horizonTexture: asset846,
           skyTopTexture: null,
-          filterAddTexture: asset839,
-          filterSubTexture: asset840,
-          cloudBottomTexture: asset836,
-          cloudTopTexture: asset837,
-          flareConfig: asset841,
-          glowTexture: asset842,
-          flareTexture: asset843,
+          filterAddTexture: asset847,
+          filterSubTexture: asset848,
+          cloudBottomTexture: asset844,
+          cloudTopTexture: asset845,
+          flareConfig: asset849,
+          glowTexture: asset850,
+          flareTexture: asset851,
           flareConfigByName: {
             "day.ini": asset6,
             "canalday.ini": asset7,
@@ -2499,7 +2521,7 @@ export const trackCatalog = [
       skidmarkColor: new THREE.Vector4(1, 1, 1, 1),
       particleColor: new THREE.Vector4(0.717647, 0.717647, 0.717647, 1),
       colorBloom: true,
-      bloomColor: new THREE.Vector4(0.482353, 0.286275, 0.007843, 0),
+      bloomColor: new THREE.Vector4(0.482353, 0.286275, 0.00784314, 0),
       bloomTolerance: 0.24,
       bloomScale: 2.6,
       bloomIntensity: 0.59,
@@ -2514,7 +2536,7 @@ export const trackCatalog = [
       horizonRadius: 12500,
       horizonHeight: 6000,
       horizonBase: -3500,
-      horizonOffset: 49.759998,
+      horizonOffset: 49.76,
       flareFile: "SunEvening.ini",
       flarePosition: new THREE.Vector3(60, 22, 60),
       maxOverBrighting: 1.69,
@@ -2527,101 +2549,103 @@ export const trackCatalog = [
         familyId: "garagetest",
         trackId: "garagetest1",
         variantId: "a",
-        model: asset938,
-        log: asset939,
-        collisionModel: asset936,
-        collisionMeta: asset937,
-        startPoints: asset940,
-        lightmap: asset941,
+        model: asset950,
+        log: asset951,
+        collisionModel: asset946,
+        collisionMeta: asset947,
+        collisionBvh: asset948,
+        collisionCdb2: asset949,
+        startPoints: asset952,
+        lightmap: asset953,
         trackTextures: {
-          "advertisements_nascar_fencea": asset850,
-          "advetisement_c": asset851,
-          "alpha_audience_a": asset852,
-          "alpha_audience_b": asset853,
-          "alpha_audience_c": asset854,
-          "alpha_audience_stand_one_windows": asset855,
-          "alpha_audience_stand_three_stairs": asset856,
-          "alpha_bridge_racing_five": asset857,
-          "alpha_bushbranch": asset858,
-          "alpha_bushlod": asset859,
-          "alpha_bushsprite": asset860,
-          "alpha_dynamic": asset861,
-          "alpha_objects": asset862,
-          "alpha_traffic_line": asset863,
-          "alpha_treebranch": asset864,
-          "alpha_treelod": asset865,
-          "alpha_treesprite": asset866,
-          "alpha_wirefence": asset867,
-          "big_cone_a": asset868,
-          "bigtruckthree": asset869,
-          "blimp": asset870,
-          "concretewall_plain": asset871,
-          "concretewall_red": asset872,
-          "concretewall_yellow_black": asset873,
-          "cone": asset874,
-          "control_tower_balcony": asset875,
-          "control_tower_base": asset876,
-          "control_tower_top": asset877,
-          "dm_terrain_grass": asset878,
-          "hot_air_balloon": asset879,
-          "lights_a": asset880,
-          "rac_advertisement_board": asset881,
-          "rac_advertisement_racing": asset882,
-          "rac_audience_stand_four_details": asset883,
-          "rac_audience_stand_four_floor": asset884,
-          "rac_audience_stand_four_roof": asset885,
-          "rac_audience_stand_four_seats": asset886,
-          "rac_audience_stand_four_walls": asset887,
-          "rac_audience_stand_one_ceiling": asset888,
-          "rac_audience_stand_one_details": asset889,
-          "rac_audience_stand_one_floor": asset890,
-          "rac_audience_stand_one_roof": asset891,
-          "rac_audience_stand_one_walls": asset892,
-          "rac_audience_stand_one_windows": asset893,
-          "rac_audience_stand_two_walls_a": asset894,
-          "rac_audience_stand_two_windows": asset895,
-          "rac_billboard_racing_a_advertisement": asset896,
-          "rac_billboard_racing_metal": asset897,
-          "rac_bridge_racing_five_advertisement": asset898,
-          "rac_bridge_racing_five_metal": asset899,
-          "rac_building_over_road_concrete_wall": asset900,
-          "rac_chicane_red_white": asset901,
-          "rac_pit_door": asset902,
-          "rac_tires": asset903,
-          "rac_watch_tower_one": asset904,
-          "racingwatchtowertwo_alpha": asset905,
-          "racingwatchtowertwo_alphawindows": asset906,
-          "racingwatchtowertwo_floor": asset907,
-          "racingwatchtowertwo_poles": asset908,
-          "racingwatchtowertwo_walls": asset909,
-          "railing": asset910,
-          "scaffold_b": asset911,
-          "sdm_road_concrete": asset912,
-          "sdm_road_concrete_mark": asset913,
-          "sdm_road_concrete_tile": asset914,
-          "sdm_road_tarmac_tile": asset915,
-          "sdm_side_grass": asset916,
-          "sdm_terrain_grass": asset917,
-          "sm_rac_audience_stand_two_windows": asset918,
-          "sponsorsigns_a": asset919,
-          "start": asset920,
-          "trailer_with_roof": asset921,
-          "treetrunk": asset922,
-          "truck_o_detail": asset923,
-          "wall_a": asset924
+          "advertisements_nascar_fencea": asset860,
+          "advetisement_c": asset861,
+          "alpha_audience_a": asset862,
+          "alpha_audience_b": asset863,
+          "alpha_audience_c": asset864,
+          "alpha_audience_stand_one_windows": asset865,
+          "alpha_audience_stand_three_stairs": asset866,
+          "alpha_bridge_racing_five": asset867,
+          "alpha_bushbranch": asset868,
+          "alpha_bushlod": asset869,
+          "alpha_bushsprite": asset870,
+          "alpha_dynamic": asset871,
+          "alpha_objects": asset872,
+          "alpha_traffic_line": asset873,
+          "alpha_treebranch": asset874,
+          "alpha_treelod": asset875,
+          "alpha_treesprite": asset876,
+          "alpha_wirefence": asset877,
+          "big_cone_a": asset878,
+          "bigtruckthree": asset879,
+          "blimp": asset880,
+          "concretewall_plain": asset881,
+          "concretewall_red": asset882,
+          "concretewall_yellow_black": asset883,
+          "cone": asset884,
+          "control_tower_balcony": asset885,
+          "control_tower_base": asset886,
+          "control_tower_top": asset887,
+          "dm_terrain_grass": asset888,
+          "hot_air_balloon": asset889,
+          "lights_a": asset890,
+          "rac_advertisement_board": asset891,
+          "rac_advertisement_racing": asset892,
+          "rac_audience_stand_four_details": asset893,
+          "rac_audience_stand_four_floor": asset894,
+          "rac_audience_stand_four_roof": asset895,
+          "rac_audience_stand_four_seats": asset896,
+          "rac_audience_stand_four_walls": asset897,
+          "rac_audience_stand_one_ceiling": asset898,
+          "rac_audience_stand_one_details": asset899,
+          "rac_audience_stand_one_floor": asset900,
+          "rac_audience_stand_one_roof": asset901,
+          "rac_audience_stand_one_walls": asset902,
+          "rac_audience_stand_one_windows": asset903,
+          "rac_audience_stand_two_walls_a": asset904,
+          "rac_audience_stand_two_windows": asset905,
+          "rac_billboard_racing_a_advertisement": asset906,
+          "rac_billboard_racing_metal": asset907,
+          "rac_bridge_racing_five_advertisement": asset908,
+          "rac_bridge_racing_five_metal": asset909,
+          "rac_building_over_road_concrete_wall": asset910,
+          "rac_chicane_red_white": asset911,
+          "rac_pit_door": asset912,
+          "rac_tires": asset913,
+          "rac_watch_tower_one": asset914,
+          "racingwatchtowertwo_alpha": asset915,
+          "racingwatchtowertwo_alphawindows": asset916,
+          "racingwatchtowertwo_floor": asset917,
+          "racingwatchtowertwo_poles": asset918,
+          "racingwatchtowertwo_walls": asset919,
+          "railing": asset920,
+          "scaffold_b": asset921,
+          "sdm_road_concrete": asset922,
+          "sdm_road_concrete_mark": asset923,
+          "sdm_road_concrete_tile": asset924,
+          "sdm_road_tarmac_tile": asset925,
+          "sdm_side_grass": asset926,
+          "sdm_terrain_grass": asset927,
+          "sm_rac_audience_stand_two_windows": asset928,
+          "sponsorsigns_a": asset929,
+          "start": asset930,
+          "trailer_with_roof": asset931,
+          "treetrunk": asset932,
+          "truck_o_detail": asset933,
+          "wall_a": asset934
         },
         environment: {
-          atmosphere: asset925,
-          atmospherePreset: asset926,
-          horizonTexture: asset929,
-          skyTopTexture: asset935,
-          filterAddTexture: asset930,
-          filterSubTexture: asset931,
-          cloudBottomTexture: asset927,
-          cloudTopTexture: asset928,
-          flareConfig: asset932,
-          glowTexture: asset933,
-          flareTexture: asset934,
+          atmosphere: asset935,
+          atmospherePreset: asset936,
+          horizonTexture: asset939,
+          skyTopTexture: asset945,
+          filterAddTexture: asset940,
+          filterSubTexture: asset941,
+          cloudBottomTexture: asset937,
+          cloudTopTexture: asset938,
+          flareConfig: asset942,
+          glowTexture: asset943,
+          flareTexture: asset944,
           flareConfigByName: {
             "day.ini": asset6,
             "canalday.ini": asset7,
@@ -2684,3 +2708,4 @@ export const defaultSelection = {
   carId: carCatalog[0]?.id ?? null,
   skinId: carCatalog[0]?.defaultSkinId ?? null,
 };
+

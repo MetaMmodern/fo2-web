@@ -109,6 +109,7 @@ Source of truth notes:
 - `ghidra_findings/DRIVING_COLLISION_FINDINGS_2026-03-31.md:1`
 - `ghidra_findings/DRIVING_RUNTIME_CONTROL_FINDINGS_2026-03-31.md:1`
 - `ghidra_findings/ORIGINAL_COLLISION_ENGINE_PORT_ASSESSMENT_2026-06-09.md:1`
+- `ghidra_findings/COLLISION_CDB2_SOLVER_BODY_LAYOUT_2026-06-09.md:1`
 
 ### Core anchors
 
@@ -176,12 +177,40 @@ Source of truth notes:
 - `FUN_00454b50` @ `0x00454b50` — Builds the runtime engine curve table from `PeakPower*`, `PeakTorque*`, `RedLineRpm`, `RpmLimit`, and `ZeroPowerRpm`.
 - `Drivetrain_DistributeTorqueToDrivenWheels` @ `0x00441090` — Driven-wheel torque distribution and differential dispatch stage.
 - `PhysicsWorld_StepActiveBodiesAndContacts` @ `0x0056c850` — World-level active-body/contact-island step used by normal `UpdateCamera` after all per-vehicle force accumulation. Handles active body callbacks/contact flags, island/contact processing, integration, and sleep/activation bookkeeping.
+- `PhysicsWorld_InitializeContactPoolsAndDefaults` @ `0x00565a10` - Initializes the world contact pools/defaults. Confirmed 2026-06-09: prepares `0x400` contact nodes at `world+0xf720` with `0x44` stride and contact vtable `0x0067bc0c`, zeroes `world+0x20720`, and sets solver/contact defaults including `world+0x2073c = 0.1`, `world+0x20738 = 0.00001`, `world+0x20740 = 0.25`, `world+0x20744 = 1.25`, `world+0x910 = 1.0`.
 - `PhysicsWorld_BuildPotentialContactPairs` @ `0x00565f10` — Broadphase/potential-pair builder. Walks body overlap links, filters flags/masks/sleep state, queues contact pairs, and activates dynamic objects into the live set.
 - `PhysicsWorld_GenerateContactManifolds` @ `0x005692b0` — World contact-manifold generation. Consumes potential body pairs, emits contact records/damage visual contacts, handles active dynamic body triangle contacts, collision callbacks, and queued body hit data.
+- `PhysicsWorld_AppendContactConstraint` @ `0x0056a850` — Appends generated contact/manifold records into the physics world's per-body contact graph. Confirmed 2026-06-09: writes a `0x44`-stride world contact node from a `0x38`-byte contact record and resolves material/friction/restitution terms from collision material tables/body flags.
 - `PhysicsIsland_SolveContactsAndIntegrateBodies` @ `0x00573780` — Per-island contact solver/integration stage called by `PhysicsWorld_StepActiveBodiesAndContacts`; prepares body solver rows, resolves queued contacts, and integrates active bodies.
 - `PhysicsWorld_UpdateBodyBroadphaseBounds` @ `0x0056ea50` — Updates body broadphase integer AABBs from body transforms and collision shape bounds, then reinserts changed bounds into spatial axes.
 - `CollisionSpatial_QueryTransformedAabbTriangles` @ `0x005630d0` — Static collision spatial query used by `Vehicle_SampleWheelGroundContacts`; traverses authored collision tree data and writes triangle/contact candidates into the caller buffer.
 - `CollisionSpatial_RaycastTriangleSoup` @ `0x005639e0` — Triangle-soup ray/sweep tester used by wheel ground sampling and reset settle; writes hit point/normal/material id and supports a fallback static query for near-zero ray direction.
+- `CollisionSpatial_GenerateBodyTriangleContacts` @ `0x00570040` — Active body-vs-static triangle contact generator. Confirmed 2026-06-09: queries authored static collision BVH/CDB data for an active body and writes caller-limited `0x38`-byte contacts for `PhysicsWorld_GenerateContactManifolds`.
+- `CollisionSpatial_ClipTriangleAgainstBodyBoxContact` @ `0x00571080` — Clips one authored static triangle against a transformed body box and emits a `0x38`-byte contact record with world point, normal, contact velocity, local centroid, penetration/depth, and material/triangle id.
+- `CollisionMath_ComputeTriangleBoxPenetrationDepth` @ `0x00570910` — Computes triangle-vs-box minimum penetration/separation depth used by `CollisionSpatial_ClipTriangleAgainstBodyBoxContact` when exact clipping depth is requested.
+- `CollisionCdb2_ExpandLeafCommands` @ `0x0056d3d0` - Expands CDB2 leaf command headers into `0x10` byte triangle candidates: material byte, edge/flag byte, vertex attribute/edge byte, padding, and three vertex pointers. Dispatches decoder modes through table `0x0069bd28`.
+- `CollisionCdb2_ExpandOneLeafCommand` @ `0x0056d490` - Single-command CDB2 expander used by the raycast traversal path.
+- `CollisionCdb2_DecodeTriangles_Mode0` @ `0x0056ce10` - CDB2 leaf command payload decoder mode 0.
+- `CollisionCdb2_DecodeTriangles_Mode1` @ `0x0056cfa0` - CDB2 leaf command payload decoder mode 1.
+- `CollisionCdb2_DecodeTriangles_Mode2` @ `0x0056d120` - CDB2 leaf command payload decoder mode 2.
+- `CollisionCdb2_DecodeTriangles_Mode3` @ `0x0056d1c0` - CDB2 leaf command payload decoder mode 3.
+- `CollisionCdb2_DecodeTriangles_Mode4` @ `0x0056d250` - CDB2 leaf command payload decoder mode 4.
+- `CollisionCdb2_DecodeTriangles_Mode5` @ `0x0056d330` - CDB2 leaf command payload decoder mode 5.
+- `CollisionSpatial_BuildTransformedAabbQuery` @ `0x0056d6d0` - Builds the transformed AABB/OBB query structure used before static CDB2/BVH traversal.
+- `CollisionSpatial_TestQuantizedNodeAabbAgainstQueryObb` @ `0x00562bb0` - Tests quantized CDB2/BVH node bounds against the transformed query OBB.
+- `ContactManifold_ReduceContactsByDepthAndExtents` @ `0x0056f7d0` - Reduces generated `0x38` contact records when body-static clipping emits too many points; keeps deepest and extremal tangent contacts.
+- `ContactConstraint_GetSolverRowCount` @ `0x0056f2b0` - Contact vtable `0x0067bc0c` slot 0. Returns one normal solver row, or three rows when contact node flag bit `0x1` enables tangent/friction rows.
+- `ContactConstraint_FillSolverRowsAndBounds` @ `0x0056f2d0` - Contact vtable `0x0067bc0c` slot `+4`. Fills normal/tangent Jacobian rows, penetration bias, restitution term, and projected impulse bounds from the `0x44` contact node and `0x38` contact record.
+- `ContactConstraint_ResetNodeLinks` @ `0x00565220` - Contact vtable `0x0067bc0c` slot `+8`. Clears link/state fields on a `0x44` contact node while preserving the vtable.
+- `PhysicsSolver_SolveContactConstraint` @ `0x00572fb0` - Per-contact projected constraint solver. Gets row count/fills rows, builds effective mass, solves bounded impulses, applies impulses to one or two bodies, and handles impact threshold/callback side effects.
+- `PhysicsSolver_BuildSingleBodyRhs` @ `0x00572420` - Contact solver helper for one-body/static contacts.
+- `PhysicsSolver_BuildTwoBodyRhs` @ `0x005725b0` - Contact solver helper for two-body contacts.
+- `PhysicsSolver_ApplySolvedImpulseToBody` @ `0x00572850` - Applies solved contact impulse rows back into body linear/angular solver state.
+- `PhysicsSolver_SolveProjectedConstraintBounds` @ `0x00574a50` - Solves bounded projected constraint rows for the contact solver.
+- `PhysicsSolver_ScaleJacobianRowsByInverseMassInertia` @ `0x00572da0` — Contact solver helper called from the `0x00572fb0` path; scales/copies contact Jacobian rows through inverse mass/inertia terms.
+- `PhysicsSolver_ScaleJacobianRowsByBodyMatrix` @ `0x00572e60` — Contact solver helper called from the `0x00572fb0` path; scales/copies Jacobian rows through a supplied body matrix and timestep factors.
+- `PhysicsSolver_MultiplyConstraintMatrix` @ `0x005720a0` — Contact solver helper called from the `0x00572fb0` path; multiplies contact constraint/Jacobian row blocks into an output matrix/vector.
+- `PhysicsSolver_AccumulateConstraintMatrix` @ `0x00572250` — Contact solver helper called from the `0x00572fb0` path; accumulates contact constraint/Jacobian row products into an existing matrix/vector.
 - `PhysicsBody_IntegrateForcesAndPose` @ `0x00564410` — Body-level force/pose integration helper used by the reset settle loop at `Vehicle_ResetPoseAndRunPhysicsSubsteps`.
 - `PhysicsBody_IntegratePoseFromVelocities` @ `0x00564640` — Low-level body pose integrator called by `PhysicsBody_IntegrateForcesAndPose` and `PhysicsIsland_SolveContactsAndIntegrateBodies`. Confirmed 2026-06-09: integrates linear velocity and quaternion orientation from accumulated force/torque/angular velocity, normalizes the quaternion, rebuilds the matrix, and applies damping. No airborne upright/default attitude reset is present in this path.
 - `Vehicle_UpdateAngularAccelerationFeedback` @ `0x00422e30` — Vehicle post-step angular acceleration/feedback update called from `Vehicle_FinalizeSubstepAndUpdateAttachments` on normal runtime finalization.
@@ -200,8 +229,11 @@ Source of truth notes:
 - `CollisionTopMin` @ `0x0066a400`
 - `CollisionTopMax` @ `0x0066a3f0`
 - `BodyCollision` @ `0x0067bf3c`
+- `BodyFriction` @ `0x0067bf68`
+- `Friction` @ `0x0067bf78`
 - `RayCollision` @ `0x0067bf1c`
 - `CameraCollision` @ `0x0067bf2c`
+- `CollisionSound` @ `0x0067bf94`
 - `CollisionSoundTypes` @ `0x00669540`
 - `SuspensionBottomOut` @ `0x00669510`
 - `Data.Physics.TireDynamics` @ `0x0066a940`
@@ -243,6 +275,7 @@ Source of truth notes:
 ### Track / Dynamic-Object collision anchors
 
 - `DynamicObject_InitializeFromLua` @ `0x00590fd0` — Data-driven dynamic object bootstrap; reads `Mass`, `Restitution`, `CollisionSound`, `WakeupVelocity`, `ReactivationVelocity`, `DamageThreshold`, `AeroDragForce`, `BonusType`, `Category`, `Inertia`, `ExplosionForce`, `DestroyFx`, `EmitterFx`, and optional `RotateX/Y/Z`.
+- `DynamicObject_DispatchDestroyAndEmitterFx` @ `0x00591cb0` — Destruction/effects dispatcher for dynamic objects. Confirmed 2026-06-09: handles optional explosion force, destroy effect variants, emitter effect registration, and deferred environment queue insertion; it is not part of baseline collision resolution.
 - `DynamicObject_InstantiateLinkedProxyByName` @ `0x00597320` — Instantiates linked runtime proxy/effect objects from the global object-template table and links them under the parent dynamic object.
 - `DynamicObject_RegisterIntoEnvironmentActivationLists` @ `0x00565c40` — Registers dynamic objects into environment activation bookkeeping.
 - `DynamicObject_RegisterIntoEnvironmentLiveSet` @ `0x00565d50` — Registers dynamic objects into the environment live-set / linked-list bookkeeping when they transition live.

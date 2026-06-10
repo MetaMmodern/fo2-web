@@ -422,6 +422,8 @@ function buildTracks(globalImports) {
     const logPath = path.join(trackDir, "geometry/track_geom_log.txt");
     const collisionModelPath = path.join(trackDir, "geometry/collision.glb");
     const collisionMetaPath = path.join(trackDir, "geometry/collision.meta.json");
+    const collisionBvhPath = path.join(trackDir, "geometry/track_bvh.gen");
+    const collisionCdb2Path = path.join(trackDir, "geometry/track_cdb2.gen");
     const logText = fs.readFileSync(logPath, "utf8");
     const textureFileMap = createTextureFileMap(textureDir);
     const requestedTextures = collectRequestedTrackTextures(logText);
@@ -504,6 +506,12 @@ function buildTracks(globalImports) {
     const collisionMetaImport = fileExists(collisionMetaPath)
       ? addImport(collisionMetaPath, { url: false })
       : "null";
+    const collisionBvhImport = fileExists(collisionBvhPath)
+      ? addImport(collisionBvhPath)
+      : "null";
+    const collisionCdb2Import = fileExists(collisionCdb2Path)
+      ? addImport(collisionCdb2Path)
+      : "null";
 
     return `{
       id: ${JSON.stringify(trackKey)},
@@ -515,6 +523,8 @@ function buildTracks(globalImports) {
       log: ${addImport(logPath)},
       collisionModel: ${collisionModelImport},
       collisionMeta: ${collisionMetaImport},
+      collisionBvh: ${collisionBvhImport},
+      collisionCdb2: ${collisionCdb2Import},
       startPoints: ${addImport(path.join(trackDir, "data/startpoints.bed"))},
       lightmap: ${addImport(path.join(trackDir, "lighting/lightmap1_w2.png"))},
       trackTextures: {

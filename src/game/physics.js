@@ -32,15 +32,14 @@ const CONTACT_RAY_DISTANCE = 4.6;
 const CONTACT_SKIN = 0.035;
 const TMP_WHEEL_RAY_OPTIONS = {
   rayDistance: 0,
-  minUpDot: -0.25,
+  minUpDot: 0.2,
 };
 const TMP_WHEEL_SAMPLE_OPTIONS = {
   rayHeight: CONTACT_RAY_HEIGHT,
   rayDistance: CONTACT_RAY_DISTANCE,
-  minUpDot: -0.2,
+  minUpDot: 0.2,
 };
 const BODY_COLLISION_SKIN = 0.08;
-const BODY_WALL_PROBE_HEIGHT = 0.45;
 const RESET_FALL_Y = -30;
 const DEFAULT_GRAVITY = 18;
 const PITCH_INERTIA_SCALE = 0.82;
@@ -129,10 +128,7 @@ export async function createDrivingSimulation({
       }
 
       const runtimeDebug = resolveDrivingDebugOptions(debugOptions);
-      const wheelContactSampler =
-        runtimeDebug.surfaceSampler && trackContactSampler
-          ? trackContactSampler
-          : trackFloorSampler;
+      const wheelContactSampler = trackFloorSampler;
 
       if (!runtimeDebug.enabled) {
         updateCameraState(state, carRoot, runtimeDebug);
@@ -170,6 +166,7 @@ export async function createDrivingSimulation({
           state,
           substepContacts,
           runtimeDebug,
+          trackContactSampler,
           trackFloorSampler,
           dynamicObjectState,
           FIXED_DT,
@@ -177,6 +174,9 @@ export async function createDrivingSimulation({
         accumulator -= FIXED_DT;
         stepCount += 1;
         stepVehicleMs += nowMs() - stepStart;
+      }
+      if (stepCount >= MAX_STEPS_PER_FRAME && accumulator >= FIXED_DT) {
+        accumulator = Math.min(accumulator, FIXED_DT * 2);
       }
       syncStateSlipAggregates(state);
 
@@ -304,6 +304,7 @@ function normalizeDrivingConfig(rawConfig, carRoot) {
     massKg: massBase * massFudge,
     bodyHalfExtents: bodyBounds.halfExtents,
     bodyOffset: bodyBounds.offset,
+    bodyCollisionVolumes: bodyBounds.volumes,
     bodyCollisionRadius: Math.max(
       bodyBounds.halfExtents.x,
       bodyBounds.halfExtents.z,
@@ -736,24 +737,62 @@ function updatePlayerControls(state, input, config, dt) {
 }
 
 function resolveBodyBounds(bodyCollision, carRoot) {
-  const minArray = bodyCollision.collisionFullMin;
-  const maxArray = bodyCollision.collisionFullMax;
+  const fullVolume = resolveCollisionVolume(
+    bodyCollision.collisionFullMin,
+    bodyCollision.collisionFullMax,
+    new THREE.Vector3(0.3, 0.2, 0.6),
+  );
 
-  if (Array.isArray(minArray) && Array.isArray(maxArray)) {
-    const min = new THREE.Vector3().fromArray(minArray);
-    const max = new THREE.Vector3().fromArray(maxArray);
+  if (fullVolume) {
+    const bottomVolume = resolveCollisionVolume(
+      bodyCollision.collisionBottomMin,
+      bodyCollision.collisionBottomMax,
+      new THREE.Vector3(0.3, 0.12, 0.6),
+    );
+    const topVolume = resolveCollisionVolume(
+      bodyCollision.collisionTopMin,
+      bodyCollision.collisionTopMax,
+      new THREE.Vector3(0.3, 0.12, 0.6),
+    );
     return {
-      halfExtents: max.clone().sub(min).multiplyScalar(0.5).max(new THREE.Vector3(0.3, 0.2, 0.6)),
-      offset: min.clone().add(max).multiplyScalar(0.5),
+      halfExtents: fullVolume.halfExtents,
+      offset: fullVolume.offset,
+      volumes: {
+        full: fullVolume,
+        bottom: bottomVolume ?? fullVolume,
+        top: topVolume ?? fullVolume,
+      },
     };
   }
 
   const box = new THREE.Box3().setFromObject(carRoot);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3()).sub(carRoot.position);
+  const halfExtents = size.multiplyScalar(0.5).max(new THREE.Vector3(0.3, 0.2, 0.6));
   return {
-    halfExtents: size.multiplyScalar(0.5).max(new THREE.Vector3(0.3, 0.2, 0.6)),
+    halfExtents,
     offset: center,
+    volumes: {
+      full: {
+        halfExtents: halfExtents.clone(),
+        offset: center.clone(),
+      },
+      bottom: null,
+      top: null,
+    },
+  };
+}
+
+function resolveCollisionVolume(minArray, maxArray, minHalfExtents) {
+  if (!Array.isArray(minArray) || !Array.isArray(maxArray)) {
+    return null;
+  }
+
+  const min = new THREE.Vector3().fromArray(minArray);
+  const max = new THREE.Vector3().fromArray(maxArray);
+  return {
+    halfExtents: max.clone().sub(min).multiplyScalar(0.5).max(minHalfExtents),
+    offset: min.clone().add(max).multiplyScalar(0.5),
   };
 }
 
@@ -967,6 +1006,7 @@ function runVehicleSubstep(
   state,
   sampledContacts,
   runtimeDebug,
+  trackContactSampler,
   trackFloorSampler,
   dynamicObjectState,
   dt,
@@ -1058,7 +1098,7 @@ function runVehicleSubstep(
   carRoot.position.addScaledVector(state.velocity, dt);
   correctSuspensionPenetration(carRoot, state, groundedContacts, config, dt);
   if (runtimeDebug.bodyContacts) {
-    resolveTrackBodyContacts(carRoot, config, state, trackFloorSampler);
+    resolveTrackBodyContacts(carRoot, config, state, trackContactSampler);
   }
   interactWithDynamicObjects(carRoot, config, state, dynamicObjectState, trackFloorSampler, dt);
   updatePlanarBasisFromQuaternion(state, carRoot.quaternion);
@@ -2357,6 +2397,13 @@ function updateWheelVisuals(carRoot, wheelLayout, state) {
 
     const wheelState = findWheelState(state, wheel.name);
     tire.position.copy(wheel.tireBasePosition);
+    const minTravelY =
+      wheel.tireBasePosition.y +
+      wheel.wheelConfig.defaultCompression -
+      wheel.wheelConfig.maxLength;
+    const maxTravelY =
+      wheel.tireBasePosition.y +
+      wheel.wheelConfig.defaultCompression;
 
     if (wheelState.grounded && wheelState.contactPoint && wheelState.contactNormal) {
       TMP_A
@@ -2366,7 +2413,7 @@ function updateWheelVisuals(carRoot, wheelLayout, state) {
           Math.max(wheel.wheelConfig.radius, 0.05),
         );
       TMP_B.copy(carRoot.worldToLocal(TMP_A));
-      tire.position.y = TMP_B.y;
+      tire.position.y = THREE.MathUtils.clamp(TMP_B.y, minTravelY, maxTravelY);
     } else {
       const compression = THREE.MathUtils.clamp(
         wheelState.compression ?? 0,
@@ -2490,12 +2537,12 @@ function resetVehicleToSpawn(
   state.differentialState.front = createDifferentialRuntimeState();
   state.differentialState.rear = createDifferentialRuntimeState();
 
-  if (trackContactSampler ?? trackFloorSampler) {
+  if (trackFloorSampler ?? trackContactSampler) {
     const contacts = sampleWheelContacts(
       carRoot,
       wheelLayout,
-      trackContactSampler,
-      trackFloorSampler,
+      trackFloorSampler ?? trackContactSampler,
+      null,
     )
       .filter((entry) => entry.hit);
 
@@ -2540,66 +2587,146 @@ function stabilizeIdleState(state, dt) {
 }
 
 function resolveTrackBodyContacts(carRoot, config, state, trackFloorSampler) {
-  if (!trackFloorSampler?.raycast) {
+  if (!trackFloorSampler?.raycast && !trackFloorSampler?.queryObbContacts) {
     return;
   }
 
-  const center = TMP_C
-    .copy(carRoot.position)
-    .addScaledVector(state.groundNormal ?? WORLD_UP, BODY_WALL_PROBE_HEIGHT);
   const forward = TMP_FORWARD.copy(state.forwardDir);
   const right = TMP_RIGHT.copy(state.rightDir);
-  const radius = config.bodyCollisionRadius + BODY_COLLISION_SKIN;
+  const up = TMP_UP.copy(WORLD_UP).applyQuaternion(carRoot.quaternion).normalize();
   const directions = [
     forward,
     TMP_A.copy(forward).negate(),
     right,
     TMP_B.copy(right).negate(),
-    TMP_D.copy(forward).add(right).normalize(),
-    TMP_E.copy(forward).sub(right).normalize(),
-    TMP_F.copy(forward).negate().add(right).normalize(),
-    TMP_G.copy(forward).negate().sub(right).normalize(),
   ];
+  TMP_D.copy(state.velocity);
+  TMP_D.y = 0;
+  if (TMP_D.lengthSq() > 0.25) {
+    TMP_D.normalize();
+    directions.push(TMP_D);
+  }
+  const volumes = [
+    config.bodyCollisionVolumes?.bottom,
+    config.bodyCollisionVolumes?.top,
+    config.bodyCollisionVolumes?.full,
+  ].filter(Boolean);
+  const uniqueVolumes = [];
 
-  for (const direction of directions) {
-    const hit = trackFloorSampler.raycast(center, direction, {
-      rayDistance: radius,
-      minUpDot: -0.7,
-      maxUpDot: 0.78,
-    });
-
-    if (!hit) {
-      continue;
-    }
-
-    const penetration = radius - hit.distance;
-    if (penetration <= 0) {
-      continue;
-    }
-
-    const normal = TMP_H.copy(hit.normal ?? direction).normalize();
-    if (normal.y > 0.82) {
-      continue;
-    }
-    normal.y = Math.min(normal.y, 0.25);
-    if (normal.lengthSq() < 1e-8) {
-      normal.copy(direction).negate();
-    }
-    normal.normalize();
-
-    carRoot.position.addScaledVector(normal, penetration);
-    const velocityIntoWall = state.velocity.dot(normal);
-    if (velocityIntoWall < 0) {
-      const impact = -velocityIntoWall;
-      applyContactAngularImpulse(state, normal, impact, BODY_WALL_PROBE_HEIGHT);
-      state.velocity.addScaledVector(normal, -velocityIntoWall * 1.08);
-      state.velocity.multiplyScalar(0.985);
-      state.angularVelocity.addScaledVector(
-        WORLD_UP,
-        -state.angularVelocity.dot(WORLD_UP) * 0.18,
-      );
+  for (const volume of volumes) {
+    if (!uniqueVolumes.includes(volume)) {
+      uniqueVolumes.push(volume);
     }
   }
+
+  for (const volume of uniqueVolumes) {
+    const center = TMP_C
+      .copy(volume.offset)
+      .applyQuaternion(carRoot.quaternion)
+      .add(carRoot.position);
+
+    if (trackFloorSampler.queryObbContacts) {
+      const contacts = trackFloorSampler.queryObbContacts(
+        center,
+        { x: right, y: up, z: forward },
+        volume.halfExtents,
+        {
+          skin: BODY_COLLISION_SKIN,
+          minUpDot: -0.7,
+          maxUpDot: 1,
+          maxContacts: 4,
+          maxCandidates: 2048,
+          preferIndexed: true,
+        },
+      );
+
+      for (const hit of contacts) {
+        applyTrackBodyContact(carRoot, state, center, hit);
+      }
+      if (contacts.length > 0) {
+        continue;
+      }
+    }
+
+    if (!trackFloorSampler.raycast) {
+      continue;
+    }
+
+    for (const direction of directions) {
+      const supportDistance =
+        Math.abs(direction.dot(right)) * volume.halfExtents.x +
+        Math.abs(direction.dot(forward)) * volume.halfExtents.z +
+        BODY_COLLISION_SKIN;
+      const hit = trackFloorSampler.raycast(center, direction, {
+        rayDistance: supportDistance,
+        minUpDot: -0.7,
+        maxUpDot: 1,
+        preferIndexed: true,
+      });
+
+      if (!hit) {
+        continue;
+      }
+
+      const penetration = supportDistance - hit.distance;
+      if (penetration <= 0) {
+        continue;
+      }
+
+      applyTrackBodyContact(carRoot, state, center, {
+        ...hit,
+        penetration,
+        normal: hit.normal ?? direction,
+      });
+    }
+  }
+}
+
+function applyTrackBodyContact(carRoot, state, center, hit) {
+  const penetration = hit?.penetration ?? 0;
+  if (!Number.isFinite(penetration) || penetration <= 0) {
+    return;
+  }
+
+  const normal = TMP_H.copy(hit.normal ?? WORLD_UP).normalize();
+  if (normal.lengthSq() < 1e-8) {
+    return;
+  }
+  normal.normalize();
+
+  carRoot.position.addScaledVector(normal, Math.min(penetration, 0.35));
+  const velocityIntoWall = state.velocity.dot(normal);
+  if (velocityIntoWall < 0) {
+    const impact = -velocityIntoWall;
+    const heightOffset = Math.abs(center.y - carRoot.position.y);
+    applyContactAngularImpulse(state, normal, impact, heightOffset);
+    if (hit.point) {
+      applyBodyContactAngularImpulse(state, carRoot, normal, hit.point, impact);
+    }
+    state.velocity.addScaledVector(normal, -velocityIntoWall * 1.08);
+    state.velocity.multiplyScalar(0.985);
+    state.angularVelocity.addScaledVector(
+      WORLD_UP,
+      -state.angularVelocity.dot(WORLD_UP) * 0.18,
+    );
+  }
+}
+
+function applyBodyContactAngularImpulse(state, carRoot, normal, contactPoint, impact) {
+  if (!Number.isFinite(impact) || impact <= 0 || !contactPoint) {
+    return;
+  }
+
+  TMP_E.copy(contactPoint).sub(carRoot.position);
+  TMP_F.crossVectors(TMP_E, normal);
+  if (TMP_F.lengthSq() < 1e-8) {
+    return;
+  }
+
+  state.angularVelocity.addScaledVector(
+    TMP_F.normalize(),
+    THREE.MathUtils.clamp(impact * 0.018, -0.45, 0.45),
+  );
 }
 
 function applyContactAngularImpulse(state, normal, impact, heightOffset = 0) {
@@ -2851,7 +2978,7 @@ function resolveDrivingDebugOptions(debugOptions) {
     gearbox: debugOptions?.gearbox ?? true,
     wheelVisuals: debugOptions?.wheelVisuals ?? true,
     cameraShake: debugOptions?.cameraShake ?? true,
-    bodyContacts: debugOptions?.bodyContacts ?? false,
+    bodyContacts: debugOptions?.bodyContacts ?? true,
     surfaceSampler: debugOptions?.surfaceSampler ?? false,
     freezePosition: debugOptions?.freezePosition ?? false,
   };
